@@ -5,7 +5,7 @@
 ```
     ┌──────────────────────────────────────────────────────────────────┐
     │                    DEPLOYMENT LAYER                               │
-    │  deploy-all-v6 (Deploy.s.sol + deploy.sh via Sphinx)             │
+    │  deploy-all-v6 (Deploy.s.sol via Sphinx)                         │
     └───────────────────────┬──────────────────────────────────────────┘
                             │ deploys everything below
                             │

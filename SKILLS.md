@@ -14,7 +14,7 @@ Fast-access reference for finding anything in the V6 ecosystem. Use this when yo
 
 **"How do I trace a bug?"** — Find the error in the "Find by Error" table below. Trace backwards: errors in `JBTerminalStore` mean the bookkeeping check failed; errors in `JBMultiTerminal` mean slippage or access control failed; errors in `JBController` mean ruleset config prevents the action.
 
-**"How does the full ecosystem get deployed?"** — `deploy-all-v6/script/Deploy.s.sol` deploys everything in 9 phases via Sphinx: core protocol → address registry → hooks (721, buyback, router, suckers) → omnichain → periphery → application projects (Croptop, Revnet, Banny). The companion `deploy.sh` orchestrates the Sphinx proposals.
+**"How does the full ecosystem get deployed?"** — `deploy-all-v6/script/Deploy.s.sol` deploys everything in 9 phases via Sphinx: core protocol → address registry → hooks (721, buyback, router, suckers) → omnichain → periphery → application projects (Croptop, Revnet, Banny).
 
 ## Find by Flow
 

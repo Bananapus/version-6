@@ -222,7 +222,7 @@ Two repos handle UniV4:
 7. Revnet project
 8. Banny project
 
-The companion `deploy.sh` orchestrates Sphinx CLI proposals with artifact sharing between phases.
+Deployment is executed directly via Sphinx using `Deploy.s.sol`.
 
 ## Key Invariants
 
