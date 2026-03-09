@@ -1,0 +1,51 @@
+[submodule "nana-core-v6"]
+	path = nana-core-v6
+	url = https://github.com/Bananapus/nana-core-v6.git
+[submodule "nana-721-hook-v6"]
+	path = nana-721-hook-v6
+	url = https://github.com/Bananapus/nana-721-hook-v6.git
+[submodule "nana-address-registry-v6"]
+	path = nana-address-registry-v6
+	url = https://github.com/Bananapus/nana-address-registry-v6.git
+[submodule "nana-buyback-hook-v6"]
+	path = nana-buyback-hook-v6
+	url = https://github.com/Bananapus/nana-buyback-hook-v6.git
+[submodule "nana-fee-project-deployer-v6"]
+	path = nana-fee-project-deployer-v6
+	url = https://github.com/Bananapus/nana-fee-project-deployer-v6.git
+[submodule "nana-omnichain-deployers-v6"]
+	path = nana-omnichain-deployers-v6
+	url = https://github.com/Bananapus/nana-omnichain-deployers-v6.git
+[submodule "nana-ownable-v6"]
+	path = nana-ownable-v6
+	url = https://github.com/Bananapus/nana-ownable-v6.git
+[submodule "nana-permission-ids-v6"]
+	path = nana-permission-ids-v6
+	url = https://github.com/Bananapus/nana-permission-ids-v6.git
+[submodule "nana-router-terminal-v6"]
+	path = nana-router-terminal-v6
+	url = https://github.com/Bananapus/nana-router-terminal-v6.git
+[submodule "nana-suckers-v6"]
+	path = nana-suckers-v6
+	url = https://github.com/Bananapus/nana-suckers-v6.git
+[submodule "revnet-core-v6"]
+	path = revnet-core-v6
+	url = https://github.com/rev-net/revnet-core-v6.git
+[submodule "croptop-core-v6"]
+	path = croptop-core-v6
+	url = https://github.com/mejango/croptop-core-v6.git
+[submodule "defifa-collection-deployer-v6"]
+	path = defifa-collection-deployer-v6
+	url = https://github.com/BallKidz/defifa-collection-deployer-v6.git
+[submodule "banny-retail-v6"]
+	path = banny-retail-v6
+	url = https://github.com/mejango/banny-retail-v6.git
+[submodule "univ4-lp-split-hook-v6"]
+	path = univ4-lp-split-hook-v6
+	url = https://github.com/Bananapus/nana-univ4-lp-split-hook-v6.git
+[submodule "univ4-router-v6"]
+	path = univ4-router-v6
+	url = https://github.com/Bananapus/nana-univ4-router-v6.git
+[submodule "deploy-all-v6"]
+	path = deploy-all-v6
+	url = https://github.com/Bananapus/deploy-all-v6.git

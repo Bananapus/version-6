@@ -1,0 +1,22 @@
+# Audit materials
+.audit/
+.audit-logs/
+AUDIT_FINDINGS.md
+NEMESIS_SCOPE.md
+
+# Claude conveniences
+.claude/
+run-nemesis-all.sh
+
+# Logs
+nohup.out
+*.log
+
+# Archive
+archive/
+
+# Docs (generated/internal)
+docs/
+
+# OS files
+.DS_Store
