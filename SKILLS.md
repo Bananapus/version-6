@@ -97,6 +97,14 @@ All paths in `nana-core-v6/src/` unless noted otherwise.
 12. **Defifa `TOTAL_CASHOUT_WEIGHT`** is `1e18` (not basis points)
 13. **Defifa `tierCashOutWeights`** is a fixed `uint256[128]` array — max 128 tiers per game
 
+14. **Empty `fundAccessLimitGroups`** means zero payouts, NOT unlimited — must explicitly set `amount: type(uint224).max` for unlimited
+15. **`groupId` vs `currency`** are different bit widths — `JBSplitGroup.groupId` is `uint256(uint160(token))`, `JBAccountingContext.currency` is `uint32(uint160(token))`. Only NATIVE_TOKEN matches by coincidence.
+16. **`baseCurrency` vs `JBAccountingContext.currency`** — metadata uses 1=ETH, 2=USD; accounting context uses `uint32(uint160(token))` (e.g. 61166 for ETH). Different systems.
+17. **NFT tiers sorted by category, not price** — `recordAddTiers` reverts with `InvalidCategorySortOrder` if categories aren't ascending
+18. **Always use `JB721TiersHookProjectDeployer.launchProjectFor`** even with empty tiers — enables future NFT additions without migration
+19. **Don't queue N identical rulesets for vesting** — use one cycling ruleset with `duration` instead
+20. **Revnet loans beat cash-outs above ~39% `cashOutTaxRate`** — below ~39%, cash-out is more capital-efficient (CryptoEconLab finding)
+
 ## Permission IDs
 
 ```
