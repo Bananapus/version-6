@@ -104,6 +104,7 @@ All paths in `nana-core-v6/src/` unless noted otherwise.
 18. **Always use `JB721TiersHookProjectDeployer.launchProjectFor`** even with empty tiers — enables future NFT additions without migration
 19. **Don't queue multiple identical rulesets** — a ruleset with `duration` auto-cycles. Only queue multiple when config actually changes between periods.
 20. **Revnet loans beat cash-outs above ~39% `cashOutTaxRate`** — below ~39%, cash-out is more capital-efficient (CryptoEconLab finding)
+21. **`NATIVE_TOKEN` represents a different token on each chain.** `NATIVE_TOKEN` (`0x...EEEe`) is the token received via `msg.value` — ETH on Ethereum/Base/Optimism/Arbitrum, CELO on Celo, etc. Its currency is `uint32(uint160(NATIVE_TOKEN))` = 61166. A `JBMatchingPriceFeed` (returns 1:1) is deployed for `ETH:NATIVE_TOKEN` on ETH-native chains so that `baseCurrency=ETH` resolves correctly to the native token. On non-ETH-native chains, a different price feed would be needed.
 
 ## Permission IDs
 
