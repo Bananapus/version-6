@@ -102,7 +102,7 @@ All paths in `nana-core-v6/src/` unless noted otherwise.
 16. **`baseCurrency` vs `JBAccountingContext.currency`** — metadata uses 1=ETH, 2=USD; accounting context uses `uint32(uint160(token))` (e.g. 61166 for ETH). Different systems.
 17. **NFT tiers sorted by category, not price** — `recordAddTiers` reverts with `InvalidCategorySortOrder` if categories aren't ascending
 18. **Always use `JB721TiersHookProjectDeployer.launchProjectFor`** even with empty tiers — enables future NFT additions without migration
-19. **Don't queue N identical rulesets for vesting** — use one cycling ruleset with `duration` instead
+19. **Don't queue multiple identical rulesets** — a ruleset with `duration` auto-cycles. Only queue multiple when config actually changes between periods.
 20. **Revnet loans beat cash-outs above ~39% `cashOutTaxRate`** — below ~39%, cash-out is more capital-efficient (CryptoEconLab finding)
 
 ## Permission IDs
