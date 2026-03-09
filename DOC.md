@@ -177,9 +177,56 @@ Key contracts:
 - `DefifaGovernor`: Scorecard submission/attestation/ratification governance
 - `DefifaHookLib`: Pure/view helpers for cash-out weight computation, fee token claims
 
+## Router Terminal
+
+`JBRouterTerminal` accepts any ERC-20 token and routes payments to a project's primary terminal:
+- Swaps incoming tokens to the project's accepted token via Uniswap V3 or V4
+- Registers routes in `JBRouterTerminalRegistry`
+- Supports slippage protection via `minAmountOut`
+- Enables projects to accept any token without configuring every token as an accounting context
+
+## Uniswap V4 Integration
+
+Two repos handle UniV4:
+- **univ4-router-v6**: `JBUniswapV4Hook` — a UniV4 hook contract with custom swap logic and TWAP oracle tracking, used by the buyback hook for price discovery
+- **univ4-lp-split-hook-v6**: `UniV4DeploymentSplitHook` — a split hook that accumulates reserved tokens and deploys them into full-range UniV4 liquidity pools, with a deployer contract for creating new hook instances per pool
+
+## Croptop
+
+`CTDeployer` creates Croptop projects — decentralized NFT publishing platforms:
+- Anyone can post content as new NFT tiers on a Croptop project
+- Posts become 721 tiers with configurable price, supply, and category
+- `CTPublisher` handles content posting and tier creation
+- Built on top of revnet economics (uses REVDeployer internally)
+- `CTProjectOwner` manages project ownership delegation
+
+## Banny
+
+`Banny721TokenUriResolver` provides dynamic SVG metadata for Banny NFTs:
+- Composable character system with body + outfit layers
+- Outfits are equippable/unequippable NFTs
+- SVG metadata generated onchain
+- Backed by a revnet treasury for economic sustainability
+
+## Ecosystem Deployment
+
+`deploy-all-v6/script/Deploy.s.sol` deploys the entire V6 ecosystem in a single Sphinx proposal across 8 chains (4 mainnets: Ethereum, Optimism, Base, Arbitrum + 4 testnets):
+
+**Deployment phases:**
+1. Core protocol (forwarder, permissions, projects, directory, splits, rulesets, prices, tokens, store, terminal)
+2. Address registry
+3. Hooks (721 tiers, buyback, router terminal, suckers)
+4. Omnichain deployer
+5. Periphery (controller, price feeds, deadlines)
+6. Croptop project
+7. Revnet project
+8. Banny project
+
+The companion `deploy.sh` orchestrates Sphinx CLI proposals with artifact sharing between phases.
+
 ## Key Invariants
 
-Proven by the existing test suite (165 test files):
+Proven by the existing test suite:
 - No flash-loan profit possible (12 attack vectors tested)
 - Terminal balance >= sum of recorded project balances
 - Total inflows >= total outflows (conservation)

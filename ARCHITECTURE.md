@@ -3,16 +3,22 @@
 ## Ecosystem Layers
 
 ```
-                          ┌──────────────────────────────────────────────────────┐
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                    DEPLOYMENT LAYER                               │
+    │  deploy-all-v6 (Deploy.s.sol + deploy.sh via Sphinx)             │
+    └───────────────────────┬──────────────────────────────────────────┘
+                            │ deploys everything below
+                            │
+                          ┌─▼────────────────────────────────────────────────────┐
                           │                 APPLICATION LAYER                       │
                           │  banny-retail-v6  │  croptop-core-v6  │  defifa-v6      │
                           └────────────┬──────┴──────┬────────────┴─────┬───────────┘
-                                       │             │
-                          ┌────────────▼─────────────▼────────────────▼──────────┐
-                          │                    DEPLOYER LAYER                       │
-                          │  REVDeployer  │  JBOmnichainDeployer  │  DefifaDeployer │
-                          │  CTDeployer   │  JB721TiersHookDeployer                 │
-                          └───────┬───────┴──────────┬──────────────────────────────┘
+                                       │             │                  │
+                          ┌────────────▼─────────────▼──────────────────▼───────────┐
+                          │                    DEPLOYER LAYER                         │
+                          │  REVDeployer  │  JBOmnichainDeployer  │  DefifaDeployer   │
+                          │  CTDeployer   │  JB721TiersHookDeployer                   │
+                          └───────┬───────┴──────────┬────────────────────────────────┘
                                   │                  │
           ┌───────────────────────▼──────────────────▼──────────────────┐
           │                       HOOK LAYER                            │
@@ -24,7 +30,7 @@
     ┌─────────────────▼───────────────▼────────────────▼───────────────┐
     │                        BRIDGE LAYER                               │
     │  JBSucker (abstract)  │  JBOptimismSucker  │  JBArbitrumSucker   │
-    │  JBBaseSucker         │  JBCCIPSucker      │  JBSuckerRegistry    │
+    │  JBBaseSucker (OP)    │  JBCCIPSucker      │  JBSuckerRegistry    │
     └───────────────────────┬──────────────────────────────────────────┘
                             │
     ┌───────────────────────▼──────────────────────────────────────────┐
@@ -178,19 +184,20 @@ JBPermissions (256-bit packed)
 
 | Repository | Role | Key Contracts | LoC |
 |-----------|------|---------------|-----|
-| nana-core-v6 | Core protocol | JBMultiTerminal, JBController, JBTerminalStore, JBRulesets | ~10,718 |
-| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBArbitrumSucker, JBCCIPSucker | ~5,339 |
-| nana-721-hook-v6 | NFT tiers | JB721TiersHook, JB721TiersHookStore | ~4,466 |
-| revnet-core-v6 | Autonomous projects | REVDeployer, REVLoans | ~3,190 |
-| nana-buyback-hook-v6 | DEX buyback | JBBuybackHook, JBSwapLib | ~1,500 |
-| nana-router-terminal-v6 | Payment routing | JBRouterTerminal | ~1,200 |
+| nana-core-v6 | Core protocol | JBMultiTerminal, JBController, JBTerminalStore, JBRulesets | ~10,700 |
+| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBBaseSucker, JBArbitrumSucker, JBCCIPSucker | ~5,300 |
+| nana-721-hook-v6 | NFT tiers | JB721TiersHook, JB721TiersHookStore | ~4,500 |
+| defifa-collection-deployer-v6 | Prediction games | DefifaDeployer, DefifaHook, DefifaGovernor, DefifaHookLib | ~3,800 |
+| revnet-core-v6 | Autonomous projects | REVDeployer, REVLoans | ~3,200 |
 | univ4-lp-split-hook-v6 | LP management | UniV4DeploymentSplitHook | ~1,800 |
-| univ4-router-v6 | UniV4 integration | JBUniswapV4Hook | ~800 |
+| deploy-all-v6 | Ecosystem deployment | Deploy.s.sol (Sphinx orchestration) | ~1,600 |
+| nana-buyback-hook-v6 | DEX buyback | JBBuybackHook, JBBuybackHookRegistry, JBSwapLib | ~1,500 |
+| nana-router-terminal-v6 | Payment routing | JBRouterTerminal, JBRouterTerminalRegistry | ~1,200 |
 | croptop-core-v6 | NFT publishing | CTDeployer, CTPublisher | ~1,200 |
 | banny-retail-v6 | Banny NFTs | Banny721TokenUriResolver | ~900 |
+| nana-omnichain-deployers-v6 | Omnichain | JBOmnichainDeployer | ~800 |
+| univ4-router-v6 | UniV4 integration | JBUniswapV4Hook | ~800 |
 | nana-ownable-v6 | JB ownership | JBOwnable | ~300 |
+| nana-fee-project-deployer-v6 | Fee project | Deploy.s.sol (script only) | ~200 |
 | nana-address-registry-v6 | Registry | JBAddressRegistry | ~100 |
 | nana-permission-ids-v6 | Constants | JBPermissionIds | ~50 |
-| nana-omnichain-deployers-v6 | Omnichain | JBOmnichainDeployer | ~800 |
-| defifa-collection-deployer-v6 | Prediction games | DefifaDeployer, DefifaHook, DefifaGovernor, DefifaHookLib | ~3,838 |
-| nana-fee-project-deployer-v6 | Fee project | Deploy.s.sol (script only) | ~200 |

@@ -55,6 +55,30 @@ This document describes known security properties, trust assumptions, and operat
 | Single governor | All games share one DefifaGovernor — bug affects all games | Design choice; governor logic is simple |
 | Fee token dilution | Reserved mints get fee tokens proportional to tier price (not paid) | By design; reduces real payers' claims |
 
+### REVLoans
+
+| Risk | Description | Mitigation |
+|------|-------------|------------|
+| Collateral value manipulation | Attacker inflates surplus to borrow more, then deflates surplus | Borrow amount based on bonding curve value at time of borrow; surplus changes don't retroactively change existing loan terms |
+| 10-year liquidation drift | Collateral's real value may diverge significantly from loan over 10 years | Liquidation schedule gradually releases collateral; loans can be repaid early |
+| Collateral reallocation race | Reallocating collateral between loans could create moment of under-collateralization | Reallocation is atomic within a single transaction |
+
+### UniV4 LP / Router
+
+| Risk | Description | Mitigation |
+|------|-------------|------------|
+| LP pool deployment front-running | Pool deployment is permissionless once threshold is met | Pool parameters are deterministic from hook config |
+| Router swap slippage | Token swaps through JBRouterTerminal can be sandwiched | `minAmountOut` parameter; users should set appropriate slippage |
+| Stale route | Registered swap route may become suboptimal over time | Routes can be updated; not locked |
+
+### Deployment
+
+| Risk | Description | Mitigation |
+|------|-------------|------------|
+| Deployment ordering | Partially deployed state could be exploited between Sphinx phases | Sphinx proposals are atomic per phase; contracts aren't usable until fully wired |
+| Hardcoded addresses | Deploy.s.sol contains hardcoded addresses for external contracts (Uniswap, Chainlink) | Addresses verified against canonical deployments per chain |
+| Constructor parameter errors | Wrong initialization parameters could lock funds or grant wrong permissions | Deployment script tested via `forge build`; CI verifies compilation |
+
 ### MEV / Front-Running
 
 | Risk | Description | Mitigation |
@@ -88,6 +112,9 @@ The protocol uses no `ReentrancyGuard`. Instead, it relies on state ordering:
 | `_sendReservedTokensToSplitsOf` | Pending balance zeroed BEFORE minting | LOW |
 | Defifa `afterCashOutRecordedWith` | Tokens burned BEFORE state updates; terminal state committed | LOW |
 | Defifa `fulfillCommitmentsOf` | `fulfilledCommitmentsOf` set BEFORE external calls | LOW |
+| REVLoans `borrowFrom` | Collateral locked BEFORE funds transferred | LOW |
+| REVLoans `repayLoan` | Loan state cleared BEFORE collateral returned | LOW |
+| `JBRouterTerminal._swap` | Swap executed, then payment forwarded — no intermediate state exposure | LOW |
 
 **Key defense**: `JBTerminalStore_InadequateTerminalStoreBalance` revert prevents extracting more than available balance regardless of reentrancy.
 
@@ -129,3 +156,6 @@ The protocol uses no `ReentrancyGuard`. Instead, it relies on state ordering:
 4. **Handle credit vs ERC-20** - Users may have credits that aren't transferable as ERC-20
 5. **Monitor `FeeReverted` events** - Indicates fee processing failures (temporary, fees remain held)
 6. **Support ERC-2771** - If using meta-transactions, ensure the trusted forwarder is configured
+7. **Set slippage on router terminal payments** - `JBRouterTerminal` swaps can be sandwiched without `minAmountOut`
+8. **Check loan health before relying on collateral** - REVLoans collateral value changes with surplus; don't assume stable LTV
+9. **Verify sucker deprecation state** - Check `deprecationOf()` before initiating cross-chain operations
