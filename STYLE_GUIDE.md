@@ -314,13 +314,10 @@ Standard config across all repos:
 ```toml
 [profile.default]
 solc = '0.8.26'
-evm_version = 'paris'
+evm_version = 'cancun'
 optimizer_runs = 200
 libs = ["node_modules", "lib"]
 fs_permissions = [{ access = "read-write", path = "./"}]
-
-[profile.ci_sizes]
-optimizer_runs = 200
 
 [fuzz]
 runs = 4096
@@ -337,9 +334,10 @@ wrap_comments = true
 ```
 
 **Variations:**
-- `evm_version = 'cancun'` for repos using transient storage (buyback-hook, router-terminal, univ4-router)
-- `via_ir = true` for repos hitting stack-too-deep (buyback-hook, banny-retail, univ4-lp-split-hook, deploy-all)
+- `via_ir = true` for repos hitting stack-too-deep (buyback-hook, banny-retail, univ4-lp-split-hook, deploy-all, omnichain-deployers)
 - `optimizer = false` only for deploy-all-v6 (stack-too-deep with optimization)
+- `optimizer_runs = 100` for revnet-core-v6 (stack-too-deep at 200 runs due to deep struct nesting in `_deploy721RevnetFor`)
+- `lint_on_build = false` for repos that depend on packages with test helpers using bare `src/` imports (solar linter can't resolve them). Run `forge lint src/` explicitly to lint your own code. Affected: omnichain-deployers, revnet-core, suckers, defifa
 
 ### CI Workflows
 
@@ -370,7 +368,7 @@ jobs:
       - name: Run tests
         run: forge test --fail-fast --summary --detailed --skip "*/script/**"
       - name: Check contract sizes
-        run: FOUNDRY_PROFILE=ci_sizes forge build --sizes --skip "*/test/**" --skip "*/script/**" --skip SphinxUtils
+        run: forge build --sizes --skip "*/test/**" --skip "*/script/**" --skip SphinxUtils
 ```
 
 **lint.yml:**
@@ -424,6 +422,19 @@ Every repo has a `remappings.txt`. Minimal content:
 
 Additional mappings as needed for repo-specific dependencies.
 
+### Linting
+
+Solar (Foundry's built-in linter) runs automatically during `forge build`. It scans all `.sol` files in `libs` directories, including `node_modules`. When a dependency's test helpers use bare `src/` imports (e.g. `@bananapus/core-v6/test/helpers/JBTest.sol`), solar fails because `src/` resolves to the consuming repo, not the dependency. The `[lint] ignore` config does not fix this.
+
+**Don't import test helpers that use bare `src/` imports.** If you must depend on one (e.g. `mockExpect` from `JBTest`), add to `foundry.toml`:
+
+```toml
+[lint]
+lint_on_build = false
+```
+
+You can still lint your own code explicitly: `forge lint src/`
+
 ### Formatting
 
 Run `forge fmt` before committing. The `[fmt]` config in `foundry.toml` enforces:
@@ -450,4 +461,4 @@ CI checks formatting via `forge fmt --check`.
 
 ### Contract Size Checks
 
-CI runs `FOUNDRY_PROFILE=ci_sizes forge build --sizes` to catch contracts approaching the 24KB limit. The `ci_sizes` profile uses `optimizer_runs = 200` for realistic size measurement even when the default profile has different optimizer settings.
+CI runs `forge build --sizes` to catch contracts approaching the 24KB limit.
