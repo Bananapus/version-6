@@ -39,7 +39,7 @@ Fast-access reference for finding anything in the V6 ecosystem. Use this when yo
 | Loan creation | `REVLoans.borrowFrom()` L544 | Collateral lock, bonding curve valuation |
 | Cross-chain prepare | `JBSucker.prepare()` | Cash out + insert into outbox merkle tree |
 | Cross-chain claim | `JBSucker.claim()` | Verify merkle proof + mint/transfer |
-| LP pool deploy | `UniV4DeploymentSplitHook.deployPool()` L482 | Full-range liquidity from accumulated tokens |
+| LP pool deploy | `UniV4DeploymentSplitHook.deployPool()` L482 | Concentrated liquidity from accumulated tokens |
 | Defifa game launch | `DefifaDeployer.launchGameWith()` L393 | Creates project + queues phase rulesets |
 | Defifa scorecard | `DefifaGovernor.submitScorecardFor()` L413 | Allocates `TOTAL_CASHOUT_WEIGHT` (1e18) across tiers |
 | Defifa attestation | `DefifaGovernor.attestToScorecardFrom()` L323 | Per-tier power, capped at 1e9 |
