@@ -333,11 +333,14 @@ multiline_func_header = "all"
 wrap_comments = true
 ```
 
-**Variations:**
-- `via_ir = true` for repos hitting stack-too-deep (buyback-hook, banny-retail, univ4-lp-split-hook, deploy-all, omnichain-deployers)
-- `optimizer = false` only for deploy-all-v6 (stack-too-deep with optimization)
-- `optimizer_runs = 100` for revnet-core-v6 (stack-too-deep at 200 runs due to deep struct nesting in `_deploy721RevnetFor`)
-- `lint_on_build = false` for repos that depend on packages with test helpers using bare `src/` imports (solar linter can't resolve them). Run `forge lint src/` explicitly to lint your own code. Affected: omnichain-deployers, revnet-core, suckers, defifa
+**Optional sections (add only when needed):**
+- `[rpc_endpoints]` — repos with fork tests. Maps named endpoints to env vars (e.g. `ethereum = "${RPC_ETHEREUM_MAINNET}"`).
+- `[profile.ci_sizes]` — only when CI needs different optimizer settings than defaults for the size check step (e.g. `optimizer_runs = 200` when the default profile uses a lower value).
+
+**Common variations:**
+- `via_ir = true` when hitting stack-too-deep
+- `optimizer = false` when optimization causes stack-too-deep
+- `optimizer_runs` reduced when deep struct nesting causes stack-too-deep at 200 runs
 
 ### CI Workflows
 
@@ -367,6 +370,8 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
       - name: Run tests
         run: forge test --fail-fast --summary --detailed --skip "*/script/**"
+        env:
+          RPC_ETHEREUM_MAINNET: ${{ secrets.RPC_ETHEREUM_MAINNET }}
       - name: Check contract sizes
         run: forge build --sizes --skip "*/test/**" --skip "*/script/**" --skip SphinxUtils
 ```
@@ -389,6 +394,55 @@ jobs:
       - name: Check formatting
         run: forge fmt --check
 ```
+
+**slither.yml** (repos with `src/` contracts only):
+```yaml
+name: slither
+on:
+    pull_request:
+      branches:
+        - main
+    push:
+      branches:
+        - main
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: latest
+      - name: Install npm dependencies
+        run: npm install --omit=dev
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Run slither
+        uses: crytic/slither-action@v0.3.1
+        with:
+            slither-config: slither-ci.config.json
+            fail-on: medium
+```
+
+**slither-ci.config.json:**
+```json
+{
+  "detectors_to_exclude": "timestamp,uninitialized-local,naming-convention,solc-version,shadowing-local",
+  "exclude_informational": true,
+  "exclude_low": false,
+  "exclude_medium": false,
+  "exclude_high": false,
+  "disable_color": false,
+  "filter_paths": "(mocks/|test/|node_modules/|lib/)",
+  "legacy_ast": false
+}
+```
+
+**Variations:**
+- Deployer-only repos (no `src/`, only `script/`) skip slither entirely — the action's internal `forge build` skips `test/` and `script/` by default, leaving nothing to compile.
+- Use inline `// slither-disable-next-line <detector>` to suppress known false positives rather than adding to `detectors_to_exclude` in the config. The comment must be on the line immediately before the flagged expression.
 
 ### package.json
 
@@ -414,26 +468,62 @@ jobs:
 
 ### remappings.txt
 
-Every repo has a `remappings.txt`. Minimal content:
+Every repo has a `remappings.txt` as the **single source of truth** for import remappings. Never add remappings to `foundry.toml`.
+
+**Principle:** Import paths in Solidity source must match npm package names exactly. With `libs = ["node_modules", "lib"]`, Foundry auto-resolves `@scope/package/path/File.sol` → `node_modules/@scope/package/path/File.sol`. No remapping needed for packages installed as real directories.
+
+**Note:** Auto-resolution does **not** work for symlinked packages (e.g. npm workspace links). Workspace repos like `deploy-all-v6` and `nana-cli-v6` need explicit `@scope/package/=node_modules/@scope/package/` remappings for each symlinked dependency.
+
+**Minimal content** (most repos):
 
 ```
-@sphinx-labs/contracts/=lib/sphinx/packages/contracts/contracts/foundry
+forge-std/=lib/forge-std/src/
 ```
 
-Additional mappings as needed for repo-specific dependencies.
+Only add extra remappings for:
+- **`forge-std`** — always needed (git submodule with `src/` subdirectory)
+- **Repo-specific `lib/` submodules** that have no npm package (e.g., `hookmate/=lib/hookmate/src/`)
+- **Symlinked npm packages** — need explicit `@scope/package/=node_modules/@scope/package/` entries
+- **Nested transitive deps** — e.g., `@chainlink/contracts-ccip/` nested inside `@bananapus/suckers-v6/node_modules/`
+
+**Never add remappings for:**
+- npm packages that match their import path and are installed as real directories — they auto-resolve
+- Short-form aliases (e.g., `@bananapus/core/` → `@bananapus/core-v6/src/`) — fix the import instead
+- Packages available via npm that are also git submodules — remove the submodule, use npm
+
+**Import path convention:**
+
+| Package | Import path | Resolves to |
+|---------|------------|-------------|
+| `@bananapus/core-v6` | `@bananapus/core-v6/src/libraries/JBConstants.sol` | `node_modules/@bananapus/core-v6/src/...` |
+| `@openzeppelin/contracts` | `@openzeppelin/contracts/token/ERC20/IERC20.sol` | `node_modules/@openzeppelin/contracts/...` |
+| `@uniswap/v4-core` | `@uniswap/v4-core/src/interfaces/IPoolManager.sol` | `node_modules/@uniswap/v4-core/src/...` |
 
 ### Linting
 
-Solar (Foundry's built-in linter) runs automatically during `forge build`. It scans all `.sol` files in `libs` directories, including `node_modules`. When a dependency's test helpers use bare `src/` imports (e.g. `@bananapus/core-v6/test/helpers/JBTest.sol`), solar fails because `src/` resolves to the consuming repo, not the dependency. The `[lint] ignore` config does not fix this.
+Solar (Foundry's built-in linter) runs automatically during `forge build`. It scans all `.sol` files in `libs` directories, including `node_modules`.
 
-**Don't import test helpers that use bare `src/` imports.** If you must depend on one (e.g. `mockExpect` from `JBTest`), add to `foundry.toml`:
+**All test helpers must use relative imports** (e.g. `../../src/structs/JBRuleset.sol`), not bare `src/` imports. This ensures solar can resolve paths when the helper is consumed via npm in downstream repos.
 
-```toml
-[lint]
-lint_on_build = false
+### Fork Tests
+
+Fork tests use named RPC endpoints defined in `[rpc_endpoints]` of `foundry.toml`. No skip guards — fork tests should hard-fail if the RPC endpoint is unavailable, making CI failures explicit.
+
+```solidity
+function setUp() public {
+    vm.createSelectFork("ethereum");
+    // ... setup code
+}
 ```
 
-You can still lint your own code explicitly: `forge lint src/`
+The endpoint name (e.g. `"ethereum"`) maps to an env var via `foundry.toml`:
+
+```toml
+[rpc_endpoints]
+ethereum = "${RPC_ETHEREUM_MAINNET}"
+```
+
+For multi-chain fork tests, add all needed endpoints.
 
 ### Formatting
 
@@ -461,4 +551,4 @@ CI checks formatting via `forge fmt --check`.
 
 ### Contract Size Checks
 
-CI runs `forge build --sizes` to catch contracts approaching the 24KB limit.
+CI runs `forge build --sizes` to catch contracts approaching the 24KB limit. When the repo's default `optimizer_runs` differs from what you want for size checking, use `FOUNDRY_PROFILE=ci_sizes forge build --sizes` with a `[profile.ci_sizes]` section in `foundry.toml`.
