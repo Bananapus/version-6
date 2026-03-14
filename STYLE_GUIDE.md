@@ -197,7 +197,7 @@ interface IJBExample is IJBBase {
 | Public/external function | `camelCase` | `cashOutTokensOf` |
 | Internal/private function | `_camelCase` | `_processFee` |
 | Internal storage | `_camelCase` | `_accountingContextForTokenOf` |
-| Function parameter | `camelCase` | `projectId`, `cashOutCount` |
+| Function parameter | `camelCase` (no underscores) | `projectId`, `cashOutCount` |
 
 ## NatSpec
 
@@ -253,9 +253,12 @@ uint256 public constant MAX_RESERVED_PERCENT = 10_000;
 
 ## Function Calls
 
-Use named parameters for readability when calling functions with 3+ arguments:
+Use named arguments for all function calls with 2 or more arguments — in both `src/` and `script/`:
 
 ```solidity
+// Good — named arguments
+token.mint({account: beneficiary, amount: count});
+_transferOwnership({newOwner: address(0), projectId: 0});
 PERMISSIONS.hasPermission({
     operator: sender,
     account: account,
@@ -264,7 +267,17 @@ PERMISSIONS.hasPermission({
     includeRoot: true,
     includeWildcardProjectId: true
 });
+
+// Bad — positional arguments with 2+ args
+token.mint(beneficiary, count);
+_transferOwnership(address(0), 0);
 ```
+
+Single-argument calls use positional style: `_burn(amount)`.
+
+This also applies to constructor calls, struct literals, and inherited/library calls (e.g., OZ `_mint`, `_safeMint`, `safeTransfer`, `allowance`, `Clones.cloneDeterministic`).
+
+Named argument keys must use **camelCase** — never underscores. If a function's parameter names use underscores, rename them to camelCase first.
 
 ## Multiline Signatures
 
