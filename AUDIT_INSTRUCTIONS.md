@@ -130,7 +130,27 @@ Borrowers lock project tokens and borrow against their bonding curve value.
 - Can you borrow, then increase your cashout value by manipulating surplus, then cash out the collateral for more than you borrowed?
 - Collateral reallocation between loans: any state inconsistency during reallocation?
 
-### 8. NFT Tier Economics (721 Hook + Defifa)
+### 8. Currency Denomination Mismatches
+
+The protocol has **two different currency type systems** that interact at conversion boundaries:
+
+- **Abstract currency** (`baseCurrency` in rulesets, `currency` in `JB721InitTiersConfig`): small integers (1 = ETH, 2 = USD). Used for surplus calculations, payout limit conversions, and NFT tier pricing. Paired with a `decimals` field (e.g., 18 for ETH/USD).
+- **Concrete currency** (`currency` in `JBAccountingContext` and `JBTokenAmount`): `uint32(uint160(tokenAddress))`. Identifies the actual payment token. USDC at `0xA0b8...eB48` has a concrete currency derived from its address and 6 decimals.
+
+**Conversions happen at these boundaries:**
+- `JBTerminalStore`: surplus calculations convert between `baseCurrency` and payment token via `JBPrices`
+- `JB721TiersHookLib.normalizePaymentValue()`: converts payment amount to tier pricing denomination for price comparison
+- `JB721TiersHookLib.convertSplitAmounts()`: converts split amounts from tier pricing denomination back to payment token denomination for forwarding
+- `JBPrices.pricePerUnitOf()`: the underlying oracle query, where `pricingCurrency` and `unitCurrency` use concrete currency IDs but return amounts in the configured `decimals`
+
+**Attack surface:**
+- Can an amount computed in one denomination (e.g., 30e18 USD) be compared or forwarded as if it were in another denomination (e.g., 30e18 USDC with 6 decimals)? This was a real bug in tier split forwarding — fixed in `convertSplitAmounts`.
+- `mulDiv` rounding compounds through conversion chains. Pay in token A → normalize to pricing currency → compute split → convert back to token A. Each step rounds. Can this be exploited?
+- `baseCurrency` (abstract, small int) vs `JBAccountingContext.currency` (concrete, derived from address) are different bit widths for the same conceptual token. Any codepath that confuses them?
+- What happens when `JBPrices` has no feed for a currency pair? (`normalizePaymentValue` returns `(0, false)` and skips minting. `convertSplitAmounts` returns unconverted amounts. Are these safe?)
+- `groupId` in fund access limits is `uint256` (token address), but `currency` in accounting context is `uint32`. Can truncation cause collisions?
+
+### 9. NFT Tier Economics (721 Hook + Defifa)
 
 **Attack surface — 721 Hook:**
 - Discount percent denominator is 200 (not 100). `discountPercent = 200` means 100% discount = free mint. Can you free-mint then cash out at full weight?
@@ -145,7 +165,7 @@ Borrowers lock project tokens and borrow against their bonding curve value.
 - Scorecard timeout: what happens if a valid scorecard exists but isn't ratified before timeout?
 - Can game phase transitions be manipulated by timing ruleset changes?
 
-### 9. Deployment Script
+### 10. Deployment Script
 
 `deploy-all-v6/script/Deploy.s.sol` deploys the entire ecosystem in one Sphinx proposal.
 
@@ -183,7 +203,8 @@ These code patterns are where bugs hide in this codebase:
 | Mapping deletion without cleanup | JBSplits, JBRulesets, JBSucker | Stale data in related mappings |
 | Array iteration without bounds | processHeldFeesOf, split distribution | Gas griefing or DoS |
 | External calls to untrusted hooks | All hook execution paths | Reentrancy via hook callbacks |
-| Price feed dependency | JBTerminalStore surplus calculation | Stale/manipulated prices affect cashout values |
+| Price feed dependency | JBTerminalStore, JB721TiersHookLib | Stale/manipulated prices affect cashout values and split amounts |
+| Currency denomination mixing | JBTerminalStore, JB721TiersHookLib, JBFundAccessLimits | Abstract (1=ETH, 2=USD) vs concrete (uint32(address)) currency IDs used in different contexts |
 | Permit2 metadata encoding | JBMultiTerminal._pay | Malformed metadata could bypass checks |
 | Bit-packed metadata | JBRulesetMetadataResolver | Off-by-one in bit shifts = wrong flag values |
 

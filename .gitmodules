@@ -49,3 +49,6 @@
 [submodule "deploy-all-v6"]
 	path = deploy-all-v6
 	url = https://github.com/Bananapus/deploy-all-v6.git
+[submodule "nana-cli-v6"]
+	path = nana-cli-v6
+	url = https://github.com/Bananapus/nana-cli-v6.git

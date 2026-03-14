@@ -2,7 +2,7 @@
 
 Programmable treasuries for Ethereum. Projects collect funds, issue tokens on bonding curves, govern economics through rulesets, and compose features through hooks — all onchain, all composable, across any EVM chain.
 
-This is the complete V6 smart contract ecosystem: 17 repositories spanning core protocol, hooks, cross-chain bridging, deployers, and applications. Clone recursively to get everything:
+This is the complete V6 smart contract ecosystem: 18 repositories spanning core protocol, hooks, cross-chain bridging, deployers, applications, and CLI tooling. Clone recursively to get everything:
 
 ```bash
 git clone --recursive https://github.com/Bananapus/version-6.git
@@ -36,7 +36,7 @@ Hooks plug into the core at well-defined extension points. Data hooks override e
 |------|-------------|
 | [nana-721-hook-v6](./nana-721-hook-v6) | Tiered NFTs — mint on payment, burn to cash out. Per-tier pricing, supply caps, reserve frequency, discount rates. |
 | [nana-buyback-hook-v6](./nana-buyback-hook-v6) | Data hook that compares minting vs buying from Uniswap V4, takes whichever gives more tokens. TWAP oracle with sigmoid slippage. |
-| [univ4-lp-split-hook-v6](./univ4-lp-split-hook-v6) | Split hook that accumulates reserved tokens and deploys them into UniV4 full-range liquidity pools. |
+| [univ4-lp-split-hook-v6](./univ4-lp-split-hook-v6) | Split hook that accumulates reserved tokens and deploys them into UniV4 concentrated liquidity positions bounded by issuance and cash-out rates. |
 | [univ4-router-v6](./univ4-router-v6) | Uniswap V4 hook with custom swap logic and oracle tracking for buyback integration. |
 
 ### Terminals
@@ -74,6 +74,12 @@ Hooks plug into the core at well-defined extension points. Data hooks override e
 | [nana-ownable-v6](./nana-ownable-v6) | Ownership that works with both EOAs and Juicebox project NFTs. |
 | [nana-address-registry-v6](./nana-address-registry-v6) | Maps deployed contracts to their deployers via CREATE2. |
 
+### CLI
+
+| Repo | What it does |
+|------|-------------|
+| [nana-cli-v6](./nana-cli-v6) | CLI for people and AI agents. 31 Forge scripts covering all protocol operations, with shell CLI, MCP server, and Claude Code skill surfaces. |
+
 ### Deployment
 
 | Repo | What it does |
@@ -110,6 +116,7 @@ forge test
 | Token decimals | 18 | Enforced across all project tokens |
 | Loan liquidation | 3,650 days | 10 years |
 | Solidity version | 0.8.26 | All contracts |
+| EVM version | cancun | Required for transient storage (TSTORE/TLOAD) |
 
 ## External Dependencies
 
