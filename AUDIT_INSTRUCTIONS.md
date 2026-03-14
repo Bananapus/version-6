@@ -87,7 +87,7 @@ Data hooks see the raw payment context. They return modified weights and hook sp
 - REVDeployer (data hook) + JB721TiersHook (pay hook) + JBBuybackHook (nested data hook call): What happens when the buyback hook returns empty specifications vs. non-empty? Does the REVDeployer handle both cases?
 - JBOmnichainDeployer (data hook overrides cash out tax to 0%) + any cash out hook: Can the 0% tax override be exploited outside of legitimate sucker operations?
 - JB721TiersHook (pay hook) minting NFTs during a payment where JBBuybackHook is swapping tokens: Does the swap callback interact safely with the NFT mint?
-- UniV4DeploymentSplitHook receiving payout during `sendPayoutsOf` while the same project is being paid into: Cross-function reentrancy through split hook.
+- JBUniswapV4LPSplitHook receiving payout during `sendPayoutsOf` while the same project is being paid into: Cross-function reentrancy through split hook.
 
 **What to look for:** State that's partially committed when hooks execute. The terminal updates the store, then mints tokens, then calls hooks. At hook execution time, the store has the new balance but the hook might be able to manipulate other state.
 
@@ -233,14 +233,14 @@ These code patterns are where bugs hide in this codebase:
 |---------|--------------|-------------------|
 | `try-catch` swallowing errors | JBMultiTerminal (hooks, fees, splits) | Failed external calls silently change control flow. The fee try-catch can be used for temporary fee avoidance. |
 | `mulDiv` rounding direction | JBCashOuts, JBFees, JBTerminalStore, JB721TiersHookLib | Rounding in attacker's favor compounds over many transactions. |
-| Hardcoded 0 / placeholder functions | UniV4DeploymentSplitHook | A function that should compute real values but returns 0. Are there other placeholders? |
+| Hardcoded 0 / placeholder functions | JBUniswapV4LPSplitHook | A function that should compute real values but returns 0. Are there other placeholders? |
 | Currency type confusion | JBTerminalStore, JB721TiersHookLib, JBFundAccessLimits | Abstract (1=ETH, 2=USD) vs concrete (`uint32(address)`) currencies. `groupId` (`uint256`) vs `currency` (`uint32`) truncation. |
 | Uncapped input parameters | JB721TiersHookStore | Parameters that accept `uint32` but should be bounded by protocol constants. What other parameters lack bounds checks? |
 | Silent fund drops | JB721TiersHookLib | Funds consumed from accounting but never sent when target address is `address(0)`. Any other path where funds disappear without revert? |
 | Undiscounted price usage | JB721TiersHookLib, JB721TiersHookStore | Cash out weight and split amounts use original tier price instead of discounted price. Is this consistent across all code paths? |
 | Sign convention mismatch | JBUniswapV4Hook | V4 uses a credit/debit convention where output amounts are negative. Slippage checks expecting positive values never fire. Any other V4 integration paths with this issue? |
 | Missing ownership transfer | Deployer contracts | Hooks or contracts deployed by a deployer but never transferred to the project owner. Any deployers that forget `transferOwnershipToProject`? |
-| Stale references after mutation | UniV4DeploymentSplitHook | Stored IDs or addresses that become dangling after the referenced object is burned or destroyed. |
+| Stale references after mutation | JBUniswapV4LPSplitHook | Stored IDs or addresses that become dangling after the referenced object is burned or destroyed. |
 | Re-initialization after ownership renounce | Clone patterns | `initialize()` guard that checks `owner != address(0)` passes again after `renounceOwnership`. Any other clone patterns with this issue? |
 | Array OOB from conditional returns | REVDeployer, hook compositions | Unconditional `[0]` access on arrays that may be empty depending on which code path a hook takes. Scan for all array index accesses after hook/external calls. |
 | External call in loop | JBMultiTerminal (payout splits), processHeldFeesOf | Gas griefing by making external calls revert. Each revert is caught by try-catch but still costs gas. |
@@ -309,7 +309,7 @@ Audit in this order. Earlier items have higher blast radius:
 |----------|--------|-----|
 | 1 | **Hook composition** (REVDeployer + JBBuybackHook + JB721TiersHook) | Hooks compose in ways that aren't tested end-to-end. Conditional array returns, nested hook calls, and re-entrant hook → protocol interactions are the most likely source of undiscovered bugs. |
 | 2 | **JBMultiTerminal + JBTerminalStore** | All funds flow through here. No reentrancy guard — CEI ordering is the only defense. |
-| 3 | **UniV4DeploymentSplitHook** | Complex contract with Uniswap V4 integration, permissionless entry points, no reentrancy protection, and placeholder code. |
+| 3 | **JBUniswapV4LPSplitHook** | Complex contract with Uniswap V4 integration, permissionless entry points, no reentrancy protection, and placeholder code. |
 | 4 | **REVLoans** | Lending against a bonding curve whose parameters change with stage transitions. Collateral manipulation surface is large. |
 | 5 | **JB721TiersHookLib + JB721TiersHookStore** | NFT discount/split/price economics have multiple interacting parameters (discountPercent, splitPercent, cash out weight, reserve frequency). |
 | 6 | **JBRulesets** | Weight decay, approval hooks, ruleset transitions — timing-dependent logic with 20k-cycle cache thresholds. |

@@ -159,7 +159,7 @@ Juicebox V6 uses a compositional hook system where features plug into the core p
 | Data Hook (cashout) | `IJBRulesetDataHook.beforeCashOutRecordedWith` | JBTerminalStore | JBOmnichainDeployer, REVDeployer |
 | Pay Hook | `IJBPayHook.afterPayRecordedWith` | JBMultiTerminal | JB721TiersHook |
 | Cash Out Hook | `IJBCashOutHook.afterCashOutRecordedWith` | JBMultiTerminal | JB721TiersHook, REVDeployer, DefifaHook |
-| Split Hook | `IJBSplitHook.processSplitWith` | JBMultiTerminal | UniV4DeploymentSplitHook |
+| Split Hook | `IJBSplitHook.processSplitWith` | JBMultiTerminal | JBUniswapV4LPSplitHook |
 | Approval Hook | `IJBRulesetApprovalHook.approvalStatusOf` | JBRulesets | JBDeadline |
 
 ### Permission System
@@ -168,7 +168,7 @@ Juicebox V6 uses a compositional hook system where features plug into the core p
 JBPermissions (256-bit packed)
 ├── ROOT (ID 1) — grants all permissions
 ├── Wildcard projectId=0 — applies to all projects
-├── Per-project permissions (IDs 2-32)
+├── Per-project permissions (IDs 2-33)
 │   ├── Core: QUEUE_RULESETS, MINT_TOKENS, BURN_TOKENS, SET_TERMINALS, etc.
 │   ├── 721 Hook: ADJUST_721_TIERS, SET_721_METADATA, SET_721_DISCOUNT_PERCENT
 │   ├── Buyback: SET_BUYBACK_TWAP, SET_BUYBACK_POOL, SET_BUYBACK_HOOK
@@ -184,20 +184,20 @@ JBPermissions (256-bit packed)
 
 | Repository | Role | Key Contracts | LoC |
 |-----------|------|---------------|-----|
-| nana-core-v6 | Core protocol | JBMultiTerminal, JBController, JBTerminalStore, JBRulesets | ~10,700 |
-| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBBaseSucker, JBArbitrumSucker, JBCCIPSucker | ~5,300 |
-| nana-721-hook-v6 | NFT tiers | JB721TiersHook, JB721TiersHookStore | ~4,500 |
-| defifa-collection-deployer-v6 | Prediction games | DefifaDeployer, DefifaHook, DefifaGovernor, DefifaHookLib | ~3,800 |
-| revnet-core-v6 | Autonomous projects | REVDeployer, REVLoans | ~3,200 |
-| univ4-lp-split-hook-v6 | LP management | UniV4DeploymentSplitHook | ~1,800 |
+| nana-core-v6 | Core protocol | JBMultiTerminal, JBController, JBTerminalStore, JBRulesets | ~11,200 |
+| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBBaseSucker, JBArbitrumSucker, JBCCIPSucker | ~5,000 |
+| nana-721-hook-v6 | NFT tiers | JB721TiersHook, JB721TiersHookStore | ~5,100 |
+| defifa-collection-deployer-v6 | Prediction games | DefifaDeployer, DefifaHook, DefifaGovernor, DefifaHookLib | ~3,900 |
+| revnet-core-v6 | Autonomous projects | REVDeployer, REVLoans | ~3,400 |
+| nana-router-terminal-v6 | Payment routing | JBRouterTerminal, JBRouterTerminalRegistry | ~2,200 |
+| nana-buyback-hook-v6 | DEX buyback | JBBuybackHook, JBBuybackHookRegistry, JBSwapLib | ~1,900 |
 | deploy-all-v6 | Ecosystem deployment | Deploy.s.sol (Sphinx orchestration) | ~1,600 |
-| nana-buyback-hook-v6 | DEX buyback | JBBuybackHook, JBBuybackHookRegistry, JBSwapLib | ~1,500 |
-| nana-router-terminal-v6 | Payment routing | JBRouterTerminal, JBRouterTerminalRegistry | ~1,200 |
-| croptop-core-v6 | NFT publishing | CTDeployer, CTPublisher | ~1,200 |
-| banny-retail-v6 | Banny NFTs | Banny721TokenUriResolver | ~900 |
-| nana-omnichain-deployers-v6 | Omnichain | JBOmnichainDeployer | ~800 |
-| univ4-router-v6 | UniV4 integration | JBUniswapV4Hook | ~800 |
-| nana-ownable-v6 | JB ownership | JBOwnable | ~300 |
+| banny-retail-v6 | Banny NFTs | Banny721TokenUriResolver | ~1,600 |
+| univ4-lp-split-hook-v6 | LP management | JBUniswapV4LPSplitHook | ~1,600 |
+| croptop-core-v6 | NFT publishing | CTDeployer, CTPublisher | ~1,400 |
+| univ4-router-v6 | UniV4 integration | JBUniswapV4Hook | ~1,400 |
+| nana-omnichain-deployers-v6 | Omnichain | JBOmnichainDeployer | ~1,000 |
+| nana-ownable-v6 | JB ownership | JBOwnable | ~400 |
 | nana-fee-project-deployer-v6 | Fee project | Deploy.s.sol (script only) | ~200 |
-| nana-address-registry-v6 | Registry | JBAddressRegistry | ~100 |
-| nana-permission-ids-v6 | Constants | JBPermissionIds | ~50 |
+| nana-address-registry-v6 | Registry | JBAddressRegistry | ~150 |
+| nana-permission-ids-v6 | Constants | JBPermissionIds | ~70 |

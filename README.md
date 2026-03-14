@@ -25,8 +25,8 @@ git clone --recursive https://github.com/Bananapus/version-6.git
 
 | Repo | What it does |
 |------|-------------|
-| [nana-core-v6](./nana-core-v6) | The protocol. Terminals accept funds, Controllers mint tokens, the Store does bookkeeping, Rulesets govern economics, Permissions gate access. ~10,700 lines of battle-tested Solidity. |
-| [nana-permission-ids-v6](./nana-permission-ids-v6) | Permission constants — ROOT through SET_SUCKER_DEPRECATION (IDs 1-32). |
+| [nana-core-v6](./nana-core-v6) | The protocol. Terminals accept funds, Controllers mint tokens, the Store does bookkeeping, Rulesets govern economics, Permissions gate access. ~11,200 lines of Solidity. |
+| [nana-permission-ids-v6](./nana-permission-ids-v6) | Permission constants — ROOT through SET_SUCKER_DEPRECATION (IDs 1-33). |
 
 ### Hooks
 
