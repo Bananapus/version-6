@@ -1,6 +1,6 @@
 # Juicebox V6
 
-Programmable treasuries for Ethereum. Projects collect funds, issue tokens on bonding curves, govern economics through rulesets, and compose features through hooks — all onchain, all composable, across any EVM chain.
+Programmable treasuries for Ethereum. Projects collect funds, issue tokens, cash out along bonding curves, govern economics through rulesets, and compose features through hooks — all onchain, all composable, across any EVM chain.
 
 This is the complete V6 smart contract ecosystem: 18 repositories spanning core protocol, hooks, cross-chain bridging, deployers, applications, and CLI tooling. Clone recursively to get everything:
 

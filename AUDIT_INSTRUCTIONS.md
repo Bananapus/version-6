@@ -1,6 +1,6 @@
 # Audit Instructions
 
-You are auditing the Juicebox V6 smart contract ecosystem — a programmable treasury protocol where projects collect funds through terminals, issue tokens on bonding curves, and compose features through hooks. Your goal is to find bugs that lose funds, break invariants, or enable unauthorized access.
+You are auditing the Juicebox V6 smart contract ecosystem — a programmable treasury protocol where projects collect funds through terminals, issue tokens at configurable weights, let holders cash out along a bonding curve, and compose features through hooks. Your goal is to find bugs that lose funds, break invariants, or enable unauthorized access.
 
 Read [DOC.md](./DOC.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for protocol context. Read [RISKS.md](./RISKS.md) for known risks and trust model. Then come back here.
 
