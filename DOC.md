@@ -109,7 +109,7 @@ Called after cash out is recorded:
 
 ### Split Hooks
 Called when a split payout targets a hook contract:
-- `UniV4DeploymentSplitHook`: Accumulates tokens for Uniswap V4 pool deployment
+- `JBUniswapV4LPSplitHook`: Accumulates tokens for Uniswap V4 pool deployment
 
 ### Approval Hooks
 Called when evaluating ruleset transitions:
@@ -189,7 +189,7 @@ Key contracts:
 
 Two repos handle UniV4:
 - **univ4-router-v6**: `JBUniswapV4Hook` — a UniV4 hook contract with custom swap logic and TWAP oracle tracking, used by the buyback hook for price discovery
-- **univ4-lp-split-hook-v6**: `UniV4DeploymentSplitHook` — a split hook that accumulates reserved tokens and deploys them into full-range UniV4 liquidity pools, with a deployer contract for creating new hook instances per pool
+- **univ4-lp-split-hook-v6**: `JBUniswapV4LPSplitHook` — a split hook that accumulates reserved tokens and deploys them into full-range UniV4 liquidity pools, with a deployer contract for creating new hook instances per pool
 
 ## Croptop
 

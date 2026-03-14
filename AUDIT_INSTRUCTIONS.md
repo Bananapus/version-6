@@ -8,19 +8,19 @@ Read [DOC.md](./DOC.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for protocol co
 
 **In scope — all Solidity in these directories:**
 ```
-nana-core-v6/src/                    # Core protocol (~10,700 lines)
-nana-721-hook-v6/src/                # NFT hooks (~4,400 lines)
-nana-buyback-hook-v6/src/            # DEX buyback (~1,500 lines)
-nana-router-terminal-v6/src/         # Payment routing (~1,200 lines)
-nana-suckers-v6/src/                 # Cross-chain bridging (~5,300 lines)
-nana-omnichain-deployers-v6/src/     # Multi-chain deploy (~800 lines)
-revnet-core-v6/src/                  # Revnets + loans (~3,200 lines)
-croptop-core-v6/src/                 # NFT publishing (~1,200 lines)
-banny-retail-v6/src/                 # Banny NFTs (~900 lines)
-defifa-collection-deployer-v6/src/   # Prediction games (~3,800 lines)
-univ4-lp-split-hook-v6/src/          # UniV4 LP management (~1,800 lines)
-univ4-router-v6/src/                 # UniV4 hook (~800 lines)
-deploy-all-v6/script/Deploy.s.sol    # Ecosystem deployment (1,572 lines)
+nana-core-v6/src/                    # Core protocol (~11,200 lines)
+nana-721-hook-v6/src/                # NFT hooks (~5,100 lines)
+nana-suckers-v6/src/                 # Cross-chain bridging (~5,000 lines)
+defifa-collection-deployer-v6/src/   # Prediction games (~3,900 lines)
+revnet-core-v6/src/                  # Revnets + loans (~3,400 lines)
+nana-router-terminal-v6/src/         # Payment routing (~2,200 lines)
+nana-buyback-hook-v6/src/            # DEX buyback (~1,900 lines)
+deploy-all-v6/script/Deploy.s.sol    # Ecosystem deployment (~1,600 lines)
+banny-retail-v6/src/                 # Banny NFTs (~1,600 lines)
+univ4-lp-split-hook-v6/src/          # UniV4 LP management (~1,600 lines)
+univ4-router-v6/src/                 # UniV4 hook (~1,400 lines)
+croptop-core-v6/src/                 # NFT publishing (~1,400 lines)
+nana-omnichain-deployers-v6/src/     # Multi-chain deploy (~1,000 lines)
 ```
 
 **Also in scope:** All deployment scripts (`*/script/*.sol`). Hardcoded addresses, initialization parameters, and deployment ordering are real attack surface.
@@ -42,7 +42,7 @@ All three paths pay a 2.5% fee to project #1.
 
 **Rulesets** govern economics per time period: mint weight, tax rate, reserved percent, hook configuration. They form a linked list — when one expires, the next queued one takes effect (or the current one cycles with decayed weight).
 
-**Hooks** are the composition layer. They plug in at six extension points:
+**Hooks** are the composition layer. Five extension points:
 - Data hooks: override payment weight or cash out parameters (absolute control)
 - Pay hooks: execute after payment (mint NFTs, swap tokens)
 - Cash out hooks: execute after cash out
@@ -87,7 +87,7 @@ Data hooks see the raw payment context. They return modified weights and hook sp
 - REVDeployer (data hook) + JB721TiersHook (pay hook) + JBBuybackHook (nested data hook call): What happens when the buyback hook returns empty specifications vs. non-empty? Does the REVDeployer handle both cases?
 - JBOmnichainDeployer (data hook overrides cash out tax to 0%) + any cash out hook: Can the 0% tax override be exploited outside of legitimate sucker operations?
 - JB721TiersHook (pay hook) minting NFTs during a payment where JBBuybackHook is swapping tokens: Does the swap callback interact safely with the NFT mint?
-- UniV4DeploymentSplitHook receiving payout during `sendPayoutsOf` while the same project is being paid into: Cross-function reentrancy through split hook.
+- JBUniswapV4LPSplitHook receiving payout during `sendPayoutsOf` while the same project is being paid into: Cross-function reentrancy through split hook.
 
 **What to look for:** State that's partially committed when hooks execute. The terminal updates the store, then mints tokens, then calls hooks. At hook execution time, the store has the new balance but the hook might be able to manipulate other state.
 
@@ -233,14 +233,14 @@ These code patterns are where bugs hide in this codebase:
 |---------|--------------|-------------------|
 | `try-catch` swallowing errors | JBMultiTerminal (hooks, fees, splits) | Failed external calls silently change control flow. The fee try-catch can be used for temporary fee avoidance. |
 | `mulDiv` rounding direction | JBCashOuts, JBFees, JBTerminalStore, JB721TiersHookLib | Rounding in attacker's favor compounds over many transactions. |
-| Hardcoded 0 / placeholder functions | UniV4DeploymentSplitHook | A function that should compute real values but returns 0. Are there other placeholders? |
+| Hardcoded 0 / placeholder functions | JBUniswapV4LPSplitHook | A function that should compute real values but returns 0. Are there other placeholders? |
 | Currency type confusion | JBTerminalStore, JB721TiersHookLib, JBFundAccessLimits | Abstract (1=ETH, 2=USD) vs concrete (`uint32(address)`) currencies. `groupId` (`uint256`) vs `currency` (`uint32`) truncation. |
 | Uncapped input parameters | JB721TiersHookStore | Parameters that accept `uint32` but should be bounded by protocol constants. What other parameters lack bounds checks? |
 | Silent fund drops | JB721TiersHookLib | Funds consumed from accounting but never sent when target address is `address(0)`. Any other path where funds disappear without revert? |
 | Undiscounted price usage | JB721TiersHookLib, JB721TiersHookStore | Cash out weight and split amounts use original tier price instead of discounted price. Is this consistent across all code paths? |
 | Sign convention mismatch | JBUniswapV4Hook | V4 uses a credit/debit convention where output amounts are negative. Slippage checks expecting positive values never fire. Any other V4 integration paths with this issue? |
 | Missing ownership transfer | Deployer contracts | Hooks or contracts deployed by a deployer but never transferred to the project owner. Any deployers that forget `transferOwnershipToProject`? |
-| Stale references after mutation | UniV4DeploymentSplitHook | Stored IDs or addresses that become dangling after the referenced object is burned or destroyed. |
+| Stale references after mutation | JBUniswapV4LPSplitHook | Stored IDs or addresses that become dangling after the referenced object is burned or destroyed. |
 | Re-initialization after ownership renounce | Clone patterns | `initialize()` guard that checks `owner != address(0)` passes again after `renounceOwnership`. Any other clone patterns with this issue? |
 | Array OOB from conditional returns | REVDeployer, hook compositions | Unconditional `[0]` access on arrays that may be empty depending on which code path a hook takes. Scan for all array index accesses after hook/external calls. |
 | External call in loop | JBMultiTerminal (payout splits), processHeldFeesOf | Gas griefing by making external calls revert. Each revert is caught by try-catch but still costs gas. |
@@ -309,7 +309,7 @@ Audit in this order. Earlier items have higher blast radius:
 |----------|--------|-----|
 | 1 | **Hook composition** (REVDeployer + JBBuybackHook + JB721TiersHook) | Hooks compose in ways that aren't tested end-to-end. Conditional array returns, nested hook calls, and re-entrant hook → protocol interactions are the most likely source of undiscovered bugs. |
 | 2 | **JBMultiTerminal + JBTerminalStore** | All funds flow through here. No reentrancy guard — CEI ordering is the only defense. |
-| 3 | **UniV4DeploymentSplitHook** | Complex contract with Uniswap V4 integration, permissionless entry points, no reentrancy protection, and placeholder code. |
+| 3 | **JBUniswapV4LPSplitHook** | Complex contract with Uniswap V4 integration, permissionless entry points, no reentrancy protection, and placeholder code. |
 | 4 | **REVLoans** | Lending against a bonding curve whose parameters change with stage transitions. Collateral manipulation surface is large. |
 | 5 | **JB721TiersHookLib + JB721TiersHookStore** | NFT discount/split/price economics have multiple interacting parameters (discountPercent, splitPercent, cash out weight, reserve frequency). |
 | 6 | **JBRulesets** | Weight decay, approval hooks, ruleset transitions — timing-dependent logic with 20k-cycle cache thresholds. |

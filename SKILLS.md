@@ -26,26 +26,26 @@ Fast-access reference for finding anything in the V6 ecosystem. Use this when yo
 | Surplus calculation | `JBTerminalStore._tokenSurplusFrom()` L813 | Cross-terminal aggregation via JBSurplus |
 | Bonding curve | `JBCashOuts.cashOutFrom()` L20 | `base * [(MAX-tax) + tax*(count/supply)] / MAX` |
 | Token minting | `JBController.mintTokensOf()` L492 | Reserved accumulation in `pendingReservedTokenBalanceOf` |
-| Reserved distribution | `JBController._sendReservedTokensToSplitsOf()` L1063 | Mints then distributes to splits |
+| Reserved distribution | `JBController._sendReservedTokensToSplitsOf()` L1078 | Mints then distributes to splits |
 | Ruleset queuing | `JBRulesets.queueFor()` L116 | Linked list via `basedOnId` |
-| Weight decay | `JBRulesets.deriveWeightFrom()` L609 | Cache required after 20k cycles |
+| Weight decay | `JBRulesets.deriveWeightFrom()` L610 | Cache required after 20k cycles |
 | Permission check | `JBPermissions.hasPermission()` L191 | 256-bit packed, ROOT=1 grants all |
 | Fee processing | `JBMultiTerminal._processFee()` L1479 | 2.5% to project #1, 28-day hold |
 | Held fee return | `JBMultiTerminal.processHeldFeesOf()` L631 | Sequential from `_nextHeldFeeIndexOf` |
 | Data hook (pay) | `JBTerminalStore.recordPaymentFrom()` L308 | Hook overrides weight + specifies pay hooks |
 | Data hook (cashout) | `JBTerminalStore.recordCashOutFor()` L167 | Hook overrides tax rate, count, supply |
-| NFT tier mint | `JB721TiersHookStore.recordMint()` L1020 | Tier selection by price, supply cap check |
-| Buyback decision | `JBBuybackHook._getQuote()` L711 | TWAP vs spot, mint vs swap |
-| Loan creation | `REVLoans.borrowFrom()` L544 | Collateral lock, bonding curve valuation |
+| NFT tier mint | `JB721TiersHookStore.recordMint()` L1023 | Tier selection by price, supply cap check |
+| Buyback decision | `JBBuybackHook._getQuote()` L832 | TWAP vs spot, mint vs swap |
+| Loan creation | `REVLoans.borrowFrom()` L545 | Collateral lock, bonding curve valuation |
 | Cross-chain prepare | `JBSucker.prepare()` | Cash out + insert into outbox merkle tree |
 | Cross-chain claim | `JBSucker.claim()` | Verify merkle proof + mint/transfer |
-| LP pool deploy | `UniV4DeploymentSplitHook.deployPool()` L482 | Concentrated liquidity from accumulated tokens |
-| Defifa game launch | `DefifaDeployer.launchGameWith()` L393 | Creates project + queues phase rulesets |
-| Defifa scorecard | `DefifaGovernor.submitScorecardFor()` L413 | Allocates `TOTAL_CASHOUT_WEIGHT` (1e18) across tiers |
-| Defifa attestation | `DefifaGovernor.attestToScorecardFrom()` L323 | Per-tier power, capped at 1e9 |
-| Defifa ratification | `DefifaGovernor.ratifyScorecardFrom()` L365 | Quorum = 50% of eligible attestation power |
+| LP pool deploy | `JBUniswapV4LPSplitHook.deployPool()` | Concentrated liquidity from accumulated tokens |
+| Defifa game launch | `DefifaDeployer.launchGameWith()` L390 | Creates project + queues phase rulesets |
+| Defifa scorecard | `DefifaGovernor.submitScorecardFor()` L411 | Allocates `TOTAL_CASHOUT_WEIGHT` (1e18) across tiers |
+| Defifa attestation | `DefifaGovernor.attestToScorecardFrom()` L321 | Per-tier power, capped at 1e9 |
+| Defifa ratification | `DefifaGovernor.ratifyScorecardFrom()` L363 | Quorum = 50% of eligible attestation power |
 | Defifa cash-out weight | `DefifaHookLib.computeCashOutWeight()` L95 | `weight / tokens` — integer truncation |
-| Defifa game phase | `DefifaDeployer.currentGamePhaseOf()` L227 | COUNTDOWN → MINT → REFUND → SCORING → COMPLETE |
+| Defifa game phase | `DefifaDeployer.currentGamePhaseOf()` L221 | COUNTDOWN → MINT → REFUND → SCORING → COMPLETE |
 | Full ecosystem deploy | `deploy-all-v6/script/Deploy.s.sol` (1572 lines) | 9-phase Sphinx deployment across 8 chains |
 
 All paths in `nana-core-v6/src/` unless noted otherwise.
@@ -109,35 +109,39 @@ All paths in `nana-core-v6/src/` unless noted otherwise.
 ## Permission IDs
 
 ```
-ROOT                    = 1     All permissions. Cannot be set for wildcard projectId=0.
-QUEUE_RULESETS          = 2     Queue new rulesets
-MINT_TOKENS             = 3     Mint project tokens
-BURN_TOKENS             = 4     Burn tokens on behalf of holder
-SET_TERMINALS           = 5     Set project terminals
-SET_CONTROLLER          = 6     Set project controller
-SET_SPLIT_GROUPS        = 7     Configure splits
-SET_PROJECT_URI         = 8     Set project metadata
-SET_TOKEN               = 9     Deploy/set ERC-20 token
-SEND_PAYOUTS            = 10    Trigger payout distribution
-ADD_PRICE_FEED          = 11    Add price feeds
-USE_ALLOWANCE           = 12    Withdraw from surplus allowance
-CASH_OUT_TOKENS         = 13    Cash out on behalf of holder
-SEND_RESERVED_TOKENS    = 14    Distribute reserved tokens
-TRANSFER_CREDITS        = 15    Transfer token credits
-SET_PRIMARY_TERMINAL    = 16    Set primary terminal
-CLAIM_TOKENS            = 17    Claim ERC-20 from credits
-ADD_ACCOUNTING_CONTEXTS = 20    Add accepted tokens
-ADJUST_721_TIERS        = 21    Modify NFT tiers
-SET_721_METADATA        = 22    Set NFT metadata
-MINT_721                = 23    Owner-mint NFTs
-SET_721_DISCOUNT_PERCENT = 24   Set tier discounts
-SET_BUYBACK_TWAP        = 25    Configure TWAP window
-SET_BUYBACK_POOL        = 26    Set buyback pool
-SET_BUYBACK_HOOK        = 27    Set buyback hook
-MAP_SUCKER_TOKEN        = 29    Map cross-chain tokens
-DEPLOY_SUCKERS          = 30    Deploy sucker pairs
-SUCKER_SAFETY           = 31    Emergency hatch control
-SET_SUCKER_DEPRECATION  = 32    Deprecate suckers
+ROOT                     = 1     All permissions. Cannot be set for wildcard projectId=0.
+QUEUE_RULESETS           = 2     Queue new rulesets
+LAUNCH_RULESETS          = 3     Launch initial rulesets (also requires SET_TERMINALS)
+CASH_OUT_TOKENS          = 4     Cash out on behalf of holder
+SEND_PAYOUTS             = 5     Trigger payout distribution
+MIGRATE_TERMINAL         = 6     Migrate terminal balance
+SET_PROJECT_URI          = 7     Set project metadata
+DEPLOY_ERC20             = 8     Deploy ERC-20 for project
+SET_TOKEN                = 9     Set ERC-20 token
+MINT_TOKENS              = 10    Mint project tokens
+BURN_TOKENS              = 11    Burn tokens on behalf of holder
+CLAIM_TOKENS             = 12    Claim ERC-20 from credits
+TRANSFER_CREDITS         = 13    Transfer token credits
+SET_CONTROLLER           = 14    Set project controller
+SET_TERMINALS            = 15    Set project terminals
+SET_PRIMARY_TERMINAL     = 16    Set primary terminal
+USE_ALLOWANCE            = 17    Withdraw from surplus allowance
+SET_SPLIT_GROUPS         = 18    Configure splits
+ADD_PRICE_FEED           = 19    Add price feeds
+ADD_ACCOUNTING_CONTEXTS  = 20    Add accepted tokens
+SET_TOKEN_METADATA       = 21    Update token name/symbol
+ADJUST_721_TIERS         = 22    Modify NFT tiers
+SET_721_METADATA         = 23    Set NFT metadata
+MINT_721                 = 24    Owner-mint NFTs
+SET_721_DISCOUNT_PERCENT = 25    Set tier discounts
+SET_BUYBACK_TWAP         = 26    Configure TWAP window
+SET_BUYBACK_POOL         = 27    Set buyback pool
+SET_BUYBACK_HOOK         = 28    Set buyback hook (also locks)
+SET_ROUTER_TERMINAL      = 29    Set router terminal (also locks)
+MAP_SUCKER_TOKEN         = 30    Map cross-chain tokens
+DEPLOY_SUCKERS           = 31    Deploy sucker pairs
+SUCKER_SAFETY            = 32    Emergency hatch control
+SET_SUCKER_DEPRECATION   = 33    Deprecate suckers
 ```
 
 ## Libraries
@@ -159,32 +163,32 @@ SET_SUCKER_DEPRECATION  = 32    Deprecate suckers
 
 ```
 nana-core-v6
-  JBMultiTerminal.sol      2,024   ████████████████████
-  JBController.sol         1,186   ████████████
-  JBRulesets.sol           1,093   ███████████
-  JBTerminalStore.sol        800   ████████
+  JBMultiTerminal.sol          2,026   ████████████████████
+  JBController.sol             1,201   ████████████
+  JBRulesets.sol               1,107   ███████████
+  JBTerminalStore.sol            911   █████████
 
 nana-721-hook-v6
-  JB721TiersHookStore.sol  1,200   ████████████
-  JB721TiersHook.sol         600   ██████
+  JB721TiersHookStore.sol      1,223   ████████████
+  JB721TiersHook.sol             788   ████████
 
 revnet-core-v6
-  REVDeployer.sol          1,600   ████████████████
-  REVLoans.sol             1,590   ████████████████
+  REVLoans.sol                 1,363   ██████████████
+  REVDeployer.sol              1,311   █████████████
 
 nana-suckers-v6
-  JBSucker.sol             1,200   ████████████
-
-nana-buyback-hook-v6
-  JBBuybackHook.sol          600   ██████
+  JBSucker.sol                 1,180   ████████████
 
 univ4-lp-split-hook-v6
-  UniV4DeploymentSplitHook   800   ████████
+  JBUniswapV4LPSplitHook.sol   1,352   ██████████████
 
 defifa-collection-deployer-v6
-  DefifaHook.sol           1,056   ███████████
-  DefifaDeployer.sol         894   █████████
-  DefifaGovernor.sol         490   █████
+  DefifaHook.sol               1,075   ███████████
+  DefifaDeployer.sol             906   █████████
+  DefifaGovernor.sol             505   █████
+
+nana-buyback-hook-v6
+  JBBuybackHook.sol              909   █████████
 
 deploy-all-v6
   Deploy.s.sol             1,572   ████████████████
