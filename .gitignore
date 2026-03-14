@@ -1,7 +1,7 @@
 # Audit materials
 .audit/
 .audit-logs/
-AUDIT_FINDINGS.md
+AUDIT_FINDINGS*.md
 NEMESIS_SCOPE.md
 
 # Claude conveniences
