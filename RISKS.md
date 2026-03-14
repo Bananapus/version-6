@@ -1,32 +1,34 @@
-# Juicebox V6 EVM - Security Considerations
+# Juicebox V6 EVM - Risks
 
-This document describes known security properties, trust assumptions, and operational considerations for users and integrators of the Juicebox V6 protocol.
+Known security properties, trust assumptions, and operational considerations for users and integrators of the Juicebox V6 protocol.
+
+## Audit Status
+
+No external audit has been performed yet.
 
 ## Trust Model
 
 ### What You Trust When Using Juicebox V6
 
-1. **The Core Protocol**: The terminal, controller, store, and supporting contracts are shared infrastructure. All projects share the same terminal and controller instances.
+1. **The Core Protocol**: Terminal, controller, store, and supporting contracts are shared infrastructure. All projects share the same contract instances. A bug in `JBMultiTerminal` affects every project.
 
-2. **Your Project Owner**: The project owner (ERC-721 holder) can queue new rulesets, set terminals, configure splits, and delegate permissions. A malicious or compromised owner can fundamentally change project economics.
+2. **Your Project Owner**: The project owner (ERC-721 holder) can queue new rulesets, set terminals, configure splits, and delegate permissions. A malicious or compromised owner can fundamentally change project economics between rulesets.
 
-3. **Your Data Hook**: If a ruleset specifies a data hook, that hook has **absolute control** over token minting weights and cash out parameters. A malicious data hook can drain the entire project treasury. Audit your data hooks with the same rigor as the terminal itself.
+3. **Your Data Hook**: If a ruleset specifies a data hook, that hook has **absolute control** over token minting weights and cash out parameters. A malicious data hook can drain the entire project treasury. This is by design — project owners choose their hooks. Audit your data hooks with the same rigor as the terminal itself.
 
-4. **Your Approval Hook**: Approval hooks can approve or reject ruleset transitions. A reverting approval hook doesn't freeze the project (try-catch fallback), but a malicious one could allow unexpected transitions.
+4. **Your Approval Hook**: Approval hooks approve or reject ruleset transitions. A reverting approval hook falls back to the basedOnId chain (try-catch), but a malicious one could allow unexpected transitions.
 
-5. **Price Feeds**: Surplus calculations depend on Chainlink price feeds. A stale or manipulated feed can affect cash out values and payout calculations. Feed staleness causes operation reverts (DoS), not fund loss.
+5. **Price Feeds**: Surplus calculations depend on Chainlink price feeds. A stale or manipulated feed causes operation reverts (DoS), not direct fund loss.
 
-6. **The Fee Project (#1)**: 2.5% fees go to project #1. If project #1's terminal is misconfigured, fees are returned to the originating project's balance (not lost).
+6. **The Fee Project (#1)**: 2.5% fees go to project #1. If project #1's terminal reverts, fees are returned to the originating project's balance (try-catch fallback).
 
 ### What You Do NOT Need to Trust
 
-- **Other projects**: Each project's balance is isolated by terminal address in `JBTerminalStore`. One project cannot access another's funds.
+- **Other projects**: Each project's balance is isolated by `(terminal, projectId, token)` in `JBTerminalStore`. One project cannot access another's funds.
 - **Token holders**: Token holders can only cash out proportional to the bonding curve. The protocol enforces the curve math.
 - **Permit2**: Optional. Projects work without Permit2 integration.
 
-## Known Risks
-
-### By Design
+## Known Risks — By Design
 
 | Risk | Description | Mitigation |
 |------|-------------|------------|
@@ -35,61 +37,75 @@ This document describes known security properties, trust assumptions, and operat
 | Pending reserved inflation | Pending reserved tokens dilute cash out values | Call `sendReservedTokensToSplitsOf` regularly |
 | No reentrancy guard | Protocol relies on CEI ordering, not mutex | State updates before all external calls |
 | Weight cache requirement | Projects with >20k cycles need progressive cache updates | Anyone can call `updateRulesetWeightCache` |
+| Fee-on-fee compounding | Fees on hooks that themselves trigger fees | Each fee layer is bounded; no unbounded recursion |
 
-### Operational
+## Operational Risks
 
 | Risk | Description | Mitigation |
 |------|-------------|------------|
 | Price feed DoS | Stale/reverting price feed blocks multi-currency operations | Monitor feed health; single-currency projects unaffected |
 | Split gas exhaustion | Very large split arrays (100+) may exceed block gas | Keep split count reasonable (<50) |
-| Held fee growth | Held fees array grows without cleanup | `_nextHeldFeeIndexOf` pointer skips processed entries |
+| Held fee storage growth | Held fees array grows without cleanup | `_nextHeldFeeIndexOf` pointer skips processed entries |
 | Sucker token immutability | Token mappings cannot be changed after first outbox entry | Verify mappings before first bridge operation |
 
-### Defifa-Specific
+## MEV / Front-Running Risks
 
 | Risk | Description | Mitigation |
 |------|-------------|------------|
-| Whale tier dominance | Attacker buys majority of 6+ tiers, controls quorum | Per-tier attestation cap (1e9), but capital-intensive attack possible |
-| Dynamic quorum | Quorum uses live supply, not snapshot — can change after grace period | `NothingToClaim` revert prevents burns during SCORING |
-| Cash-out weight truncation | Integer division `weight/tokens` permanently locks dust | Bounded to ~1 wei per tier per game |
-| Single governor | All games share one DefifaGovernor — bug affects all games | Design choice; governor logic is simple |
-| Fee token dilution | Reserved mints get fee tokens proportional to tier price (not paid) | By design; reduces real payers' claims |
+| Buyback hook sandwich | Spot price fallback on oracle failure is manipulable | TWAP primary (5min min), sigmoid slippage, price limits |
+| Rebalance sandwich | Permissionless `rebalanceLiquidity` in LP hook | Min amount parameters; limited protection |
+| Cash out front-running | Large cash outs visible in mempool | Use private mempools; `minTokensReclaimed` parameter |
+| LP pool deploy sandwich | Pool initialization at non-market price | Pool parameters deterministic from hook config |
+| Fee collection MEV | Permissionless `collectAndRouteLPFees` with `minReturnedTokens: 0` | Add access control or slippage protection |
+
+## Subsystem-Specific Risks
 
 ### REVLoans
 
 | Risk | Description | Mitigation |
 |------|-------------|------------|
-| Collateral value manipulation | Attacker inflates surplus to borrow more, then deflates surplus | Borrow amount based on bonding curve value at time of borrow; surplus changes don't retroactively change existing loan terms |
-| 10-year liquidation drift | Collateral's real value may diverge significantly from loan over 10 years | Liquidation schedule gradually releases collateral; loans can be repaid early |
-| Collateral reallocation race | Reallocating collateral between loans could create moment of under-collateralization | Reallocation is atomic within a single transaction |
+| Collateral value drift | Bonding curve value changes with surplus over 10-year liquidation | Liquidation schedule gradually releases collateral |
+| Stage transition stranding | Active loans may become underwater after stage transition | Borrowers should monitor stage timelines |
+| Fee terminal revert DoS | Fee payments during loan ops not wrapped in try-catch | Fix: add try-catch |
 
-### UniV4 LP / Router
-
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| LP pool deployment front-running | Pool deployment is permissionless once threshold is met | Pool parameters are deterministic from hook config |
-| Router swap slippage | Token swaps through JBRouterTerminal can be sandwiched | `minAmountOut` parameter; users should set appropriate slippage |
-| Stale route | Registered swap route may become suboptimal over time | Routes can be updated; not locked |
-
-### Deployment
+### 721 Hook (NFTs)
 
 | Risk | Description | Mitigation |
 |------|-------------|------------|
-| Deployment ordering | Partially deployed state could be exploited between Sphinx phases | Sphinx proposals are atomic per phase; contracts aren't usable until fully wired |
-| Hardcoded addresses | Deploy.s.sol contains hardcoded addresses for external contracts (Uniswap, Chainlink) | Addresses verified against canonical deployments per chain |
-| Constructor parameter errors | Wrong initialization parameters could lock funds or grant wrong permissions | Deployment script tested via `forge build`; CI verifies compilation |
+| Free mint arbitrage | 100% discount (`discountPercent = 200`) + cash out weight based on undiscounted price | Cap discount below 100% or weight by paid price |
+| Split overflow | `splitPercent` not validated against `SPLITS_TOTAL_PERCENT` | Add validation in `recordAddTiers` |
+| Split fund loss | Funds silently dropped when split terminal not found | Revert on missing terminal |
+| Price mismatch in splits | Split amounts use undiscounted tier price | Apply discount before computing splits |
 
-### MEV / Front-Running
+### Cross-Chain (Suckers)
 
 | Risk | Description | Mitigation |
 |------|-------------|------------|
-| Buyback hook sandwich | Spot price fallback path (on oracle failure) is manipulable | TWAP primary path (5min min), sigmoid slippage, price limits |
-| Rebalance sandwich | Permissionless `rebalanceLiquidity` in UniV4 LP hook | Min amount parameters provide some protection |
-| Cash out front-running | Large cash outs visible in mempool | Use private mempools; `minTokensReclaimed` parameter |
+| Emergency hatch rug | No timelock on emergency hatch token recovery | Compromised owner key can drain bridge |
+| CCIP amount skip | Amount validation intentionally skipped to prevent lockup | CCIP failures extremely rare; authentication strong |
+
+### Defifa (Prediction Games)
+
+| Risk | Description | Mitigation |
+|------|-------------|------------|
+| Whale tier dominance | Attacker buys majority of 6+ tiers, controls quorum | Per-tier cap at 1e9, but capital-intensive attack possible |
+| Dynamic quorum | Quorum uses live supply, not snapshot | Burns during SCORING prevented |
+| Grace period bypass | Early-submitted scorecards may expire before attestations begin | Fix `gracePeriodEnds` calculation |
+| Fulfillment blocks ratification | `fulfillCommitmentsOf` revert blocks scorecard permanently | Add try-catch around fulfillment |
+
+### LP Split Hook (UniV4)
+
+| Risk | Description | Mitigation |
+|------|-------------|------------|
+| Fee routing placeholder | `_getAmountForCurrency` returns hardcoded 0 | Replace with actual balance tracking |
+| Cross-token corruption | Single accumulator for multi-token projects | Key by `(projectId, token)` |
+| No reentrancy protection | External calls without ReentrancyGuard | Add guard to all entry points |
+| Position bricking | Stale `tokenIdOf` after zero-liquidity rebalance | Update token ID on position burn |
+| Re-initialization | `initialize()` callable again after `renounceOwnership` | Add initialized guard |
 
 ## Security Properties (Proven)
 
-These invariants are verified by the existing test suite:
+These invariants are verified by the test suite (165 test files):
 
 1. **No flash-loan profit**: Tested across 12 attack vectors including multi-step, cross-terminal, and time-manipulation strategies
 2. **Balance conservation**: Terminal ETH/token balance >= sum of all recorded project balances
@@ -97,65 +113,45 @@ These invariants are verified by the existing test suite:
 4. **Fee monotonicity**: Fee project (#1) balance only increases
 5. **Token supply consistency**: `creditSupply + erc20.totalSupply() == totalSupply`
 6. **Ruleset existence**: After launch, `currentOf(projectId)` always returns a valid ruleset
-7. **Fee accuracy**: Forward and backward fee calculations are consistent within rounding bounds
+7. **Fee accuracy**: Forward and backward fee calculations consistent within rounding bounds
 
 ## Reentrancy Analysis
 
-The protocol uses no `ReentrancyGuard`. Instead, it relies on state ordering:
+The protocol uses no `ReentrancyGuard`. It relies on state ordering (CEI pattern):
 
-| Function | State Updated Before External Call | Risk Level |
-|----------|-----------------------------------|------------|
-| `_cashOutTokensOf` | Store balance deducted, tokens burned BEFORE transfer | LOW |
-| `_pay` | Store balance added, tokens minted BEFORE pay hooks | LOW |
+| Function | State Before External Call | Risk |
+|----------|---------------------------|------|
+| `_cashOutTokensOf` | Balance deducted, tokens burned BEFORE transfer/hooks | LOW |
+| `_pay` | Balance added, tokens minted BEFORE pay hooks | LOW |
 | `executePayout` | Payout limit recorded BEFORE split hook calls | LOW |
 | `processHeldFeesOf` | Index updated BEFORE fee processing | LOW |
 | `_sendReservedTokensToSplitsOf` | Pending balance zeroed BEFORE minting | LOW |
-| Defifa `afterCashOutRecordedWith` | Tokens burned BEFORE state updates; terminal state committed | LOW |
-| Defifa `fulfillCommitmentsOf` | `fulfilledCommitmentsOf` set BEFORE external calls | LOW |
-| REVLoans `borrowFrom` | Collateral locked BEFORE funds transferred | LOW |
-| REVLoans `repayLoan` | Loan state cleared BEFORE collateral returned | LOW |
-| `JBRouterTerminal._swap` | Swap executed, then payment forwarded — no intermediate state exposure | LOW |
+| `REVLoans.borrowFrom` | Collateral locked BEFORE funds transferred | LOW |
+| `REVLoans.repayLoan` | Loan state cleared BEFORE collateral returned | LOW |
 
 **Key defense**: `JBTerminalStore_InadequateTerminalStoreBalance` revert prevents extracting more than available balance regardless of reentrancy.
 
-## Permission Security
-
-- **ROOT (ID 1)** grants all permissions but **cannot** be set for wildcard `projectId = 0`
-- ROOT operators **cannot** grant ROOT to other addresses
-- Permission 0 is reserved and cannot be set
-- All permission checks support ERC-2771 meta-transactions via trusted forwarder
-
-## Cross-Chain Security
-
-- Merkle proofs prevent double-claims (bitmap tracking per leaf index)
-- Bridge roots only settable by authenticated remote peer
-- Leaf hash includes beneficiary address (prevents replay with different recipient)
-- CCIP amount validation intentionally skipped (M-28) to prevent token lockup
-- Emergency hatch allows project owner to recover stuck tokens (instant, no timelock)
-- Token mapping immutability prevents remapping after first use
+**Gap**: Complex cross-function reentrancy (hook calling back into a *different* terminal function) is not explicitly prevented. The LP split hook has no reentrancy protection at all.
 
 ## Recommendations for Project Owners
 
-1. **Audit your data hooks** - They have complete control over your project's economics
-2. **Set approval hooks** - Use `JBDeadline` to require minimum delay before ruleset changes
-3. **Distribute reserved tokens regularly** - Pending reserves dilute cash out values
-4. **Monitor price feeds** - Stale feeds block operations; consider single-currency setups
-5. **Use `minTokensReclaimed`** - Always set slippage protection on cash outs
-6. **Keep split arrays small** - Gas costs scale linearly with split count
-7. **Test ruleset transitions** - Ensure your approval hooks don't unexpectedly block transitions
-8. **Verify token mappings before bridging** - Cross-chain token mappings are immutable once used
-9. **Be cautious with 100% discounts** - Setting `discountPercent = 200` on NFT tiers allows free minting with full cash out weight
-10. **Defifa: Submit scorecards early** - A scorecard that reaches quorum but isn't ratified before `scorecardTimeout` becomes blocked
-11. **Defifa: Delegation during MINT** - Token delegation is only possible during MINT phase; tokens transferred later inherit the sender's delegate or go to `address(0)`
+1. **Audit your data hooks** — they have complete control over your project's economics
+2. **Set approval hooks** — use `JBDeadline` to require minimum delay before ruleset changes
+3. **Distribute reserved tokens regularly** — pending reserves dilute cash out values
+4. **Monitor price feeds** — stale feeds block operations; consider single-currency setups
+5. **Always set `minTokensReclaimed`** — slippage protection on cash outs
+6. **Keep split arrays small** — gas costs scale linearly with split count
+7. **Verify token mappings before bridging** — cross-chain token mappings are immutable once used
+8. **Be cautious with 100% discounts** — `discountPercent = 200` allows free minting with full cash out weight
+9. **Don't call `renounceOwnership` on LP hook clones** — allows re-initialization
 
 ## Recommendations for Integrators
 
-1. **Use `try-catch` for terminal calls** - The terminal may revert if rulesets are paused or limits exceeded
-2. **Check `controllerOf()` returns** - Returns `IERC165`, not `address`
-3. **Check `primaryTerminalOf()` returns** - Returns `IJBTerminal`, not `address`
-4. **Handle credit vs ERC-20** - Users may have credits that aren't transferable as ERC-20
-5. **Monitor `FeeReverted` events** - Indicates fee processing failures (temporary, fees remain held)
-6. **Support ERC-2771** - If using meta-transactions, ensure the trusted forwarder is configured
-7. **Set slippage on router terminal payments** - `JBRouterTerminal` swaps can be sandwiched without `minAmountOut`
-8. **Check loan health before relying on collateral** - REVLoans collateral value changes with surplus; don't assume stable LTV
-9. **Verify sucker deprecation state** - Check `deprecationOf()` before initiating cross-chain operations
+1. **Use `try-catch` for terminal calls** — the terminal may revert if rulesets are paused or limits exceeded
+2. **Cast `controllerOf()` returns** — returns `IERC165`, not `address`
+3. **Cast `primaryTerminalOf()` returns** — returns `IJBTerminal`, not `address`
+4. **Handle credit vs ERC-20** — users may have credits that aren't transferable as ERC-20
+5. **Set slippage on router terminal payments** — `JBRouterTerminal` swaps can be sandwiched without `minAmountOut`
+6. **Check loan health dynamically** — REVLoans collateral value changes with surplus; don't assume stable LTV
+7. **Verify sucker deprecation state** — check `deprecationOf()` before initiating cross-chain operations
+8. **Monitor `FeeReverted` events** — indicates fee processing failures (temporary, fees remain held)

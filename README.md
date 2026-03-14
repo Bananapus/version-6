@@ -14,7 +14,7 @@ git clone --recursive https://github.com/Bananapus/version-6.git
 |-------------|---------|
 | Understand the protocol | [DOC.md](./DOC.md) |
 | See how contracts connect | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| Review security properties | [SECURITY.md](./SECURITY.md) |
+| Understand the risks | [RISKS.md](./RISKS.md) |
 | Navigate the codebase fast | [SKILLS.md](./SKILLS.md) |
 | Audit / try to break it | [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md) |
 | Follow our coding style | [STYLE_GUIDE.md](./STYLE_GUIDE.md) |
