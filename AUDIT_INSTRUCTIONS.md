@@ -8,19 +8,19 @@ Read [DOC.md](./DOC.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for protocol co
 
 **In scope — all Solidity in these directories:**
 ```
-nana-core-v6/src/                    # Core protocol (~10,700 lines)
-nana-721-hook-v6/src/                # NFT hooks (~4,400 lines)
-nana-buyback-hook-v6/src/            # DEX buyback (~1,500 lines)
-nana-router-terminal-v6/src/         # Payment routing (~1,200 lines)
-nana-suckers-v6/src/                 # Cross-chain bridging (~5,300 lines)
-nana-omnichain-deployers-v6/src/     # Multi-chain deploy (~800 lines)
-revnet-core-v6/src/                  # Revnets + loans (~3,200 lines)
-croptop-core-v6/src/                 # NFT publishing (~1,200 lines)
-banny-retail-v6/src/                 # Banny NFTs (~900 lines)
-defifa-collection-deployer-v6/src/   # Prediction games (~3,800 lines)
-univ4-lp-split-hook-v6/src/          # UniV4 LP management (~1,800 lines)
-univ4-router-v6/src/                 # UniV4 hook (~800 lines)
-deploy-all-v6/script/Deploy.s.sol    # Ecosystem deployment (1,572 lines)
+nana-core-v6/src/                    # Core protocol (~11,200 lines)
+nana-721-hook-v6/src/                # NFT hooks (~5,100 lines)
+nana-suckers-v6/src/                 # Cross-chain bridging (~5,000 lines)
+defifa-collection-deployer-v6/src/   # Prediction games (~3,900 lines)
+revnet-core-v6/src/                  # Revnets + loans (~3,400 lines)
+nana-router-terminal-v6/src/         # Payment routing (~2,200 lines)
+nana-buyback-hook-v6/src/            # DEX buyback (~1,900 lines)
+deploy-all-v6/script/Deploy.s.sol    # Ecosystem deployment (~1,600 lines)
+banny-retail-v6/src/                 # Banny NFTs (~1,600 lines)
+univ4-lp-split-hook-v6/src/          # UniV4 LP management (~1,600 lines)
+univ4-router-v6/src/                 # UniV4 hook (~1,400 lines)
+croptop-core-v6/src/                 # NFT publishing (~1,400 lines)
+nana-omnichain-deployers-v6/src/     # Multi-chain deploy (~1,000 lines)
 ```
 
 **Also in scope:** All deployment scripts (`*/script/*.sol`). Hardcoded addresses, initialization parameters, and deployment ordering are real attack surface.
@@ -42,7 +42,7 @@ All three paths pay a 2.5% fee to project #1.
 
 **Rulesets** govern economics per time period: mint weight, tax rate, reserved percent, hook configuration. They form a linked list — when one expires, the next queued one takes effect (or the current one cycles with decayed weight).
 
-**Hooks** are the composition layer. They plug in at six extension points:
+**Hooks** are the composition layer. Five extension points:
 - Data hooks: override payment weight or cash out parameters (absolute control)
 - Pay hooks: execute after payment (mint NFTs, swap tokens)
 - Cash out hooks: execute after cash out

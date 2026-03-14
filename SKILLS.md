@@ -26,26 +26,26 @@ Fast-access reference for finding anything in the V6 ecosystem. Use this when yo
 | Surplus calculation | `JBTerminalStore._tokenSurplusFrom()` L813 | Cross-terminal aggregation via JBSurplus |
 | Bonding curve | `JBCashOuts.cashOutFrom()` L20 | `base * [(MAX-tax) + tax*(count/supply)] / MAX` |
 | Token minting | `JBController.mintTokensOf()` L492 | Reserved accumulation in `pendingReservedTokenBalanceOf` |
-| Reserved distribution | `JBController._sendReservedTokensToSplitsOf()` L1063 | Mints then distributes to splits |
+| Reserved distribution | `JBController._sendReservedTokensToSplitsOf()` L1078 | Mints then distributes to splits |
 | Ruleset queuing | `JBRulesets.queueFor()` L116 | Linked list via `basedOnId` |
-| Weight decay | `JBRulesets.deriveWeightFrom()` L609 | Cache required after 20k cycles |
+| Weight decay | `JBRulesets.deriveWeightFrom()` L610 | Cache required after 20k cycles |
 | Permission check | `JBPermissions.hasPermission()` L191 | 256-bit packed, ROOT=1 grants all |
 | Fee processing | `JBMultiTerminal._processFee()` L1479 | 2.5% to project #1, 28-day hold |
 | Held fee return | `JBMultiTerminal.processHeldFeesOf()` L631 | Sequential from `_nextHeldFeeIndexOf` |
 | Data hook (pay) | `JBTerminalStore.recordPaymentFrom()` L308 | Hook overrides weight + specifies pay hooks |
 | Data hook (cashout) | `JBTerminalStore.recordCashOutFor()` L167 | Hook overrides tax rate, count, supply |
-| NFT tier mint | `JB721TiersHookStore.recordMint()` L1020 | Tier selection by price, supply cap check |
-| Buyback decision | `JBBuybackHook._getQuote()` L711 | TWAP vs spot, mint vs swap |
-| Loan creation | `REVLoans.borrowFrom()` L544 | Collateral lock, bonding curve valuation |
+| NFT tier mint | `JB721TiersHookStore.recordMint()` L1023 | Tier selection by price, supply cap check |
+| Buyback decision | `JBBuybackHook._getQuote()` L832 | TWAP vs spot, mint vs swap |
+| Loan creation | `REVLoans.borrowFrom()` L545 | Collateral lock, bonding curve valuation |
 | Cross-chain prepare | `JBSucker.prepare()` | Cash out + insert into outbox merkle tree |
 | Cross-chain claim | `JBSucker.claim()` | Verify merkle proof + mint/transfer |
 | LP pool deploy | `JBUniswapV4LPSplitHook.deployPool()` | Concentrated liquidity from accumulated tokens |
-| Defifa game launch | `DefifaDeployer.launchGameWith()` L393 | Creates project + queues phase rulesets |
-| Defifa scorecard | `DefifaGovernor.submitScorecardFor()` L413 | Allocates `TOTAL_CASHOUT_WEIGHT` (1e18) across tiers |
-| Defifa attestation | `DefifaGovernor.attestToScorecardFrom()` L323 | Per-tier power, capped at 1e9 |
-| Defifa ratification | `DefifaGovernor.ratifyScorecardFrom()` L365 | Quorum = 50% of eligible attestation power |
+| Defifa game launch | `DefifaDeployer.launchGameWith()` L390 | Creates project + queues phase rulesets |
+| Defifa scorecard | `DefifaGovernor.submitScorecardFor()` L411 | Allocates `TOTAL_CASHOUT_WEIGHT` (1e18) across tiers |
+| Defifa attestation | `DefifaGovernor.attestToScorecardFrom()` L321 | Per-tier power, capped at 1e9 |
+| Defifa ratification | `DefifaGovernor.ratifyScorecardFrom()` L363 | Quorum = 50% of eligible attestation power |
 | Defifa cash-out weight | `DefifaHookLib.computeCashOutWeight()` L95 | `weight / tokens` — integer truncation |
-| Defifa game phase | `DefifaDeployer.currentGamePhaseOf()` L227 | COUNTDOWN → MINT → REFUND → SCORING → COMPLETE |
+| Defifa game phase | `DefifaDeployer.currentGamePhaseOf()` L221 | COUNTDOWN → MINT → REFUND → SCORING → COMPLETE |
 | Full ecosystem deploy | `deploy-all-v6/script/Deploy.s.sol` (1572 lines) | 9-phase Sphinx deployment across 8 chains |
 
 All paths in `nana-core-v6/src/` unless noted otherwise.
