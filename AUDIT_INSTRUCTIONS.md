@@ -1,8 +1,8 @@
 # Audit Instructions
 
-You are auditing the Juicebox V6 smart contract ecosystem. Your goal is to find bugs that lose funds, break invariants, or enable unauthorized access. This document tells you where the money is, what to attack, and what assumptions to challenge.
+You are auditing the Juicebox V6 smart contract ecosystem — a programmable treasury protocol where projects collect funds through terminals, issue tokens at configurable weights, let holders cash out along a bonding curve, and compose features through hooks. Your goal is to find bugs that lose funds, break invariants, or enable unauthorized access.
 
-Read [ARCHITECTURE.md](./ARCHITECTURE.md) and [DOC.md](./DOC.md) first for protocol context. Read [SECURITY.md](./SECURITY.md) for known risks and trust model. Then come back here.
+Read [DOC.md](./DOC.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for protocol context. Read [RISKS.md](./RISKS.md) for known risks and trust model. Then come back here.
 
 ## Scope
 
@@ -23,158 +23,191 @@ univ4-router-v6/src/                 # UniV4 hook (~800 lines)
 deploy-all-v6/script/Deploy.s.sol    # Ecosystem deployment (1,572 lines)
 ```
 
-**Also in scope:** All deployment scripts (`*/script/*.sol`). Hardcoded addresses, initialization parameter errors, and deployment ordering bugs are real vulnerabilities.
+**Also in scope:** All deployment scripts (`*/script/*.sol`). Hardcoded addresses, initialization parameters, and deployment ordering are real attack surface.
 
 **Out of scope:** Test files (`*/test/`), OpenZeppelin/Solady/Uniswap dependencies (assume correct), forge-std.
 
+## The Protocol in 60 Seconds
+
+Every project is an ERC-721 NFT. The NFT owner governs the project.
+
+**Money in**: Users pay a project via `JBMultiTerminal.pay()`. The terminal records the payment in `JBTerminalStore`, then asks `JBController` to mint project tokens to the payer. A data hook can override the mint rate. Pay hooks execute afterward (e.g., mint NFTs).
+
+**Money out — three paths**:
+1. **Cash out** (`cashOutTokensOf`): Burn tokens, reclaim surplus via bonding curve. Tax rate controls how much goes back.
+2. **Payouts** (`sendPayoutsOf`): Owner distributes funds to splits (addresses, other projects, hooks). Bounded by payout limits.
+3. **Surplus allowance** (`useAllowanceOf`): Owner withdraws from surplus. Bounded by allowance limits.
+
+All three paths pay a 2.5% fee to project #1.
+
+**Rulesets** govern economics per time period: mint weight, tax rate, reserved percent, hook configuration. They form a linked list — when one expires, the next queued one takes effect (or the current one cycles with decayed weight).
+
+**Hooks** are the composition layer. They plug in at six extension points:
+- Data hooks: override payment weight or cash out parameters (absolute control)
+- Pay hooks: execute after payment (mint NFTs, swap tokens)
+- Cash out hooks: execute after cash out
+- Split hooks: execute during payout distribution
+- Approval hooks: approve/reject ruleset transitions
+
 ## Where the Money Is
 
-All project funds flow through `JBMultiTerminal`. Every project's ETH and ERC-20 balances are recorded in `JBTerminalStore`. The terminal holds real tokens; the store tracks accounting.
+All project funds are held by `JBMultiTerminal`. Accounting lives in `JBTerminalStore`. The terminal holds real tokens; the store tracks per-project balances.
 
-**Value extraction paths (ordered by risk):**
-1. `cashOutTokensOf()` — burn tokens, reclaim surplus via bonding curve
-2. `sendPayoutsOf()` — distribute funds to splits (payees)
-3. `useAllowanceOf()` — withdraw from surplus allowance
-4. `_processFee()` — 2.5% fee to project #1 on every outflow
-5. `processHeldFeesOf()` — release or return held fees after 28 days
-6. `REVLoans.borrowFrom()` — borrow against locked token collateral
-7. `JBSucker.prepare()` → `claim()` — bridge tokens cross-chain
+**Value extraction paths (ordered by blast radius):**
+
+| Path | Entry Point | What to Verify |
+|------|------------|----------------|
+| Cash out | `cashOutTokensOf()` | Bonding curve math, surplus calculation, data hook overrides |
+| Payouts | `sendPayoutsOf()` | Payout limit enforcement, split distribution, fee calculation |
+| Surplus allowance | `useAllowanceOf()` | Allowance limit enforcement, surplus calculation |
+| Fee processing | `_processFee()` / `processHeldFeesOf()` | Fee arithmetic, held fee lifecycle, try-catch fallback |
+| Loans | `REVLoans.borrowFrom()` | Collateral valuation, liquidation schedule, surplus manipulation |
+| Cross-chain bridge | `JBSucker.prepare()` → `claim()` | Merkle proof verification, double-claim prevention, amount conservation |
+| NFT cash out | `JB721TiersHook.afterCashOutRecordedWith()` | Cash out weight calculation, tier price vs discount |
 
 If you can extract more value than the protocol intends through any of these paths, that's a critical finding.
 
-## What to Attack
+## Domain-Specific Attack Vectors
 
-### 1. Bonding Curve Manipulation
+These are the attack patterns most likely to yield findings in this codebase. They're ordered by estimated likelihood of undiscovered bugs.
 
-The cash out formula in `JBCashOuts.cashOutFrom()` (L20) determines how much surplus a token holder reclaims:
+### 1. Hook Composition Attacks
 
+The hook system is the largest attack surface. Individual hooks may work correctly in isolation, but their **composition** — where one hook's output feeds into another's input, or where hooks re-enter the protocol during execution — is where bugs hide.
+
+**The composition model:**
+```
+Data hook called during RECORDING (store) → Pay/cashout hooks called during FULFILLMENT (terminal)
+                                          → Split hooks called during PAYOUT (terminal)
+```
+
+Data hooks see the raw payment context. They return modified weights and hook specifications. The terminal then calls those hooks with funds. Hooks can themselves interact with the protocol.
+
+**Specific compositions to test:**
+- REVDeployer (data hook) + JB721TiersHook (pay hook) + JBBuybackHook (nested data hook call): What happens when the buyback hook returns empty specifications vs. non-empty? Does the REVDeployer handle both cases?
+- JBOmnichainDeployer (data hook overrides cash out tax to 0%) + any cash out hook: Can the 0% tax override be exploited outside of legitimate sucker operations?
+- JB721TiersHook (pay hook) minting NFTs during a payment where JBBuybackHook is swapping tokens: Does the swap callback interact safely with the NFT mint?
+- UniV4DeploymentSplitHook receiving payout during `sendPayoutsOf` while the same project is being paid into: Cross-function reentrancy through split hook.
+
+**What to look for:** State that's partially committed when hooks execute. The terminal updates the store, then mints tokens, then calls hooks. At hook execution time, the store has the new balance but the hook might be able to manipulate other state.
+
+### 2. Bonding Curve Economic Attacks
+
+The cash out formula in `JBCashOuts.cashOutFrom()`:
 ```
 reclaimAmount = (surplus * count / supply) * [(MAX - tax) + tax * (count / supply)] / MAX
 ```
 
-**Attack surface:**
-- Can you manipulate `surplus` (via pay/addToBalance) to inflate reclaim?
-- Can you manipulate `totalSupply` (including pending reserved tokens) to get a larger share?
-- Can you flash loan to temporarily inflate your position?
-- What happens when `cashOutCount >= totalSupply`? (Known: returns entire surplus)
-- What happens when `totalSupply == 0` and surplus exists? (Known: returns entire surplus)
-- Does the data hook's ability to override `cashOutTaxRate`, `cashOutCount`, and `totalSupply` create exploitable paths?
+**Key inputs an attacker controls:**
+- `count` — how many tokens to cash out (directly)
+- `surplus` — by paying into the project or manipulating via data hooks
+- `supply` — indirectly, via pending reserved tokens
 
-### 2. Data Hook Omnipotence
+**Attack sequences to try:**
+1. Pay → immediate cash out in same block: should never profit after fees (invariant tested, but test with different hook configurations)
+2. Pay with data hook that inflates weight → cash out before reserved tokens are distributed: pending reserved tokens inflate supply, reducing your share — but what if you time it right?
+3. Multi-project attack: pay into project A (which has a split to project B), then cash out from project B before the split executes
+4. Cash out with `cashOutCount >= totalSupply` returns entire surplus (known, by design). Can you engineer this condition without being the actual last holder? (e.g., front-running a burn)
+5. Cross-terminal surplus aggregation: `useTotalSurplusForCashOuts` flag aggregates surplus across all terminals via `JBSurplus`. Can you manipulate surplus in one terminal to inflate cash out value in another?
 
-Data hooks override the economic parameters for both payments and cashouts. A data hook set in a ruleset's metadata has **absolute control** over:
-- Payment: token minting weight, pay hook allocations
-- Cashout: tax rate, cashout count, total supply, cashout hook allocations
+### 3. Currency and Price Feed Manipulation
 
-**Attack surface:**
-- Can a malicious data hook drain the treasury? (By design, yes — but can a LEGITIMATE data hook be tricked?)
-- `JBBuybackHook` decides between minting and swapping. Can the swap path be sandwiched? Can the TWAP oracle be manipulated over time?
-- `REVDeployer` acts as a data hook. Can its staged economics be exploited during stage transitions?
-- `JBOmnichainDeployer` gives suckers 0% cashout tax. Can this be abused to bypass intended tax rates?
+The protocol has **two currency systems** that interact at conversion boundaries:
+- **Abstract**: `baseCurrency` in rulesets (1=ETH, 2=USD). Used for surplus calculations.
+- **Concrete**: `uint32(uint160(tokenAddress))` in accounting contexts. Identifies payment tokens.
 
-### 3. Cross-Function State Inconsistency
+`JBPrices` mediates between them. Price feeds are immutable once set.
 
-The protocol has no reentrancy guard. It relies on state ordering (CEI pattern). Look for:
-- Functions that update `JBTerminalStore` balance but make external calls before the update is complete
-- Pay hooks executing with tokens already minted but before all accounting is settled
-- Split hooks receiving funds before payout limit is fully consumed
-- Cashout hooks executing after beneficiary is paid but before fees are taken
+**Attack vectors:**
+- A price feed that returns a manipulated price could inflate/deflate surplus calculations. Chainlink feeds have staleness checks, but project-specific feeds don't have to.
+- `JBMatchingPriceFeed` returns 1:1 — if deployed for the wrong pair, all conversions are wrong.
+- `normalizePaymentValue` in `JB721TiersHookLib` converts payment amounts to tier pricing denomination. If the price feed returns an extreme value, NFTs could be minted for effectively free.
+- Rounding compounds through conversion chains: pay in token A → normalize to pricing currency → compute split → convert back. Each step rounds via `mulDiv`. Can N payments each rounding in the attacker's favor compound to a meaningful loss?
 
-**Specific pattern to trace:**
-```
-recordPaymentFrom() → [store updated] → mintTokensOf() → [tokens exist] → pay hooks execute
-```
-At the moment pay hooks execute, what can they do with the newly minted tokens? Can they cash out before the payment transaction completes?
+### 4. Reentrancy Through Hooks
 
-### 4. Fee Arithmetic
+No contract uses `ReentrancyGuard`. The protocol relies on CEI ordering.
 
-Fees are 2.5% (`FEE = 25`, `MAX_FEE = 1000`). Two formulas in `JBFees`:
-- Forward: `amount * feePercent / MAX_FEE`
-- Backward: `amount * MAX_FEE / (MAX_FEE - feePercent) - amount`
+**The critical reentrancy surfaces (in order of risk):**
 
-**Attack surface:**
-- Rounding: Can you structure payouts to N splits such that total fees collected are less than fee on the aggregate amount?
-- Held fees: Can you add to balance to return held fees, then withdraw the added balance plus the returned fee amount?
-- Fee-on-fee: When cashout hooks take fees, and the fee payment itself triggers hooks, is there a compounding issue?
-- `JBFeelessAddresses`: Can feeless status be granted/revoked at a moment that causes inconsistency?
+1. **LP Split Hook** (no protection at all): `deployPool`, `collectAndRouteLPFees`, `rebalanceLiquidity`, and `claimFeeTokensFor` all make external calls without any reentrancy protection. The hook calls `terminal.pay()` (which triggers pay hooks), `POSITION_MANAGER.modifyLiquidities`, and `controller.burnTokensOf`. If any of these re-enter the hook, state corruption is possible.
 
-### 5. Ruleset Transitions
+2. **Pay hook → cash out reentrancy**: When a pay hook executes, tokens have been minted and the store balance is updated. The hook could call `cashOutTokensOf` on the same project. Tokens are burned, reclaim is computed against the post-payment surplus. Is this profitable?
 
-Rulesets form a linked list. When one expires, the next queued takes effect. If none is queued, the current one cycles with decayed weight.
+3. **Split hook → pay reentrancy**: During `sendPayoutsOf`, split hooks receive funds. A split hook could call `pay()` on the same project. The payout limit is already consumed, but the payment adds to balance and mints tokens. Does this create a value loop?
 
-**Attack surface:**
-- Can you time a transaction to land exactly at a ruleset boundary and get better terms?
-- Approval hooks can approve/reject transitions. What if an approval hook reverts? (Protocol has try-catch fallback — verify it's correct)
-- `weight = 1` means "inherit decayed weight." Can this be exploited when chained across many cycles?
-- Weight decay requires a cache after 20,000 iterations. What happens if the cache isn't updated? (`WeightCacheRequired` revert — verify DoS impact)
+4. **Fee processing → re-entry**: `_processFee` calls `terminal.pay()` on project #1's terminal. If project #1 has a pay hook that calls back into the originating terminal, what happens? The fee amount is already deducted.
 
-### 6. Cross-Chain Bridge
+### 5. Ruleset Transition Timing
 
-`JBSucker` uses merkle trees for cross-chain token movement.
+Rulesets transition at exact block timestamps. Transaction ordering at boundaries matters.
 
-**Attack surface:**
-- Can you replay a claim with a different beneficiary? (Leaf hash includes beneficiary — verify)
-- Can you prepare on chain A, then claim on chains B AND C? (Sucker pairs are 1:1 — verify)
-- Token mapping immutability: once set, can it be changed through any path?
-- CCIP amount validation is intentionally skipped (known M-28). Can this be exploited?
-- Emergency hatch has no timelock. Can a compromised project owner rug via emergency hatch?
-- Deprecation lifecycle: can a sucker in SENDING_DISABLED still have its outbox processed?
+**What to test:**
+- A payment landing in the last second of a ruleset vs. the first second of the next: do both execute with correct weights?
+- Approval hook rejection at boundary: if the approval hook says "not yet approved," the protocol falls back to the basedOnId chain and simulates cycling from the last approved ruleset. Is this fallback always equivalent to the intended behavior?
+- `duration = 0` rulesets never expire — they're immediately replaced when a new one is queued. Can you pay and queue a ruleset in the same transaction to get the old weight but the new parameters?
+- Weight decay across 20,000+ cycles without cache: `WeightCacheRequired` revert. This is a DoS — can an attacker force a project into this state?
 
-### 7. REVLoans Collateral
+### 6. REVLoans Collateral Manipulation
 
 Borrowers lock project tokens and borrow against their bonding curve value.
 
-**Attack surface:**
-- Can you manipulate the bonding curve value of collateral (via surplus manipulation) to borrow more than the collateral is worth?
-- 10-year liquidation schedule: what happens to the collateral's value over time if the project's surplus changes?
-- Can you borrow, then increase your cashout value by manipulating surplus, then cash out the collateral for more than you borrowed?
-- Collateral reallocation between loans: any state inconsistency during reallocation?
+**The key insight**: Loan collateral value depends on the bonding curve, which depends on the project surplus, which changes with every payment and cash out.
 
-### 8. Currency Denomination Mismatches
+**Attack sequences:**
+1. Inflate surplus (pay) → borrow max → deflate surplus (large cash out from another account) → collateral is now worth less than borrowed amount → wait for liquidation to release collateral at a loss to the protocol
+2. Borrow → stage transition changes bonding curve parameters → collateral value drops below loan → effectively an unsecured loan
+3. Collateral reallocation between loans: is it atomic? Can you reallocate and borrow in a single transaction to temporarily have both the old and new collateral active?
+4. Can you manipulate the `prepaidFee` calculation for early repayment to pay less than intended?
 
-The protocol has **two different currency type systems** that interact at conversion boundaries:
+### 7. Cross-Chain Bridge Exploits
 
-- **Abstract currency** (`baseCurrency` in rulesets, `currency` in `JB721InitTiersConfig`): small integers (1 = ETH, 2 = USD). Used for surplus calculations, payout limit conversions, and NFT tier pricing. Paired with a `decimals` field (e.g., 18 for ETH/USD).
-- **Concrete currency** (`currency` in `JBAccountingContext` and `JBTokenAmount`): `uint32(uint160(tokenAddress))`. Identifies the actual payment token. USDC at `0xA0b8...eB48` has a concrete currency derived from its address and 6 decimals.
+`JBSucker` uses incremental merkle trees (eth2-style) for cross-chain token movement.
 
-**Conversions happen at these boundaries:**
-- `JBTerminalStore`: surplus calculations convert between `baseCurrency` and payment token via `JBPrices`
-- `JB721TiersHookLib.normalizePaymentValue()`: converts payment amount to tier pricing denomination for price comparison
-- `JB721TiersHookLib.convertSplitAmounts()`: converts split amounts from tier pricing denomination back to payment token denomination for forwarding
-- `JBPrices.pricePerUnitOf()`: the underlying oracle query, where `pricingCurrency` and `unitCurrency` use concrete currency IDs but return amounts in the configured `decimals`
+**What to verify:**
+- **Double claim**: Leaf hash includes `(token, beneficiary, amount, index)`. Claimed leaves are tracked in a bitmap. Can you construct a valid proof for a different beneficiary using the same leaf data?
+- **Cross-sucker replay**: Suckers are 1:1 pairs. Can you prepare on chain A, then somehow claim on chain C (not the paired chain)?
+- **Race between deprecation and claim**: SENDING_DISABLED means new prepares are blocked, but existing outbox entries should still be claimable. Verify this works correctly.
+- **Emergency hatch**: Project owner can enable `emergencyHatchOf` instantly — no timelock, no multisig. This is a known trust assumption. But verify: can emergency hatch drain tokens that are in transit (prepared but not yet claimed)?
+- **CCIP amount mismatch**: The protocol intentionally skips amount validation to prevent lockup. Can an attacker exploit this to mint more tokens than were prepared?
 
-**Attack surface:**
-- Can an amount computed in one denomination (e.g., 30e18 USD) be compared or forwarded as if it were in another denomination (e.g., 30e18 USDC with 6 decimals)? This was a real bug in tier split forwarding — fixed in `convertSplitAmounts`.
-- `mulDiv` rounding compounds through conversion chains. Pay in token A → normalize to pricing currency → compute split → convert back to token A. Each step rounds. Can this be exploited?
-- `baseCurrency` (abstract, small int) vs `JBAccountingContext.currency` (concrete, derived from address) are different bit widths for the same conceptual token. Any codepath that confuses them?
-- What happens when `JBPrices` has no feed for a currency pair? (`normalizePaymentValue` returns `(0, false)` and skips minting. `convertSplitAmounts` returns unconverted amounts. Are these safe?)
-- `groupId` in fund access limits is `uint256` (token address), but `currency` in accounting context is `uint32`. Can truncation cause collisions?
+### 8. NFT Economics Exploits (721 Hook + Defifa)
 
-### 9. NFT Tier Economics (721 Hook + Defifa)
+**721 Hook:**
+- `discountPercent` denominator is 200 (not 100). `200 = 100% discount`. Does cash out weight use original (undiscounted) price or effective (discounted) price? If original, 100% discounted NFTs carry free arbitrage.
+- `splitPercent` — is it validated against `SPLITS_TOTAL_PERCENT` (1,000,000,000)? If uncapped, a `splitPercent` of 4e9 would forward 4x the payment amount.
+- Reserve mints are based on frequency, not time. Can you time reserve mints to get more than intended?
+- Tier category ordering: `recordAddTiers` reverts with `InvalidCategorySortOrder` if categories aren't ascending. Can this be exploited to prevent legitimate tier additions?
 
-**Attack surface — 721 Hook:**
-- Discount percent denominator is 200 (not 100). `discountPercent = 200` means 100% discount = free mint. Can you free-mint then cash out at full weight?
-- Reserve mints based on frequency. Can timing be exploited to get more reserves than intended?
-- Cash out weight is based on original tier price, not discounted price paid. Discount + cashout = profit?
+**Defifa:**
+- Whale attack: buy majority of 6+ tiers out of 10, accumulate 6e9 of 10e9 attestation power, exceed 50% quorum, ratify self-serving scorecard. Cost? Risk?
+- `computeCashOutWeight` uses integer division (`weight / tokens`). Dust is permanently locked. At what scale does this become meaningful?
+- Grace period: is `gracePeriodEnds` calculated from scorecard submission time or from when attestations actually begin? If submission time, can a scorecard's grace period expire before anyone can attest?
+- Fee token dilution: reserved mints get fee tokens proportional to tier price (not amount paid). How much does this dilute real payers in realistic scenarios?
+- Can a `fulfillCommitmentsOf` revert block scorecard ratification permanently?
 
-**Attack surface — Defifa:**
-- Whale attack: buy majority of 6+ tiers, control quorum, set favorable scorecard
-- Dynamic quorum: uses live supply, not snapshot. Can you burn to lower quorum threshold?
-- `computeCashOutWeight` uses integer division (`weight / tokens`). Dust is permanently locked — but can this be exploited at scale?
-- Fee token claims: reserved mints get fee tokens proportional to tier price (not amount paid). Does this dilute real payers?
-- Scorecard timeout: what happens if a valid scorecard exists but isn't ratified before timeout?
-- Can game phase transitions be manipulated by timing ruleset changes?
+### 9. Deployment Script Verification
 
-### 10. Deployment Script
+**What to verify:**
+- **Every hardcoded address** in `deploy-all-v6/script/Deploy.s.sol` and all per-repo deploy scripts. Cross-reference against canonical contract addresses for each target chain (Ethereum, Optimism, Base, Arbitrum + testnets). Uniswap V4 PoolManager and PositionManager addresses differ per chain.
+- **Constructor parameter correctness**: Do permission grants match intended access control? Are initial rulesets configured correctly?
+- **Deployment ordering**: Can a partially-deployed state be exploited? Sphinx proposals are atomic per phase, but between phases?
+- **Sphinx project name consistency**: Do v5 vs v6 naming mismatches cause artifact resolution failures?
+- **Salt determinism for CREATE2**: Can an attacker front-run a deterministic deployment to squat the address?
 
-`deploy-all-v6/script/Deploy.s.sol` deploys the entire ecosystem in one Sphinx proposal.
+### 10. Permit2 Metadata Edge Cases
 
-**Attack surface:**
-- Are contract addresses deterministic? Can an attacker front-run deployment?
-- Are constructor arguments correct? Do permission grants match intended access?
-- Are initial rulesets configured correctly? Wrong parameters could lock funds.
-- Does deployment ordering matter? Can a partially-deployed state be exploited?
-- Are Sphinx proposal permissions correctly scoped?
+`JBMultiTerminal._pay()` supports Permit2 for gasless token approvals. The metadata encoding path:
+
+```
+metadata bytes → JBMetadataResolver.getDataFor(PERMIT2_METADATA_ID) → decode JBSingleAllowance → call permit2
+```
+
+**What to test:**
+- Malformed metadata: What if the metadata claims to be Permit2 but has wrong length?
+- Replayed permit: Does the nonce mechanism prevent reuse?
+- Signature deadline manipulation: `sigDeadline` is attacker-controlled. Can a stale permit be used after intended expiry?
+- Amount mismatch: The permit amount vs. the actual payment amount — are these validated against each other?
 
 ## Invariants to Verify
 
@@ -198,19 +231,23 @@ These code patterns are where bugs hide in this codebase:
 
 | Pattern | Where to look | Why it's dangerous |
 |---------|--------------|-------------------|
-| `try-catch` swallowing errors | JBMultiTerminal (hooks, fees, splits) | Failed external calls may silently change control flow |
-| `mulDiv` rounding direction | JBCashOuts, JBFees, JBTerminalStore | Rounding in attacker's favor compounds over many txs |
-| Mapping deletion without cleanup | JBSplits, JBRulesets, JBSucker | Stale data in related mappings |
-| Array iteration without bounds | processHeldFeesOf, split distribution | Gas griefing or DoS |
-| External calls to untrusted hooks | All hook execution paths | Reentrancy via hook callbacks |
-| Price feed dependency | JBTerminalStore, JB721TiersHookLib | Stale/manipulated prices affect cashout values and split amounts |
-| Currency denomination mixing | JBTerminalStore, JB721TiersHookLib, JBFundAccessLimits | Abstract (1=ETH, 2=USD) vs concrete (uint32(address)) currency IDs used in different contexts |
-| Permit2 metadata encoding | JBMultiTerminal._pay | Malformed metadata could bypass checks |
-| Bit-packed metadata | JBRulesetMetadataResolver | Off-by-one in bit shifts = wrong flag values |
+| `try-catch` swallowing errors | JBMultiTerminal (hooks, fees, splits) | Failed external calls silently change control flow. The fee try-catch can be used for temporary fee avoidance. |
+| `mulDiv` rounding direction | JBCashOuts, JBFees, JBTerminalStore, JB721TiersHookLib | Rounding in attacker's favor compounds over many transactions. |
+| Hardcoded 0 / placeholder functions | UniV4DeploymentSplitHook | A function that should compute real values but returns 0. Are there other placeholders? |
+| Currency type confusion | JBTerminalStore, JB721TiersHookLib, JBFundAccessLimits | Abstract (1=ETH, 2=USD) vs concrete (`uint32(address)`) currencies. `groupId` (`uint256`) vs `currency` (`uint32`) truncation. |
+| Uncapped input parameters | JB721TiersHookStore | Parameters that accept `uint32` but should be bounded by protocol constants. What other parameters lack bounds checks? |
+| Silent fund drops | JB721TiersHookLib | Funds consumed from accounting but never sent when target address is `address(0)`. Any other path where funds disappear without revert? |
+| Undiscounted price usage | JB721TiersHookLib, JB721TiersHookStore | Cash out weight and split amounts use original tier price instead of discounted price. Is this consistent across all code paths? |
+| Sign convention mismatch | JBUniswapV4Hook | V4 uses a credit/debit convention where output amounts are negative. Slippage checks expecting positive values never fire. Any other V4 integration paths with this issue? |
+| Missing ownership transfer | Deployer contracts | Hooks or contracts deployed by a deployer but never transferred to the project owner. Any deployers that forget `transferOwnershipToProject`? |
+| Stale references after mutation | UniV4DeploymentSplitHook | Stored IDs or addresses that become dangling after the referenced object is burned or destroyed. |
+| Re-initialization after ownership renounce | Clone patterns | `initialize()` guard that checks `owner != address(0)` passes again after `renounceOwnership`. Any other clone patterns with this issue? |
+| Array OOB from conditional returns | REVDeployer, hook compositions | Unconditional `[0]` access on arrays that may be empty depending on which code path a hook takes. Scan for all array index accesses after hook/external calls. |
+| External call in loop | JBMultiTerminal (payout splits), processHeldFeesOf | Gas griefing by making external calls revert. Each revert is caught by try-catch but still costs gas. |
 
 ## How to Report Findings
 
-For each finding, provide:
+For each finding:
 
 1. **Title** — one line, starts with severity (CRITICAL/HIGH/MEDIUM/LOW)
 2. **Affected contract(s)** — exact file path and line numbers
@@ -221,17 +258,18 @@ For each finding, provide:
 7. **Fix** — minimal code change that resolves the issue
 
 **Severity guide:**
-- **CRITICAL**: Direct fund loss, permanent DoS, or system insolvency. Exploitable now with no preconditions.
-- **HIGH**: Conditional fund loss, privilege escalation, or broken core invariant. Requires specific setup.
+- **CRITICAL**: Direct fund loss, permanent DoS, or system insolvency. Exploitable with no preconditions.
+- **HIGH**: Conditional fund loss, privilege escalation, or broken core invariant. Requires specific but realistic setup.
 - **MEDIUM**: Value leakage, griefing with cost to attacker, incorrect accounting, degraded functionality.
 - **LOW**: Informational, cosmetic inconsistency, edge-case-only with no material impact.
 
-**False positive checklist — verify before reporting:**
+**Before reporting — verify it's not a false positive:**
 - Is there a modifier, hook, or internal call that reconciles the state you think is inconsistent?
-- Is the "stale" state intentionally lazily evaluated (updated on next read, not every write)?
+- Is the "stale" state intentionally lazily evaluated (updated on next read)?
 - Does the protocol's try-catch fallback handle the failure case you're worried about?
-- Is the economic attack actually profitable after gas costs and fees?
+- Is the economic attack actually profitable after gas costs and 2.5% fees?
 - Does Solidity 0.8.26's built-in overflow protection prevent the arithmetic issue?
+- Has this already been reported or documented in [RISKS.md](./RISKS.md)?
 
 ## Testing Setup
 
@@ -249,27 +287,38 @@ forge test
 # Run with high verbosity for debugging
 forge test -vvvv --match-test testExploitName
 
-# Write a PoC in test/audit/
+# Write a PoC
 forge test --match-path test/audit/ExploitPoC.t.sol -vvv
+
+# Run invariant tests
+forge test --match-contract Invariant
+
+# Gas analysis
+forge test --gas-report
 ```
 
-Each repo's tests are self-contained. Run `forge test` in any repo directory. For cross-repo interactions, write tests in the downstream repo (e.g., test a buyback hook exploit in `nana-buyback-hook-v6/test/`).
+Each repo's tests are self-contained. For cross-repo interactions, write tests in the downstream repo (e.g., test a buyback hook exploit in `nana-buyback-hook-v6/test/`).
+
+The existing test suite is extensive (165 files in nana-core-v6 alone). Review the invariant tests to understand what's already been proven — then try to break those invariants with configurations the tests don't cover.
 
 ## Priority Order
 
 Audit in this order. Earlier items have higher blast radius:
 
-1. **JBMultiTerminal + JBTerminalStore** — all funds flow through here
-2. **JBController** — token minting, reserved distribution, ruleset lifecycle
-3. **JBRulesets** — weight decay, approval hooks, ruleset transitions
-4. **REVLoans** — collateralized lending against bonding curve
-5. **JBSucker** — cross-chain merkle tree bridge
-6. **JBBuybackHook** — DEX integration, oracle manipulation surface
-7. **JB721TiersHook + JB721TiersHookStore** — NFT economics, discount/cashout weight
-8. **DefifaDeployer + DefifaHook + DefifaGovernor** — prediction game governance
-9. **UniV4DeploymentSplitHook** — LP pool deployment, liquidity management
-10. **JBRouterTerminal** — payment routing, swap slippage
-11. **Deploy.s.sol** — deployment parameter correctness
-12. **Everything else** — utilities, registries, constants
+| Priority | Target | Why |
+|----------|--------|-----|
+| 1 | **Hook composition** (REVDeployer + JBBuybackHook + JB721TiersHook) | Hooks compose in ways that aren't tested end-to-end. Conditional array returns, nested hook calls, and re-entrant hook → protocol interactions are the most likely source of undiscovered bugs. |
+| 2 | **JBMultiTerminal + JBTerminalStore** | All funds flow through here. No reentrancy guard — CEI ordering is the only defense. |
+| 3 | **UniV4DeploymentSplitHook** | Complex contract with Uniswap V4 integration, permissionless entry points, no reentrancy protection, and placeholder code. |
+| 4 | **REVLoans** | Lending against a bonding curve whose parameters change with stage transitions. Collateral manipulation surface is large. |
+| 5 | **JB721TiersHookLib + JB721TiersHookStore** | NFT discount/split/price economics have multiple interacting parameters (discountPercent, splitPercent, cash out weight, reserve frequency). |
+| 6 | **JBRulesets** | Weight decay, approval hooks, ruleset transitions — timing-dependent logic with 20k-cycle cache thresholds. |
+| 7 | **JBSucker** | Cross-chain merkle tree bridge. Bridge bugs have outsized impact. |
+| 8 | **DefifaDeployer + DefifaHook + DefifaGovernor** | Governance quorum manipulation, phase timing, scorecard attacks. |
+| 9 | **Deployment scripts** | Hardcoded addresses per chain. Verify every address against canonical deployments. |
+| 10 | **JBController** | Token minting, reserved distribution, ruleset lifecycle. |
+| 11 | **JBBuybackHook** | TWAP manipulation, swap failure handling, spot price fallback. |
+| 12 | **JBRouterTerminal** | Multi-hop routing, slippage across swap steps. |
+| 13 | **Everything else** | Utilities, registries, constants. |
 
 Go break it.

@@ -1,6 +1,6 @@
 # Juicebox V6
 
-Programmable treasuries for Ethereum. Projects collect funds, issue tokens on bonding curves, govern economics through rulesets, and compose features through hooks — all onchain, all composable, across any EVM chain.
+Programmable treasuries for Ethereum. Projects collect funds, issue tokens, cash out along bonding curves, govern economics through rulesets, and compose features through hooks — all onchain, all composable, across any EVM chain.
 
 This is the complete V6 smart contract ecosystem: 18 repositories spanning core protocol, hooks, cross-chain bridging, deployers, applications, and CLI tooling. Clone recursively to get everything:
 
@@ -14,7 +14,7 @@ git clone --recursive https://github.com/Bananapus/version-6.git
 |-------------|---------|
 | Understand the protocol | [DOC.md](./DOC.md) |
 | See how contracts connect | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| Review security properties | [SECURITY.md](./SECURITY.md) |
+| Understand the risks | [RISKS.md](./RISKS.md) |
 | Navigate the codebase fast | [SKILLS.md](./SKILLS.md) |
 | Audit / try to break it | [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md) |
 | Follow our coding style | [STYLE_GUIDE.md](./STYLE_GUIDE.md) |
