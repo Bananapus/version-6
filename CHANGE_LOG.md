@@ -56,10 +56,9 @@ See [nana-suckers-v6/CHANGE_LOG.md](./nana-suckers-v6/CHANGE_LOG.md) for details
 Full details: [nana-core-v6/CHANGE_LOG.md](./nana-core-v6/CHANGE_LOG.md)
 
 **Breaking interface changes:**
-- `IJBRulesetApprovalHook.approvalStatusOf` takes a full `JBRuleset` struct instead of separate params
-- `IJBRulesetDataHook.hasMintPermissionFor` gained a `JBRuleset` parameter
+- `IJBRulesets.updateRulesetWeightCache` gained a `rulesetId` parameter
 - `IJBPayoutTerminal.sendPayoutsOf` return value changed to `amountPaidOut`
-- `JBCurrencyIds.USD` changed from `3` to `2`
+- Several interfaces changed `memory` params to `calldata`
 
 **New capabilities:**
 - `setTokenMetadataOf` — mutable ERC-20 and 721 name/symbol after deployment (new `SET_TOKEN_METADATA` permission)
@@ -89,7 +88,7 @@ Removed: `ADD_SWAP_TERMINAL_POOL`, `ADD_SWAP_TERMINAL_TWAP_PARAMS` (functions no
 
 | Repo | Key changes | Changelog |
 |------|------------|-----------|
-| nana-core-v6 | Approval hook try/catch, mutable token metadata, inverse bonding curve, migration callback, weight cache at 20k | [CHANGE_LOG.md](./nana-core-v6/CHANGE_LOG.md) |
+| nana-core-v6 | Approval hook try/catch, mutable token metadata, inverse bonding curve, reentrancy hardening, weight cache at 20k | [CHANGE_LOG.md](./nana-core-v6/CHANGE_LOG.md) |
 | nana-permission-ids-v6 | All IDs shifted, 3 new IDs, 2 removed | [CHANGE_LOG.md](./nana-permission-ids-v6/CHANGE_LOG.md) |
 | nana-721-hook-v6 | Tier splits with split recipients, extracted library, mutable name/symbol | [CHANGE_LOG.md](./nana-721-hook-v6/CHANGE_LOG.md) |
 | nana-buyback-hook-v6 | V3 → V4, sigmoid slippage, JBSwapLib, pool key storage | [CHANGE_LOG.md](./nana-buyback-hook-v6/CHANGE_LOG.md) |
