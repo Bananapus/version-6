@@ -41,6 +41,10 @@ See [revnet-core-v6/CHANGE_LOG.md](./revnet-core-v6/CHANGE_LOG.md) and [nana-omn
 
 `JBOmnichainDeployer` now sets itself as the data hook and proxies to the stored 721 hook and any extra data hook. This enables dual-hook composition: the 721 hook contributes tier split specs while the extra data hook (e.g., buyback) contributes weight adjustment. The same pattern is used by `CTDeployer` for Croptop.
 
+### Mutable Token Names
+
+Project owners can now change ERC-20 and 721 collection names and symbols after deployment. `JBController.setTokenMetadataOf` updates the ERC-20 via `JBERC20.setMetadata`. The 721 hook's `setMetadata` updates the collection name and symbol. Both gated by the new `SET_TOKEN_METADATA` (21) permission.
+
 ### Cross-Chain: `address` → `bytes32`
 
 All cross-chain identifiers changed from `address` to `bytes32` to prepare for Solana/SVM support. `JBLeaf.beneficiary`, `JBMessageRoot.token`, `JBRemoteToken.addr`, `JBSuckersPair.remote` — all `bytes32` now. Messages also gained a `version` field for future-proofing.
@@ -59,7 +63,7 @@ Full details: [nana-core-v6/CHANGE_LOG.md](./nana-core-v6/CHANGE_LOG.md)
 - `JBCurrencyIds.USD` changed from `3` to `2`
 
 **New capabilities:**
-- `setTokenMetadataOf` — mutable ERC-20 name/symbol after deployment
+- `setTokenMetadataOf` — mutable ERC-20 and 721 name/symbol after deployment (new `SET_TOKEN_METADATA` permission)
 - `JBCashOuts.minCashOutCountFor` — inverse bonding curve (binary search for minimum tokens needed)
 - `IJBMigratable.afterReceiveMigrationFrom` — callback after migration
 - `LAUNCH_RULESETS` permission (separated from `QUEUE_RULESETS`)
