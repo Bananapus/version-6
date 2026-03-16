@@ -59,7 +59,6 @@ Full details: [nana-core-v6/CHANGE_LOG.md](./nana-core-v6/CHANGE_LOG.md)
 - `IJBRulesetApprovalHook.approvalStatusOf` takes a full `JBRuleset` struct instead of separate params
 - `IJBRulesetDataHook.hasMintPermissionFor` gained a `JBRuleset` parameter
 - `IJBPayoutTerminal.sendPayoutsOf` return value changed to `amountPaidOut`
-- `JBController4_1` and `IJBController4_1` merged into base contracts
 - `JBCurrencyIds.USD` changed from `3` to `2`
 
 **New capabilities:**
