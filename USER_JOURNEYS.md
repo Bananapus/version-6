@@ -4,7 +4,33 @@ How to use Juicebox V6. Three paths, one protocol.
 
 ## Start a Project
 
-### Path 1: Revnet (recommended for most projects)
+### Path 1: Omnichain Project
+
+Use `JBOmnichainDeployer.launchProjectFor()`. This deployer bundles 721 tiers, cross-chain bridging, and custom data hooks into a single call. The project owner retains full control over rulesets after launch.
+
+**What you configure:**
+- **Owner** — The final project owner (receives the project NFT).
+- **Rulesets** — Standard Juicebox rulesets with full control over weight, duration, tax rate, and custom data hooks.
+- **Terminals** — Which tokens your project accepts.
+- **721 tiers** (optional) — NFT rewards with per-tier pricing, supply caps, and categories.
+- **Custom data hooks** (optional) — Specify a buyback hook or any custom data hook per ruleset. The deployer wraps it so the 721 hook and suckers still work.
+- **Suckers** (optional) — Cross-chain bridges.
+
+**What the deployer handles for you:**
+- Deploys a 721 hook and wires it as the project's data hook
+- Wraps your custom data hooks so they compose with the 721 hook and suckers
+- Deploys suckers if configured
+- Transfers hook and project ownership to the final owner
+
+**Result:** The project owner can queue new rulesets, change economics, and reconfigure terminals. More power, more responsibility.
+
+**Entry point:** `JBOmnichainDeployer.launchProjectFor(owner, projectUri, rulesetConfigurations, terminalConfigurations, memo, suckerDeploymentConfiguration, controller)`
+
+See [nana-omnichain-deployers-v6/USER_JOURNEYS.md](./nana-omnichain-deployers-v6/USER_JOURNEYS.md) for full parameter reference.
+
+---
+
+### Path 2: Revnet (autonomous economics)
 
 Use `REVDeployer.deployFor()`. A revnet is an autonomous project with predetermined economics — no owner key needed after launch. The deployer bundles everything: staged issuance, bonding curve, buyback hook, cross-chain bridging, and optional NFT tiers.
 
@@ -28,32 +54,6 @@ Use `REVDeployer.deployFor()`. A revnet is an autonomous project with predetermi
 **Entry point:** `REVDeployer.deployFor(revnetId, configuration, terminalConfigurations, suckerDeploymentConfiguration)`
 
 See [revnet-core-v6/USER_JOURNEYS.md](./revnet-core-v6/USER_JOURNEYS.md) for full parameter reference.
-
----
-
-### Path 2: Omnichain Project (for custom hook compositions)
-
-Use `JBOmnichainDeployer.launchProjectFor()`. This is for projects that need custom data hooks (beyond what revnets offer) while still getting 721 tiers and cross-chain bridging out of the box.
-
-**What you configure:**
-- **Owner** — The final project owner (receives the project NFT).
-- **Rulesets** — Standard Juicebox rulesets with full control over weight, duration, tax rate, and custom data hooks.
-- **Terminals** — Which tokens your project accepts.
-- **721 tiers** (optional) — NFT rewards with per-tier pricing, supply caps, and categories.
-- **Custom data hooks** (optional) — Specify a buyback hook or any custom data hook per ruleset. The deployer wraps it so the 721 hook and suckers still work.
-- **Suckers** (optional) — Cross-chain bridges.
-
-**What the deployer handles for you:**
-- Deploys a 721 hook and wires it as the project's data hook
-- Wraps your custom data hooks so they compose with the 721 hook and suckers
-- Deploys suckers if configured
-- Transfers hook and project ownership to the final owner
-
-**Key difference from revnets:** You control the rulesets directly. The project owner can queue new rulesets, change economics, and reconfigure terminals. More power, more responsibility.
-
-**Entry point:** `JBOmnichainDeployer.launchProjectFor(owner, projectUri, rulesetConfigurations, terminalConfigurations, memo, suckerDeploymentConfiguration, controller)`
-
-See [nana-omnichain-deployers-v6/USER_JOURNEYS.md](./nana-omnichain-deployers-v6/USER_JOURNEYS.md) for full parameter reference.
 
 ---
 
@@ -151,9 +151,9 @@ Queue future rulesets to change economics. Takes effect when the current ruleset
 
 | I want... | Use |
 |-----------|-----|
-| An autonomous project with locked economics | **Revnet** — no owner key, predetermined stages |
 | A project I can reconfigure over time | **Omnichain Deployer** — owner controls rulesets |
-| NFT tiers + cross-chain + buyback out of the box | **Revnet** or **Omnichain Deployer** — both bundle these |
+| An autonomous project with locked economics | **Revnet** — no owner key, predetermined stages |
+| NFT tiers + cross-chain + buyback out of the box | **Omnichain Deployer** or **Revnet** — both bundle these |
 | Full control over every hook and parameter | **Direct Controller** — wire it all yourself |
 | A simple NFT collection with community publishing | **CTDeployer** (Croptop) — built on top of omnichain deployer |
 | A prediction game with governance | **DefifaDeployer** — built on top of 721 hook |
