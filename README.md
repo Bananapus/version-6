@@ -2,7 +2,7 @@
 
 Programmable treasuries for Ethereum. Projects collect funds, issue tokens, cash out along bonding curves, govern economics through rulesets, and compose features through hooks — all onchain, all composable, across any EVM chain.
 
-This is the complete V6 smart contract ecosystem: 18 repositories spanning core protocol, hooks, cross-chain bridging, deployers, applications, and CLI tooling. Clone recursively to get everything:
+This is the complete V6 smart contract ecosystem spanning core protocol, hooks, cross-chain bridging, deployers, and applications. Clone recursively to get everything:
 
 ```bash
 git clone --recursive https://github.com/Bananapus/version-6.git
@@ -18,6 +18,7 @@ git clone --recursive https://github.com/Bananapus/version-6.git
 | Understand the risks | [RISKS.md](./RISKS.md) |
 | Navigate the codebase fast | [SKILLS.md](./SKILLS.md) |
 | Audit / try to break it | [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md) |
+| See what changed from V5 | [CHANGE_LOG.md](./CHANGE_LOG.md) |
 | Follow our coding style | [STYLE_GUIDE.md](./STYLE_GUIDE.md) |
 
 ## Repositories
@@ -74,12 +75,6 @@ Hooks plug into the core at well-defined extension points. Data hooks override e
 |------|-------------|
 | [nana-ownable-v6](./nana-ownable-v6) | Ownership that works with both EOAs and Juicebox project NFTs. |
 | [nana-address-registry-v6](./nana-address-registry-v6) | Maps deployed contracts to their deployers via CREATE2. |
-
-### CLI
-
-| Repo | What it does |
-|------|-------------|
-| [nana-cli-v6](./nana-cli-v6) | CLI for people and AI agents. 31 Forge scripts covering all protocol operations, with shell CLI, MCP server, and Claude Code skill surfaces. |
 
 ### Deployment
 
