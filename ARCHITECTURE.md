@@ -1,4 +1,4 @@
-# Juicebox V6 EVM - Architecture
+# Architecture
 
 ## Ecosystem Layers
 

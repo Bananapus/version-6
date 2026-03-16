@@ -1,10 +1,6 @@
-# Juicebox V6 EVM - Risks
+# Risks
 
-Known security properties, trust assumptions, and operational considerations for users and integrators of the Juicebox V6 protocol.
-
-## Audit Status
-
-No external audit has been performed yet.
+Trust assumptions, known risks, and security properties of Juicebox V6. For per-repo risk details, see each repo's `RISKS.md`. For audit findings, see [AUDIT.md](./AUDIT.md).
 
 ## Trust Model
 
@@ -133,25 +129,19 @@ The protocol uses no `ReentrancyGuard`. It relies on state ordering (CEI pattern
 
 **Gap**: Complex cross-function reentrancy (hook calling back into a *different* terminal function) is not explicitly prevented. The LP split hook has no reentrancy protection at all.
 
-## Recommendations for Project Owners
+## Recommendations
 
-1. **Audit your data hooks** — they have complete control over your project's economics
+**For project owners:**
+1. **Audit your data hooks** — they control your project's economics
 2. **Set approval hooks** — use `JBDeadline` to require minimum delay before ruleset changes
 3. **Distribute reserved tokens regularly** — pending reserves dilute cash out values
-4. **Monitor price feeds** — stale feeds block operations; consider single-currency setups
-5. **Always set `minTokensReclaimed`** — slippage protection on cash outs
-6. **Keep split arrays small** — gas costs scale linearly with split count
-7. **Verify token mappings before bridging** — cross-chain token mappings are immutable once used
-8. **Be cautious with 100% discounts** — `discountPercent = 200` allows free minting with full cash out weight
-9. **Don't call `renounceOwnership` on LP hook clones** — allows re-initialization
+4. **Always set `minTokensReclaimed`** — slippage protection on cash outs
+5. **Verify token mappings before bridging** — cross-chain token mappings are immutable once used
 
-## Recommendations for Integrators
-
+**For integrators:**
 1. **Use `try-catch` for terminal calls** — the terminal may revert if rulesets are paused or limits exceeded
-2. **Cast `controllerOf()` returns** — returns `IERC165`, not `address`
-3. **Cast `primaryTerminalOf()` returns** — returns `IJBTerminal`, not `address`
-4. **Handle credit vs ERC-20** — users may have credits that aren't transferable as ERC-20
-5. **Set slippage on router terminal payments** — `JBRouterTerminal` swaps can be sandwiched without `minAmountOut`
-6. **Check loan health dynamically** — REVLoans collateral value changes with surplus; don't assume stable LTV
-7. **Verify sucker deprecation state** — check `deprecationOf()` before initiating cross-chain operations
-8. **Monitor `FeeReverted` events** — indicates fee processing failures (temporary, fees remain held)
+2. **Set slippage on router terminal payments** — `JBRouterTerminal` swaps can be sandwiched without `minAmountOut`
+3. **Check loan health dynamically** — REVLoans collateral value changes with surplus; don't assume stable LTV
+4. **Monitor `FeeReverted` events** — indicates fee processing failures (temporary, fees remain held)
+
+See [SKILLS.md](./SKILLS.md) for API gotchas (return types, currency conventions, etc.).

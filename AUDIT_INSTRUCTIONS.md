@@ -1,8 +1,8 @@
 # Audit Instructions
 
-You are auditing the Juicebox V6 smart contract ecosystem — a programmable treasury protocol where projects collect funds through terminals, issue tokens at configurable weights, let holders cash out along a bonding curve, and compose features through hooks. Your goal is to find bugs that lose funds, break invariants, or enable unauthorized access.
+Juicebox V6: programmable treasuries on EVM. Projects collect funds through terminals, issue tokens, cash out along bonding curves, and compose features through hooks. Your goal: find bugs that lose funds, break invariants, or enable unauthorized access.
 
-Read [DOC.md](./DOC.md) and [ARCHITECTURE.md](./ARCHITECTURE.md) for protocol context. Read [RISKS.md](./RISKS.md) for known risks and trust model. Then come back here.
+**Context:** [DOC.md](./DOC.md) (how it works) | [ARCHITECTURE.md](./ARCHITECTURE.md) (contracts) | [RISKS.md](./RISKS.md) (trust model) | [USER_JOURNEYS.md](./USER_JOURNEYS.md) (user paths)
 
 ## Scope
 
