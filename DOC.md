@@ -1,8 +1,8 @@
-# Juicebox V6 EVM - How It Works
-
-## Overview
+# How It Works
 
 Juicebox V6 is a programmable treasury protocol. Projects collect funds through terminals, issue tokens via controllers, and govern economics through rulesets. Every aspect is composable via hooks.
+
+See [USER_JOURNEYS.md](./USER_JOURNEYS.md) for how to use it. This document explains how it works under the hood.
 
 ## Core Concepts
 
@@ -158,71 +158,19 @@ Token mappings are immutable once the outbox tree has entries.
 - Discount percent (0-200, where 200 = DISCOUNT_DENOMINATOR = 100% discount)
 - Reserve mints for beneficiaries based on frequency
 
-## Defifa (Prediction Games)
+## Other Subsystems
 
-`DefifaDeployer` creates prediction market games backed by Juicebox V6:
-- Players buy tiered NFTs representing game outcomes (via the 721 hook)
-- Game phases: COUNTDOWN -> MINT -> REFUND -> SCORING -> COMPLETE (or NO_CONTEST)
-- After minting closes, a governance process ratifies a scorecard allocating the prize pool
-- `DefifaGovernor` handles scorecard submission, attestation, and ratification
-- Attestation power: per-tier, capped at `MAX_ATTESTATION_POWER_TIER` (1e9), proportional to holdings within tier
-- Quorum: 50% of eligible tiers' attestation power
-- Cash-out weights: `TOTAL_CASHOUT_WEIGHT` (1e18) distributed across tiers by scorecard
-- Fee tokens: $DEFIFA and $BASE_PROTOCOL distributed proportional to mint price paid
-- Split fees: 2.5% protocol (BASE_PROTOCOL_FEE_DIVISOR=40) + 5% Defifa (DEFIFA_FEE_DIVISOR=20)
+### Router Terminal
+`JBRouterTerminal` accepts any ERC-20 and swaps to the project's accepted token via Uniswap V3/V4. Projects accept any token without configuring every accounting context.
 
-Key contracts:
-- `DefifaDeployer`: Game lifecycle management, ruleset queuing, commitment fulfillment
-- `DefifaHook`: Extends JB721TiersHook — manages cash-out weights, fee token claims, attestation units
-- `DefifaGovernor`: Scorecard submission/attestation/ratification governance
-- `DefifaHookLib`: Pure/view helpers for cash-out weight computation, fee token claims
+### Uniswap V4 Integration
+- **`JBUniswapV4Hook`** (univ4-router-v6) — UniV4 hook with TWAP oracle for buyback price discovery
+- **`JBUniswapV4LPSplitHook`** (univ4-lp-split-hook-v6) — Split hook that accumulates reserved tokens into concentrated liquidity positions
 
-## Router Terminal
-
-`JBRouterTerminal` accepts any ERC-20 token and routes payments to a project's primary terminal:
-- Swaps incoming tokens to the project's accepted token via Uniswap V3 or V4
-- Registers routes in `JBRouterTerminalRegistry`
-- Supports slippage protection via `minAmountOut`
-- Enables projects to accept any token without configuring every token as an accounting context
-
-## Uniswap V4 Integration
-
-Two repos handle UniV4:
-- **univ4-router-v6**: `JBUniswapV4Hook` — a UniV4 hook contract with custom swap logic and TWAP oracle tracking, used by the buyback hook for price discovery
-- **univ4-lp-split-hook-v6**: `JBUniswapV4LPSplitHook` — a split hook that accumulates reserved tokens and deploys them into full-range UniV4 liquidity pools, with a deployer contract for creating new hook instances per pool
-
-## Croptop
-
-`CTDeployer` creates Croptop projects — decentralized NFT publishing platforms:
-- Anyone can post content as new NFT tiers on a Croptop project
-- Posts become 721 tiers with configurable price, supply, and category
-- `CTPublisher` handles content posting and tier creation
-- Built on top of revnet economics (uses REVDeployer internally)
-- `CTProjectOwner` manages project ownership delegation
-
-## Banny
-
-`Banny721TokenUriResolver` provides dynamic SVG metadata for Banny NFTs:
-- Composable character system with body + outfit layers
-- Outfits are equippable/unequippable NFTs
-- SVG metadata generated onchain
-- Backed by a revnet treasury for economic sustainability
-
-## Ecosystem Deployment
-
-`deploy-all-v6/script/Deploy.s.sol` deploys the entire V6 ecosystem in a single Sphinx proposal across 8 chains (4 mainnets: Ethereum, Optimism, Base, Arbitrum + 4 testnets):
-
-**Deployment phases:**
-1. Core protocol (forwarder, permissions, projects, directory, splits, rulesets, prices, tokens, store, terminal)
-2. Address registry
-3. Hooks (721 tiers, buyback, router terminal, suckers)
-4. Omnichain deployer
-5. Periphery (controller, price feeds, deadlines)
-6. Croptop project
-7. Revnet project
-8. Banny project
-
-Deployment is executed directly via Sphinx using `Deploy.s.sol`.
+### Applications
+- **Defifa** — Prediction games. Players buy NFTs representing outcomes, governance ratifies a scorecard to distribute the prize pool. See [defifa-collection-deployer-v6/](./defifa-collection-deployer-v6/).
+- **Croptop** — Decentralized NFT publishing. Anyone can post content as NFT tiers on a Croptop project. See [croptop-core-v6/](./croptop-core-v6/).
+- **Banny** — Dynamic SVG NFTs with composable outfits, backed by a revnet treasury. See [banny-retail-v6/](./banny-retail-v6/).
 
 ## Key Invariants
 

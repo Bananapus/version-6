@@ -1,4 +1,4 @@
-# Juicebox V6 — Developer Navigation
+# Developer Navigation
 
 Fast-access reference for finding anything in the V6 ecosystem. Use this when you need to trace a flow, find a function, debug an error, or understand how contracts interact.
 
