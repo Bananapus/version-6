@@ -13,7 +13,7 @@ git clone --recursive https://github.com/Bananapus/version-6.git
 | I want to... | Go here |
 |-------------|---------|
 | Launch a project or use the protocol | [USER_JOURNEYS.md](./USER_JOURNEYS.md) |
-| Understand how it works | [DOC.md](./DOC.md) |
+| Understand how it works | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | See how contracts connect | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Understand the risks | [RISKS.md](./RISKS.md) |
 | Navigate the codebase fast | [SKILLS.md](./SKILLS.md) |
