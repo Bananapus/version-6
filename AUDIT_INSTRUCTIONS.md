@@ -2,7 +2,7 @@
 
 Juicebox V6: programmable treasuries on EVM. Projects collect funds through terminals, issue tokens, cash out along bonding curves, and compose features through hooks. Your goal: find bugs that lose funds, break invariants, or enable unauthorized access.
 
-**Context:** [DOC.md](./DOC.md) (how it works) | [ARCHITECTURE.md](./ARCHITECTURE.md) (contracts) | [RISKS.md](./RISKS.md) (trust model) | [USER_JOURNEYS.md](./USER_JOURNEYS.md) (user paths)
+**Context:** [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) | [RISKS.md](./RISKS.md) (trust model) | [USER_JOURNEYS.md](./USER_JOURNEYS.md) (user paths)
 
 ## Scope
 
