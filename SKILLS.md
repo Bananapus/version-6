@@ -32,6 +32,8 @@ Fast-access reference for finding anything in the V6 ecosystem. Use this when yo
 | Permission check | `JBPermissions.hasPermission()` L191 | 256-bit packed, ROOT=1 grants all |
 | Fee processing | `JBMultiTerminal._processFee()` L1479 | 2.5% to project #1, 28-day hold |
 | Held fee return | `JBMultiTerminal.processHeldFeesOf()` L631 | Sequential from `_nextHeldFeeIndexOf` |
+| Preview payment | `JBTerminalStore.previewPayFrom()` | Simulates payment (view). Returns token count + hook specs |
+| Preview cash out | `JBTerminalStore.previewCashOutFrom()` | Simulates cash out (view). Returns reclaim amount, tax rate, hook specs |
 | Data hook (pay) | `JBTerminalStore.recordPaymentFrom()` L308 | Hook overrides weight + specifies pay hooks |
 | Data hook (cashout) | `JBTerminalStore.recordCashOutFor()` L167 | Hook overrides tax rate, count, supply |
 | NFT tier mint | `JB721TiersHookStore.recordMint()` L1023 | Tier selection by price, supply cap check |

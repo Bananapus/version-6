@@ -94,6 +94,8 @@ JBMultiTerminal.pay(projectId, token, amount, beneficiary, minReturnedTokens, me
 
 The terminal records the payment, mints project tokens to the beneficiary (at the current ruleset's weight), and executes any pay hooks (NFT minting, buyback swaps). If the project uses a router terminal, you can pay with any token — it swaps to the project's accepted token automatically.
 
+**Preview**: Call `JBTerminalStore.previewPayFrom(terminal, payer, amount, projectId, beneficiary, metadata)` to simulate the full payment on-chain — including data hook effects on weight and hook specifications. This is a `view` function that does not modify state.
+
 ### Cash Out
 
 Burn project tokens to reclaim a share of the surplus:
@@ -105,6 +107,8 @@ JBMultiTerminal.cashOutTokensOf(holder, projectId, cashOutCount, token, minToken
 The amount returned follows the bonding curve: `surplus * (count/supply) * [(1-tax) + tax*(count/supply)]`. Higher tax = steeper curve = more penalty for partial cash outs. Tax of 0 = linear (proportional share). Tax of 100% = no cash outs.
 
 Always set `minTokensReclaimed` to protect against slippage.
+
+**Preview**: Call `JBTerminalStore.previewCashOutFrom(terminal, holder, projectId, cashOutCount, accountingContext, balanceAccountingContexts, beneficiaryIsFeeless, metadata)` to simulate the full cash out on-chain — including data hook effects on tax rate, supply, and hook specifications. This is a `view` function that does not modify state. For a simpler estimate without data hook effects, use `currentTotalReclaimableSurplusOf(projectId, cashOutCount, decimals, currency)`.
 
 ### Borrow Against Tokens (revnets only)
 
