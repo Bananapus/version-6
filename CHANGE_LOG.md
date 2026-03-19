@@ -61,6 +61,7 @@ Full details: [nana-core-v6/CHANGE_LOG.md](./nana-core-v6/CHANGE_LOG.md)
 - Several interfaces changed `memory` params to `calldata`
 
 **New capabilities:**
+- `previewPayFrom` / `previewCashOutFrom` — `view` functions on `JBTerminalStore` that simulate the full payment or cash out on-chain, including data hook effects. Useful for UIs and integrations to preview exact outcomes before sending a transaction.
 - `setTokenMetadataOf` — mutable ERC-20 and 721 name/symbol after deployment (new `SET_TOKEN_METADATA` permission)
 - `JBCashOuts.minCashOutCountFor` — inverse bonding curve (binary search for minimum tokens needed)
 - `IJBMigratable.afterReceiveMigrationFrom` — callback after migration
