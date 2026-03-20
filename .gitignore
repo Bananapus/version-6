@@ -1,5 +1,6 @@
 # Audit materials
 .audit/
+.audit-findings-prev-*/
 .audit-logs/
 AUDIT_FINDINGS*.md
 NEMESIS_SCOPE.md
