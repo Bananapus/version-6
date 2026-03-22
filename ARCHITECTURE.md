@@ -1,5 +1,9 @@
 # Architecture
 
+## Purpose
+
+Juicebox V6 is an onchain programmable treasury protocol for Ethereum. Projects use it to accept payments, issue tokens along a bonding curve, distribute payouts to preset splits, and let token holders cash out their share of surplus — all governed by time-bound rulesets that the project owner queues in advance. The protocol is designed around a small, audited core (terminals, controllers, rulesets, token accounting) that exposes hook interfaces at every decision point, so that features like NFT tiers, DEX buybacks, cross-chain bridging, and autonomous revenue networks are implemented as composable extensions rather than baked into the core contracts.
+
 ## Ecosystem Layers
 
 ```
@@ -255,3 +259,17 @@ See [SKILLS.md](./SKILLS.md#contract-sizes) for per-contract line counts.
 | nana-fee-project-deployer-v6 | Fee project | Deploy.s.sol (script only) |
 | nana-address-registry-v6 | Registry | JBAddressRegistry |
 | nana-permission-ids-v6 | Constants | JBPermissionIds |
+
+## Design Decisions
+
+- **Layered hook composition over monolithic features.** The core protocol deliberately knows nothing about NFTs, buybacks, LP positions, or cross-chain bridging. Every feature is an external hook that plugs into one of six well-defined extension points (data hook, pay hook, cash out hook, split hook, approval hook, deployer). This keeps the audited surface small and lets anyone ship new functionality without modifying or redeploying the core.
+
+- **Data hooks separated from pay/cashout hooks.** Data hooks (`IJBRulesetDataHook`) run as `view` calls *before* the terminal records a transaction, so they can safely override economic parameters (weight, cash out tax rate, total supply) without holding funds. Pay and cash out hooks (`IJBPayHook`, `IJBCashOutHook`) run *after* the terminal has already settled state (updated balances, minted or burned tokens), so they receive funds and execute side effects like minting NFTs or performing swaps. This before/after split means a single data hook can orchestrate multiple downstream hooks via hook specifications, and the core never transfers funds to a contract that is also deciding how much to mint.
+
+- **Ruleset-based governance instead of admin functions.** Project parameters (weight, payout limits, cash out tax rate, hook addresses, permission flags) are bundled into immutable rulesets that activate on a schedule. Once a ruleset is active it cannot be changed — the owner can only queue a *future* ruleset. This gives contributors a guaranteed window to inspect upcoming changes and exit (cash out) before they take effect, without requiring a separate timelock contract.
+
+- **Terminal/store separation for bookkeeping isolation.** `JBMultiTerminal` handles fund custody, access control, fee processing, and hook execution. `JBTerminalStore` handles all arithmetic — balances, surplus calculation, payout limit tracking, bonding curve math. Because the store never holds funds or makes external calls, its logic can be reasoned about (and formally verified) in isolation from reentrancy concerns.
+
+- **Compositional deployers over inheritance.** Higher-level products (revnets, Croptop, Defifa) are thin deployer contracts that wire together core primitives and hooks, rather than subclasses of the core. `REVDeployer` configures a project with specific rulesets, a buyback data hook, and split rules — but it delegates all runtime behavior to the same `JBController` and `JBMultiTerminal` that every other project uses. This means the core protocol's security properties hold uniformly regardless of which deployer created a project.
+
+- **Noop hook specifications for preview transparency.** Data hooks can return hook specifications marked `noop = true`, which the terminal skips during execution but still surfaces in `previewPayFrom` / `previewCashOutFrom` results. This lets hooks like the buyback hook communicate routing diagnostics (TWAP price, pool liquidity, which path won) to frontends without introducing a separate query interface or requiring off-chain indexing.
