@@ -147,7 +147,7 @@ The amount returned follows the bonding curve: `surplus * (count/supply) * [(1-t
 - Credits are burned first, then ERC-20 tokens.
 - A data hook can override `cashOutTaxRate`, `cashOutCount`, and `totalSupply`, giving it full control over bonding curve economics.
 
-**Preview**: Call `JBTerminalStore.previewCashOutFrom(terminal, holder, projectId, cashOutCount, accountingContext, balanceAccountingContexts, beneficiaryIsFeeless, metadata)` to simulate the full cash out on-chain — including data hook effects on tax rate, supply, and hook specifications. This is a `view` function that does not modify state. For a simpler estimate without data hook effects, use `currentTotalReclaimableSurplusOf(projectId, cashOutCount, decimals, currency)`.
+**Preview**: Call `JBTerminalStore.previewCashOutFrom(terminal, holder, projectId, cashOutCount, tokenToReclaim, beneficiaryIsFeeless, metadata)` to simulate the full cash out on-chain — including data hook effects on tax rate, supply, and hook specifications. This is a `view` function that does not modify state. For a simpler estimate without data hook effects, use `currentTotalReclaimableSurplusOf(projectId, cashOutCount, decimals, currency)`.
 
 ---
 
@@ -255,7 +255,7 @@ Queue future rulesets to change economics. Takes effect when the current ruleset
 - A ruleset with `duration = 0` never expires and must be explicitly replaced by queuing a new one.
 - Do not queue multiple identical rulesets — a ruleset with a duration auto-cycles. Queuing duplicates creates unnecessary linked-list entries.
 - `weight = 1` means "inherit decayed weight from the previous ruleset." `weight = 0` means "no issuance."
-- If `weightCutMultiple` causes more than 20,000 iterations to derive the current weight, the transaction reverts with `JBRulesets_WeightCacheRequired`. Call `updateRulesetWeightCache()` first.
+- If a ruleset's `weightCutPercent` causes more than 20,000 weight-decay iterations to derive the current weight, the transaction reverts with `JBRulesets_WeightCacheRequired`. Call `updateRulesetWeightCache(projectId, rulesetId)` first.
 
 ---
 
