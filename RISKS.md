@@ -1,6 +1,6 @@
 # Risks
 
-Trust assumptions, known risks, and security properties of Juicebox V6. For per-repo risk details, see each repo's `RISKS.md`. For audit findings, see [AUDIT.md](./AUDIT.md).
+Trust assumptions, known risks, and security properties of Juicebox V6. For per-repo risk details, see each repo's `RISKS.md`.
 
 ## Trust Model
 
@@ -34,6 +34,7 @@ Trust assumptions, known risks, and security properties of Juicebox V6. For per-
 | No reentrancy guard | Protocol relies on CEI ordering, not mutex | State updates before all external calls |
 | Weight cache requirement | Projects with >20k cycles need progressive cache updates | Anyone can call `updateRulesetWeightCache` |
 | Fee-on-fee compounding | Fees on hooks that themselves trigger fees | Each fee layer is bounded; no unbounded recursion |
+| Noop hook spec suppression | A data hook can return noop hook specifications, suppressing hook callbacks while its own weight/tax rate/supply overrides still take effect | By design — the `noop` flag controls only whether the pay/cashout hook callback executes. The data hook's parameter overrides (weight, tax rate, supply) are applied before hook callbacks and are unaffected by `noop`. |
 
 ## Operational Risks
 
@@ -125,7 +126,7 @@ The protocol uses no `ReentrancyGuard`. It relies on state ordering (CEI pattern
 | `REVLoans.borrowFrom` | Collateral locked BEFORE funds transferred | LOW |
 | `REVLoans.repayLoan` | Loan state cleared BEFORE collateral returned | LOW |
 
-**Key defense**: `JBTerminalStore_InadequateTerminalStoreBalance` revert prevents extracting more than available balance regardless of reentrancy.
+**Key defense**: `JBTerminalStore_InadequateTerminalStoreBalance` revert prevents direct over-extraction of terminal balance.
 
 **Gap**: Complex cross-function reentrancy (hook calling back into a *different* terminal function) is not explicitly prevented. The LP split hook has no reentrancy protection at all.
 
