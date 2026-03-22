@@ -37,7 +37,7 @@ Hooks plug into the core at well-defined extension points. Data hooks override e
 | Repo | What it does |
 |------|-------------|
 | [nana-721-hook-v6](./nana-721-hook-v6) | Tiered NFTs — mint on payment, burn to cash out. Per-tier pricing, supply caps, reserve frequency, discount rates. |
-| [nana-buyback-hook-v6](./nana-buyback-hook-v6) | Data hook that compares minting vs buying from Uniswap V4, takes whichever gives more tokens. TWAP oracle with sigmoid slippage. |
+| [nana-buyback-hook-v6](./nana-buyback-hook-v6) | Data hook that routes both buy-side payments and sell-side cash outs through the better of the protocol path or a Uniswap V4 pool. TWAP oracle with sigmoid slippage. |
 | [univ4-lp-split-hook-v6](./univ4-lp-split-hook-v6) | Split hook that accumulates reserved tokens and deploys them into UniV4 concentrated liquidity positions bounded by issuance and cash-out rates. |
 | [univ4-router-v6](./univ4-router-v6) | Uniswap V4 hook with custom swap logic and oracle tracking for buyback integration. |
 
@@ -80,7 +80,7 @@ Hooks plug into the core at well-defined extension points. Data hooks override e
 
 | Repo | What it does |
 |------|-------------|
-| [deploy-all-v6](./deploy-all-v6) | Single Foundry script that deploys the entire ecosystem (~1,600 lines). Sphinx orchestration across 8 chains. |
+| [deploy-all-v6](./deploy-all-v6) | Single Foundry script that deploys the entire ecosystem (~2,200 lines). Sphinx orchestration across 8 chains. |
 
 ## Building
 

@@ -14,6 +14,8 @@ See [nana-router-terminal-v6/CHANGE_LOG.md](./nana-router-terminal-v6/CHANGE_LOG
 
 The buyback hook was rewritten from Uniswap V3 to V4. All swap logic now goes through V4's `IPoolManager` singleton. The slippage algorithm changed from a 9-tier step function to a continuous sigmoid curve. TWAP queries use V4 oracle hooks instead of V3's `OracleLibrary`. The shared swap math lives in a new `JBSwapLib` library used by both the buyback hook and router terminal.
 
+**Sell-side cash out optimization:** The buyback hook now also implements `IJBCashOutHook` and optimizes sell-side cash outs. `beforeCashOutRecordedWith` compares the protocol's bonding curve reclaim value against selling reminted tokens into the Uniswap V4 pool. If the pool route is better, the hook executes the sell via `afterCashOutRecordedWith`. If the protocol cash out wins, the hook returns a noop specification with routing metadata so preview clients can still inspect the comparison.
+
 See [nana-buyback-hook-v6/CHANGE_LOG.md](./nana-buyback-hook-v6/CHANGE_LOG.md) for details.
 
 ### New: UniV4 LP Split Hook + UniV4 Router
@@ -60,8 +62,28 @@ Full details: [nana-core-v6/CHANGE_LOG.md](./nana-core-v6/CHANGE_LOG.md)
 - `IJBPayoutTerminal.sendPayoutsOf` return value changed to `amountPaidOut`
 - Several interfaces changed `memory` params to `calldata`
 
+**Migration examples:**
+
+```solidity
+// updateRulesetWeightCache — V5 vs V6
+// V5: rulesets.updateRulesetWeightCache(projectId)
+// V6: rulesets.updateRulesetWeightCache(projectId, rulesetId)
+//     rulesetId = the specific ruleset to cache from (use currentOf().id)
+
+// sendPayoutsOf — V5 vs V6
+// V5: uint256 netLeftoverPayoutAmount = terminal.sendPayoutsOf(projectId, token, amount, currency, minTokensPaidOut);
+// V6: uint256 amountPaidOut = terminal.sendPayoutsOf(projectId, token, amount, currency, minTokensPaidOut);
+//     Return value changed from leftover to total paid out.
+
+// deployWith721sFor — removed in V6
+// V5: revDeployer.deployWith721sFor(revnetId, config, terminals, suckers, tiered721Config)
+// V6: revDeployer.deployFor(revnetId, config, terminals, suckers, tiered721Config, allowedPosts)
+//     Both deployFor overloads now auto-deploy a 721 hook. Use the 6-arg version for configured tiers.
+```
+
 **New capabilities:**
-- `previewPayFrom` / `previewCashOutFrom` — `view` functions on `JBTerminalStore` that simulate the full payment or cash out on-chain, including data hook effects. Useful for UIs and integrations to preview exact outcomes before sending a transaction.
+- `previewPayFrom` / `previewCashOutFrom` — `view` functions on `JBTerminalStore` that simulate the full payment or cash out on-chain, including data hook effects. Terminal-level wrappers (`JBMultiTerminal.previewPayFor`, `JBMultiTerminal.previewCashOutFrom`) compose the store previews with mint token splitting. Useful for UIs and integrations to preview exact outcomes before sending a transaction.
+- Noop hook specifications — `JBPayHookSpecification` and `JBCashOutHookSpecification` gained a `bool noop` field. When `noop = true`, the terminal skips the hook callback but the spec remains available to preview clients. The store enforces `noop = true` + `amount != 0` reverts (`JBTerminalStore_NoopHookSpecHasAmount`). The buyback hook uses noop specs to return routing diagnostics (TWAP tick, liquidity, pool ID) when the protocol path wins.
 - `setTokenMetadataOf` — mutable ERC-20 and 721 name/symbol after deployment (new `SET_TOKEN_METADATA` permission)
 - `JBCashOuts.minCashOutCountFor` — inverse bonding curve (binary search for minimum tokens needed)
 - `IJBMigratable.afterReceiveMigrationFrom` — callback after migration

@@ -104,6 +104,33 @@ Holder → JBMultiTerminal.cashOutTokensOf()
            └──→ Take fees (2.5% to project #1)
 ```
 
+### Preview Flow
+```
+Frontend → JBMultiTerminal.previewPayFor()
+             │
+             ├──→ JBTerminalStore.previewPayFrom()
+             │      ├── Read current ruleset
+             │      ├── [Optional] Data hook overrides weight
+             │      ├── Calculate token count from weight
+             │      └── Return hook specifications (active or noop)
+             │
+             └──→ JBController.previewMintOf()
+                    └── Split token count into beneficiary + reserved
+
+Frontend → JBMultiTerminal.previewCashOutFrom()
+             │
+             └──→ JBTerminalStore.previewCashOutFrom()
+                    ├── Calculate surplus
+                    ├── Get totalSupply (including pending reserved)
+                    ├── [Optional] Data hook overrides parameters
+                    ├── JBCashOuts.cashOutFrom() — bonding curve
+                    └── Return reclaim amount, tax rate, hook specifications
+```
+
+Both are `view` functions — no state changes. Hook specifications may include
+noop specs (informational-only, `noop = true`) carrying routing diagnostics
+from data hooks like the buyback hook.
+
 ### Payout Flow
 ```
 Owner → JBMultiTerminal.sendPayoutsOf()
@@ -156,11 +183,36 @@ Juicebox V6 uses a compositional hook system where features plug into the core p
 | Extension Point | Interface | Called By | Examples |
 |----------------|-----------|-----------|----------|
 | Data Hook (pay) | `IJBRulesetDataHook.beforePayRecordedWith` | JBTerminalStore | JBBuybackHook, REVDeployer |
-| Data Hook (cashout) | `IJBRulesetDataHook.beforeCashOutRecordedWith` | JBTerminalStore | JBOmnichainDeployer, REVDeployer |
-| Pay Hook | `IJBPayHook.afterPayRecordedWith` | JBMultiTerminal | JB721TiersHook |
-| Cash Out Hook | `IJBCashOutHook.afterCashOutRecordedWith` | JBMultiTerminal | JB721TiersHook, REVDeployer, DefifaHook |
+| Data Hook (cashout) | `IJBRulesetDataHook.beforeCashOutRecordedWith` | JBTerminalStore | JBBuybackHook, JBOmnichainDeployer, REVDeployer |
+| Pay Hook | `IJBPayHook.afterPayRecordedWith` | JBMultiTerminal | JB721TiersHook, JBBuybackHook |
+| Cash Out Hook | `IJBCashOutHook.afterCashOutRecordedWith` | JBMultiTerminal | JB721TiersHook, JBBuybackHook, REVDeployer, DefifaHook |
 | Split Hook | `IJBSplitHook.processSplitWith` | JBMultiTerminal | JBUniswapV4LPSplitHook |
 | Approval Hook | `IJBRulesetApprovalHook.approvalStatusOf` | JBRulesets | JBDeadline |
+
+Data hooks return hook specifications that can be marked **noop** (`noop = true`). Noop specs are informational-only — the terminal skips the hook callback but the spec's metadata is still available to preview clients. The buyback hook uses this to return routing diagnostics (TWAP tick, liquidity, pool ID) even when the protocol path wins. Noop specs with `amount != 0` revert (`JBTerminalStore_NoopHookSpecHasAmount`).
+
+#### Hook Composition Flow
+
+```
+Data Hook (beforePayRecordedWith / beforeCashOutRecordedWith)
+│
+├── Returns: modified weight/tax rate/supply
+│   (these overrides are ALWAYS applied)
+│
+└── Returns: hook specifications[]
+    │
+    ├── spec.noop = false, spec.amount > 0
+    │   └── Terminal calls hook.afterPayRecordedWith / afterCashOutRecordedWith
+    │       (active callback — hook receives funds and executes logic)
+    │
+    ├── spec.noop = true, spec.amount = 0
+    │   └── Terminal SKIPS callback
+    │       (informational — metadata available to preview clients only)
+    │
+    └── spec.noop = true, spec.amount > 0
+        └── REVERTS: JBTerminalStore_NoopHookSpecHasAmount
+            (noop specs cannot carry funds)
+```
 
 ### Permission System
 
@@ -182,22 +234,24 @@ JBPermissions (256-bit packed)
 
 ## Repository Summary
 
-| Repository | Role | Key Contracts | LoC |
-|-----------|------|---------------|-----|
-| nana-core-v6 | Core protocol | JBMultiTerminal, JBController, JBTerminalStore, JBRulesets | ~11,200 |
-| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBBaseSucker, JBArbitrumSucker, JBCCIPSucker | ~5,000 |
-| nana-721-hook-v6 | NFT tiers | JB721TiersHook, JB721TiersHookStore | ~5,100 |
-| defifa-collection-deployer-v6 | Prediction games | DefifaDeployer, DefifaHook, DefifaGovernor, DefifaHookLib | ~3,900 |
-| revnet-core-v6 | Autonomous projects | REVDeployer, REVLoans | ~3,400 |
-| nana-router-terminal-v6 | Payment routing | JBRouterTerminal, JBRouterTerminalRegistry | ~2,200 |
-| nana-buyback-hook-v6 | DEX buyback | JBBuybackHook, JBBuybackHookRegistry, JBSwapLib | ~1,900 |
-| deploy-all-v6 | Ecosystem deployment | Deploy.s.sol (Sphinx orchestration) | ~1,600 |
-| banny-retail-v6 | Banny NFTs | Banny721TokenUriResolver | ~1,600 |
-| univ4-lp-split-hook-v6 | LP management | JBUniswapV4LPSplitHook | ~1,600 |
-| croptop-core-v6 | NFT publishing | CTDeployer, CTPublisher | ~1,400 |
-| univ4-router-v6 | UniV4 integration | JBUniswapV4Hook | ~1,400 |
-| nana-omnichain-deployers-v6 | Omnichain | JBOmnichainDeployer | ~1,000 |
-| nana-ownable-v6 | JB ownership | JBOwnable | ~400 |
-| nana-fee-project-deployer-v6 | Fee project | Deploy.s.sol (script only) | ~200 |
-| nana-address-registry-v6 | Registry | JBAddressRegistry | ~150 |
-| nana-permission-ids-v6 | Constants | JBPermissionIds | ~70 |
+See [SKILLS.md](./SKILLS.md#contract-sizes) for per-contract line counts.
+
+| Repository | Role | Key Contracts |
+|-----------|------|---------------|
+| nana-core-v6 | Core protocol | JBMultiTerminal, JBController, JBTerminalStore, JBRulesets |
+| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBBaseSucker, JBArbitrumSucker, JBCCIPSucker |
+| nana-721-hook-v6 | NFT tiers | JB721TiersHook, JB721TiersHookStore |
+| defifa-collection-deployer-v6 | Prediction games | DefifaDeployer, DefifaHook, DefifaGovernor, DefifaHookLib |
+| revnet-core-v6 | Autonomous projects | REVDeployer, REVLoans |
+| nana-router-terminal-v6 | Payment routing | JBRouterTerminal, JBRouterTerminalRegistry |
+| nana-buyback-hook-v6 | DEX buyback | JBBuybackHook, JBBuybackHookRegistry, JBSwapLib |
+| deploy-all-v6 | Ecosystem deployment | Deploy.s.sol (Sphinx orchestration) |
+| banny-retail-v6 | Banny NFTs | Banny721TokenUriResolver |
+| univ4-lp-split-hook-v6 | LP management | JBUniswapV4LPSplitHook |
+| croptop-core-v6 | NFT publishing | CTDeployer, CTPublisher |
+| univ4-router-v6 | UniV4 integration | JBUniswapV4Hook |
+| nana-omnichain-deployers-v6 | Omnichain | JBOmnichainDeployer |
+| nana-ownable-v6 | JB ownership | JBOwnable |
+| nana-fee-project-deployer-v6 | Fee project | Deploy.s.sol (script only) |
+| nana-address-registry-v6 | Registry | JBAddressRegistry |
+| nana-permission-ids-v6 | Constants | JBPermissionIds |

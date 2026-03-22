@@ -2,6 +2,17 @@
 
 How to use Juicebox V6. Three paths, one protocol.
 
+### Key Terms
+
+| Term | Meaning |
+|------|---------|
+| **Ruleset** | A time-bounded configuration that governs a project's economics — issuance weight, duration, tax rate, hooks, and access limits. Rulesets cycle automatically when their duration expires. |
+| **Surplus** | Funds held by a project's terminals beyond what's needed for configured payouts. Token holders can cash out against the surplus. |
+| **Bonding curve** | The math that determines how much a token holder receives when cashing out. Controlled by the cash out tax rate. |
+| **Cash out tax** | A rate (0–100%) that curves the bonding curve. 0% = proportional share. Higher = steeper penalty for partial cash outs. |
+| **Data hook** | A contract that overrides payment weight or cash out parameters before the terminal records the operation. Set per-ruleset. |
+| **Hook specification** | A struct returned by a data hook describing which pay/cashout hooks to call after settlement, and with how much. Can be marked `noop` to skip the callback. |
+
 ## Start a Project
 
 ### Path 1: Omnichain Project
@@ -94,7 +105,9 @@ JBMultiTerminal.pay(projectId, token, amount, beneficiary, minReturnedTokens, me
 
 The terminal records the payment, mints project tokens to the beneficiary (at the current ruleset's weight), and executes any pay hooks (NFT minting, buyback swaps). If the project uses a router terminal, you can pay with any token — it swaps to the project's accepted token automatically.
 
-**Preview**: Call `JBTerminalStore.previewPayFrom(terminal, payer, amount, projectId, beneficiary, metadata)` to simulate the full payment on-chain — including data hook effects on weight and hook specifications. This is a `view` function that does not modify state.
+The `metadata` parameter is a variable-length key-value payload encoded via `JBMetadataResolver`. Common uses: Permit2 approval data (gasless ERC-20 payments), buyback hook quotes (TWAP tick, pool selection), 721 tier IDs to mint, and custom data hook payloads. See [SKILLS.md](./SKILLS.md#libraries) for `JBMetadataResolver` encoding format.
+
+**Preview**: Call `JBMultiTerminal.previewPayFor(projectId, token, amount, beneficiary, metadata)` to simulate the full payment on-chain — including data hook effects on weight, reserved/beneficiary token split, and hook specifications. This is a `view` function that does not modify state. When a buyback hook is active, the returned hook specifications may include noop specs with routing diagnostics (TWAP tick, liquidity, pool ID) even when the protocol mint path wins — allowing UIs to show the comparison without a second call.
 
 ### Cash Out
 
@@ -108,7 +121,7 @@ The amount returned follows the bonding curve: `surplus * (count/supply) * [(1-t
 
 Always set `minTokensReclaimed` to protect against slippage.
 
-**Preview**: Call `JBTerminalStore.previewCashOutFrom(terminal, holder, projectId, cashOutCount, accountingContext, balanceAccountingContexts, beneficiaryIsFeeless, metadata)` to simulate the full cash out on-chain — including data hook effects on tax rate, supply, and hook specifications. This is a `view` function that does not modify state. For a simpler estimate without data hook effects, use `currentTotalReclaimableSurplusOf(projectId, cashOutCount, decimals, currency)`.
+**Preview**: Call `JBMultiTerminal.previewCashOutFrom(holder, projectId, cashOutCount, tokenToReclaim, beneficiary, metadata)` to simulate the full cash out on-chain — including data hook effects on tax rate, supply, and hook specifications. This is a `view` function that does not modify state. For a lower-level preview, use `JBTerminalStore.previewCashOutFrom(terminal, holder, projectId, cashOutCount, tokenToReclaim, beneficiaryIsFeeless, metadata)`. For a simpler estimate without data hook effects, use `currentTotalReclaimableSurplusOf(projectId, cashOutCount, decimals, currency)`.
 
 ### Borrow Against Tokens (revnets only)
 
