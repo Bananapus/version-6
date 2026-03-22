@@ -2,55 +2,137 @@
 
 Fast-access reference for finding anything in the V6 ecosystem. Use this when you need to trace a flow, find a function, debug an error, or understand how contracts interact.
 
-## Common Approaches
-
-**"How do payments work?"** — Start at `JBMultiTerminal._pay()` (L1432). It calls `JBTerminalStore.recordPaymentFrom()` for bookkeeping, then `JBController.mintTokensOf()` for token issuance, then executes any pay hooks. The data hook (if set) can override the weight before minting.
-
-**"How do I build a custom hook?"** — Implement `IJBPayHook` (called after payment) or `IJBCashOutHook` (called after cashout). For economics override, implement `IJBRulesetDataHook`. See `JB721TiersHook` for a pay+cashout hook example, `JBBuybackHook` for a data hook example. Hooks are set per-ruleset in the metadata.
-
-**"How do I deploy a project?"** — Use `JBController.launchProjectFor()` with a ruleset config. For a revnet (autonomous project), use `REVDeployer.deployFor()`. For Croptop, use `CTDeployer`. For Defifa, use `DefifaDeployer.launchGameWith()`. Each deployer handles its own hook wiring.
-
-**"How does cross-chain work?"** — `JBSucker.prepare()` cashes out tokens on the source chain and inserts a leaf into an outbox merkle tree. The tree root is bridged via OP/Arb/CCIP messenger. On destination, `JBSucker.claim()` verifies the merkle proof and mints tokens. See `nana-omnichain-deployers-v6` for multi-chain project setup.
-
-**"How do I trace a bug?"** — Find the error in the "Find by Error" table below. Trace backwards: errors in `JBTerminalStore` mean the bookkeeping check failed; errors in `JBMultiTerminal` mean slippage or access control failed; errors in `JBController` mean ruleset config prevents the action.
-
-**"How does the full ecosystem get deployed?"** — `deploy-all-v6/script/Deploy.s.sol` deploys everything in 9 phases via Sphinx: core protocol → address registry → hooks (721, buyback, router, suckers) → omnichain → periphery → application projects (Croptop, Revnet, Banny).
+Deployed addresses: see `deploy-all-v6/broadcast/` or check each repo's deployment artifacts.
 
 ## Find by Flow
 
 | Flow | Entry Point | Key Logic |
 |------|------------|-----------|
-| Payment | `JBMultiTerminal._pay()` L1432 | `JBTerminalStore.recordPaymentFrom()` L318 |
-| Cash out | `JBMultiTerminal._cashOutTokensOf()` L1053 | `JBTerminalStore.recordCashOutFor()` L248 |
-| Payout distribution | `JBMultiTerminal.sendPayoutsOf()` L652 | Splits loop → `executePayout()` |
-| Surplus calculation | `JBTerminalStore._tokenSurplusFrom()` L1169 | Cross-terminal aggregation via JBSurplus |
-| Bonding curve | `JBCashOuts.cashOutFrom()` L20 | `base * [(MAX-tax) + tax*(count/supply)] / MAX` |
-| Token minting | `JBController.mintTokensOf()` L497 | Reserved accumulation in `pendingReservedTokenBalanceOf` |
-| Reserved distribution | `JBController._sendReservedTokensToSplitsOf()` L1109 | Mints then distributes to splits |
-| Ruleset queuing | `JBRulesets.queueFor()` L116 | Linked list via `basedOnId` |
-| Weight decay | `JBRulesets.deriveWeightFrom()` L613 | Cache required after 20k cycles |
-| Permission check | `JBPermissions.hasPermission()` L193 | 256-bit packed, ROOT=1 grants all |
-| Fee processing | `JBMultiTerminal._processFee()` L1508 | 2.5% to project #1, 28-day hold |
-| Held fee return | `JBMultiTerminal.processHeldFeesOf()` L584 | Sequential from `_nextHeldFeeIndexOf` |
+| Payment | `JBMultiTerminal._pay()` | `JBTerminalStore.recordPaymentFrom()` — weight calc, data hook override, then `JBController.mintTokensOf()`, then pay hooks |
+| Cash out | `JBMultiTerminal._cashOutTokensOf()` | `JBTerminalStore.recordCashOutFor()` — bonding curve, data hook override |
+| Payout distribution | `JBMultiTerminal.sendPayoutsOf()` | Splits loop via `executePayout()` |
+| Surplus calculation | `JBTerminalStore._tokenSurplusFrom()` | Cross-terminal aggregation via `JBSurplus` |
+| Bonding curve | `JBCashOuts.cashOutFrom()` | `base * [(MAX-tax) + tax*(count/supply)] / MAX` |
+| Token minting | `JBController.mintTokensOf()` | Reserved accumulation in `pendingReservedTokenBalanceOf` |
+| Reserved distribution | `JBController._sendReservedTokensToSplitsOf()` | Mints then distributes to splits |
+| Ruleset queuing | `JBRulesets.queueFor()` | Linked list via `basedOnId` |
+| Weight decay | `JBRulesets.deriveWeightFrom()` | Cache required after 20k cycles |
+| Permission check | `JBPermissions.hasPermission()` | 256-bit packed, ROOT=1 grants all |
+| Fee processing | `JBMultiTerminal._processFee()` | 2.5% to project #1, 28-day hold |
+| Held fee return | `JBMultiTerminal.processHeldFeesOf()` | Sequential from `_nextHeldFeeIndexOf` |
 | Preview payment | `JBTerminalStore.previewPayFrom()` | Simulates payment (view). Returns token count + hook specs |
 | Preview cash out | `JBTerminalStore.previewCashOutFrom()` | Simulates cash out (view). Returns reclaim amount, tax rate, hook specs |
-| Data hook (pay) | `JBTerminalStore.recordPaymentFrom()` L308 | Hook overrides weight + specifies pay hooks |
-| Data hook (cashout) | `JBTerminalStore.recordCashOutFor()` L167 | Hook overrides tax rate, count, supply |
-| NFT tier mint | `JB721TiersHookStore.recordMint()` L1037 | Tier selection by price, supply cap check |
-| Buyback decision | `JBBuybackHook._getQuote()` L1035 | TWAP oracle query, mint vs swap |
-| Loan creation | `REVLoans.borrowFrom()` L551 | Collateral lock, bonding curve valuation |
+| Data hook (pay) | `JBTerminalStore.recordPaymentFrom()` | Hook overrides weight + specifies pay hooks |
+| Data hook (cashout) | `JBTerminalStore.recordCashOutFor()` | Hook overrides tax rate, count, supply |
+| Custom hook | Implement `IJBPayHook` or `IJBCashOutHook` | For economics override, implement `IJBRulesetDataHook`. See `JB721TiersHook` (pay+cashout) or `JBBuybackHook` (data hook). Set per-ruleset in metadata. |
+| Deploy a project | `JBController.launchProjectFor()` | For revnets: `REVDeployer.deployFor()`. For Croptop: `CTDeployer`. For Defifa: `DefifaDeployer.launchGameWith()`. |
+| NFT tier mint | `JB721TiersHookStore.recordMint()` | Tier selection by price, supply cap check |
+| Buyback decision | `JBBuybackHook._getQuote()` | TWAP oracle query, mint vs swap |
+| Loan creation | `REVLoans.borrowFrom()` | Collateral lock, bonding curve valuation |
 | Cross-chain prepare | `JBSucker.prepare()` | Cash out + insert into outbox merkle tree |
 | Cross-chain claim | `JBSucker.claim()` | Verify merkle proof + mint/transfer |
 | LP pool deploy | `JBUniswapV4LPSplitHook.deployPool()` | Concentrated liquidity from accumulated tokens |
-| Defifa game launch | `DefifaDeployer.launchGameWith()` L362 | Creates project + queues phase rulesets |
-| Defifa scorecard | `DefifaGovernor.submitScorecardFor()` L185 | Allocates `TOTAL_CASHOUT_WEIGHT` (1e18) across tiers |
-| Defifa attestation | `DefifaGovernor.attestToScorecardFrom()` L97 | Per-tier power, capped at 1e9 |
-| Defifa ratification | `DefifaGovernor.ratifyScorecardFrom()` L139 | Quorum = 50% of eligible attestation power |
-| Defifa cash-out weight | `DefifaHookLib.computeCashOutWeight()` L95 | `weight / tokens` — integer truncation |
-| Defifa game phase | `DefifaDeployer.currentGamePhaseOf()` L219 | COUNTDOWN → MINT → REFUND → SCORING → COMPLETE |
-| Full ecosystem deploy | `deploy-all-v6/script/Deploy.s.sol` (2230 lines) | 9-phase Sphinx deployment across 8 chains |
+| Defifa game launch | `DefifaDeployer.launchGameWith()` | Creates project + queues phase rulesets |
+| Defifa scorecard | `DefifaGovernor.submitScorecardFor()` | Allocates `TOTAL_CASHOUT_WEIGHT` (1e18) across tiers |
+| Defifa attestation | `DefifaGovernor.attestToScorecardFrom()` | Per-tier power, capped at 1e9 |
+| Defifa ratification | `DefifaGovernor.ratifyScorecardFrom()` | Quorum = 50% of eligible attestation power |
+| Defifa cash-out weight | `DefifaHookLib.computeCashOutWeight()` | `weight / tokens` — integer truncation |
+| Defifa game phase | `DefifaDeployer.currentGamePhaseOf()` | COUNTDOWN -> MINT -> REFUND -> SCORING -> COMPLETE |
+| Full ecosystem deploy | `deploy-all-v6/script/Deploy.s.sol` | 9-phase Sphinx deployment across 8 chains |
 
 All paths in `nana-core-v6/src/` unless noted otherwise.
+
+## Struct Quick Reference
+
+### JBRulesetConfig
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `mustStartAtOrAfter` | `uint48` | Earliest start timestamp |
+| `duration` | `uint32` | Seconds per cycle. 0 = no expiry, replaced on reconfig |
+| `weight` | `uint112` | 18-decimal fixed point. 1 = inherit decayed. 0 = no issuance |
+| `weightCutPercent` | `uint32` | Decay per cycle, out of `MAX_WEIGHT_CUT_PERCENT` (1e9) |
+| `approvalHook` | `IJBRulesetApprovalHook` | Accepts/rejects proposed rulesets |
+| `metadata` | `JBRulesetMetadata` | See below |
+| `splitGroups` | `JBSplitGroup[]` | Payout + reserved token splits |
+| `fundAccessLimitGroups` | `JBFundAccessLimitGroup[]` | Payout limits + surplus allowances. Empty = zero payouts |
+
+### JBRulesetMetadata
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `reservedPercent` | `uint16` | Out of `MAX_RESERVED_PERCENT` (10,000) |
+| `cashOutTaxRate` | `uint16` | Out of `MAX_CASH_OUT_TAX_RATE` (10,000) |
+| `baseCurrency` | `uint32` | Abstract: 1=ETH, 2=USD. NOT token address |
+| `pausePay` | `bool` | |
+| `pauseCreditTransfers` | `bool` | |
+| `allowOwnerMinting` | `bool` | |
+| `allowSetCustomToken` | `bool` | |
+| `allowTerminalMigration` | `bool` | |
+| `allowSetTerminals` | `bool` | |
+| `allowSetController` | `bool` | |
+| `allowAddAccountingContext` | `bool` | |
+| `allowAddPriceFeed` | `bool` | |
+| `ownerMustSendPayouts` | `bool` | |
+| `holdFees` | `bool` | |
+| `useTotalSurplusForCashOuts` | `bool` | |
+| `useDataHookForPay` | `bool` | |
+| `useDataHookForCashOut` | `bool` | |
+| `dataHook` | `address` | Data hook contract |
+| `metadata` | `uint16` | 14 usable bits of custom metadata |
+
+### JBSplitGroup
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `groupId` | `uint256` | Convention: `uint256(uint160(token))` for payouts, `1` for reserved tokens |
+| `splits` | `JBSplit[]` | See below |
+
+### JBSplit
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `percent` | `uint32` | Out of `SPLITS_TOTAL_PERCENT` (1e9) |
+| `projectId` | `uint64` | If set, pays this project via its terminal |
+| `beneficiary` | `address payable` | Receives tokens. 0 = `msg.sender` |
+| `preferAddToBalance` | `bool` | Use `addToBalance` instead of `pay` |
+| `lockedUntil` | `uint48` | Timestamp. 0 = unlocked |
+| `hook` | `IJBSplitHook` | Highest priority recipient if set |
+
+### JBAccountingContext
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `token` | `address` | Token address. `NATIVE_TOKEN` for ETH |
+| `decimals` | `uint8` | Token decimals for fixed-point math |
+| `currency` | `uint32` | `uint32(uint160(token))` by convention |
+
+### JBFundAccessLimitGroup
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `terminal` | `address` | Terminal contract address |
+| `token` | `address` | Token address within that terminal |
+| `payoutLimits` | `JBCurrencyAmount[]` | Max payout per currency. `amount: type(uint224).max` = unlimited |
+| `surplusAllowances` | `JBCurrencyAmount[]` | Max surplus withdrawal per currency |
+
+### JBPayHookSpecification
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `hook` | `IJBPayHook` | Hook contract |
+| `noop` | `bool` | If true, skip callback (informational only). Must have `amount = 0` |
+| `amount` | `uint256` | Tokens to send to hook |
+| `metadata` | `bytes` | Arbitrary data passed to hook |
+
+### JBCashOutHookSpecification
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `hook` | `IJBCashOutHook` | Hook contract |
+| `noop` | `bool` | If true, skip callback (informational only). Must have `amount = 0` |
+| `amount` | `uint256` | Tokens to send to hook |
+| `metadata` | `bytes` | Arbitrary data passed to hook |
 
 ## Find by File Pattern
 
@@ -102,7 +184,7 @@ All paths in `nana-core-v6/src/` unless noted otherwise.
 
 14. **Empty `fundAccessLimitGroups`** means zero payouts, NOT unlimited — must explicitly set `amount: type(uint224).max` for unlimited
 15. **`groupId` vs `currency`** are different bit widths — `JBSplitGroup.groupId` is `uint256(uint160(token))`, `JBAccountingContext.currency` is `uint32(uint160(token))`. Only NATIVE_TOKEN matches by coincidence.
-16. **`baseCurrency` vs `JBAccountingContext.currency`** — `baseCurrency` uses abstract values (1=ETH, 2=USD) so rulesets are portable across chains. `JBAccountingContext.currency` uses `uint32(uint160(token))` because terminals track specific tokens at specific addresses (USDC has different addresses per chain). `JBPrices` mediates between the two: it converts token-derived currencies to/from abstract currencies (e.g. USDC token → USD concept, NATIVE_TOKEN → ETH concept) so that payout limits denominated in USD work correctly regardless of which token the terminal holds.
+16. **`baseCurrency` vs `JBAccountingContext.currency`** — `baseCurrency` uses abstract values (1=ETH, 2=USD) so rulesets are portable across chains. `JBAccountingContext.currency` uses `uint32(uint160(token))` because terminals track specific tokens at specific addresses (USDC has different addresses per chain). `JBPrices` mediates between the two: it converts token-derived currencies to/from abstract currencies (e.g. USDC token -> USD concept, NATIVE_TOKEN -> ETH concept) so that payout limits denominated in USD work correctly regardless of which token the terminal holds.
 17. **NFT tiers sorted by category, not price** — `recordAddTiers` reverts with `InvalidCategorySortOrder` if categories aren't ascending
 18. **Always use `JB721TiersHookProjectDeployer.launchProjectFor`** even with empty tiers — enables future NFT additions without migration
 19. **Don't queue multiple identical rulesets** — a ruleset with `duration` auto-cycles. Only queue multiple when config actually changes between periods.
