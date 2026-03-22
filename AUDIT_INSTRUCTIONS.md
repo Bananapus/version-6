@@ -301,6 +301,24 @@ Each repo's tests are self-contained. For cross-repo interactions, write tests i
 
 The existing test suite is extensive (165 files in nana-core-v6 alone). Review the invariant tests to understand what's already been proven — then try to break those invariants with configurations the tests don't cover.
 
+## Compiler and Version Info
+
+All contracts use **Solidity 0.8.26** targeting the **Cancun** EVM (transient storage opcodes available). Compiled with **via-IR** optimization at **200 runs**. All repos use Foundry for building and testing. Dependencies include OpenZeppelin 5.x, Solady, and Uniswap V4 core/periphery (where applicable). Overflow/underflow is checked by default (Solidity 0.8+); `unchecked` blocks are used sparingly and intentionally.
+
+## Top Trust Assumptions
+
+These are the most impactful trust assumptions in the protocol. A broken assumption = a finding:
+
+1. **Project owners are trusted by their token holders.** Owners can queue rulesets that change economics (weight, tax rate, reserved percent) with only an approval hook delay as protection. If the approval hook is `JBDeadline(0)` or absent, changes are instant.
+
+2. **Data hooks have absolute control over payment and cashout terms.** A malicious data hook can set `weight = type(uint256).max` (minting infinite tokens), `cashOutTaxRate = 0` (draining all surplus), or `totalSupply = 1` (concentrating all cashout value). Projects opt into hooks; users trust that the project's hook is safe.
+
+3. **Price feeds are immutable and trusted once set.** `JBPrices` does not allow replacing a feed. If a Chainlink feed goes stale beyond the threshold, operations using that currency pair revert (DoS but not fund loss). Project-specific feeds have no staleness requirement.
+
+4. **No reentrancy guards — CEI ordering is the only defense.** All hook callbacks (pay, cashout, split) can re-enter the protocol. The protocol relies on state being fully committed before external calls. Any deviation from this pattern is a critical finding.
+
+5. **Cross-chain bridge messages are trusted once verified by the underlying bridge.** Suckers verify merkle proofs against roots posted by the bridge (Optimism, Arbitrum, CCIP). If the bridge itself is compromised, sucker funds are at risk. This is a known, accepted dependency.
+
 ## Priority Order
 
 Audit in this order. Earlier items have higher blast radius:
