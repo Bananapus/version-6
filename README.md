@@ -1,6 +1,8 @@
 # Juicebox V6
 
-Programmable treasuries for Ethereum. Projects collect funds, issue tokens, cash out along bonding curves, govern economics through rulesets, and compose features through hooks — all onchain, all composable, across any EVM chain.
+Juicebox is an Ethereum protocol for programmable treasuries. [App](https://juicebox.money) | [Docs](https://docs.juicebox.money)
+
+Projects collect funds, issue tokens, cash out along bonding curves, govern economics through rulesets, and compose features through hooks — all onchain, all composable, across any EVM chain.
 
 This is the complete V6 smart contract ecosystem spanning core protocol, hooks, cross-chain bridging, deployers, and applications. Clone recursively to get everything:
 
