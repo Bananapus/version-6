@@ -1,148 +1,102 @@
-# Risks
+# Juicebox V6 EVM -- Ecosystem Risk Map
 
-Trust assumptions, known risks, and security properties of Juicebox V6. For per-repo risk details, see each repo's `RISKS.md`.
+Cross-repo composition risks that span multiple contracts. Individual repo-level risks are documented in each subrepo's own `RISKS.md`.
 
-## Trust Model
+For protocol architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-### What You Trust When Using Juicebox V6
+---
 
-1. **The Core Protocol**: Terminal, controller, store, and supporting contracts are shared infrastructure. All projects share the same contract instances. A bug in `JBMultiTerminal` affects every project.
+## 1. Cross-Boundary Trust Chains
 
-2. **Your Project Owner**: The project owner (ERC-721 holder) can queue new rulesets, set terminals, configure splits, and delegate permissions. A malicious or compromised owner can fundamentally change project economics between rulesets.
+These risks emerge from the composition of multiple repos, not from any single contract.
 
-3. **Your Data Hook**: If a ruleset specifies a data hook, that hook has **absolute control** over token minting weights and cash out parameters. A malicious data hook can drain the entire project treasury. This is by design — project owners choose their hooks. Audit your data hooks with the same rigor as the terminal itself.
+### Price feed → surplus → loans → LP positioning
 
-4. **Your Approval Hook**: Approval hooks approve or reject ruleset transitions. A reverting approval hook falls back to the basedOnId chain (try-catch), but a malicious one could allow unexpected transitions.
+- **Chain:** `JBPrices` (nana-core) → `JBTerminalStore.currentSurplusOf` (nana-core) → `REVLoans._borrowableAmountFrom` (revnet-core) → `JBUniswapV4LPSplitHook._getCashOutRate` (univ4-lp-split-hook)
+- **Risk:** A stale or manipulated Chainlink feed affects surplus calculations in the terminal store. Surplus feeds into the revnet loan system's collateral valuation AND the LP split hook's tick range computation. A single bad price feed can simultaneously: (1) allow over-borrowing against inflated collateral, (2) position LP liquidity at incorrect tick ranges, and (3) miscalculate cross-currency payouts.
+- **Blast radius:** Every revnet using cross-currency accounting + loans + LP split hook.
+- **Individual mitigations:** Staleness thresholds in `JBChainlinkV3PriceFeed`, L2 sequencer checks, try-catch in `_totalBorrowedFrom` skipping zero-price feeds. But no circuit breaker spans the full chain.
 
-5. **Price Feeds**: Surplus calculations depend on Chainlink price feeds. A stale or manipulated feed causes operation reverts (DoS), not direct fund loss.
+### Data hook → buyback → V4 router → terminal
 
-6. **The Fee Project (#1)**: 2.5% fees go to project #1. If project #1's terminal reverts, fees are returned to the originating project's balance (try-catch fallback).
+- **Chain:** `REVDeployer.beforePayRecordedWith` (revnet-core) → `JBBuybackHook.beforePayRecordedWith` (nana-buyback-hook) → `JBUniswapV4Hook._beforeSwap` (univ4-router) → `JBMultiTerminal.pay` (nana-core)
+- **Risk:** The revnet deployer acts as a proxy data hook, delegating to the buyback hook, which queries the V4 router hook for TWAP comparison, which may route back through a JB terminal payment. This creates a 4-contract delegation chain where each layer transforms the payment context. A bug in any layer's weight/amount transformation propagates through the entire chain.
+- **Reentrancy path:** V4 router hook routes through `terminal.pay()` → triggers `REVDeployer.beforePayRecordedWith` again → detects recursion via `_routing` transient storage flag → reverts → caught by buyback hook try-catch → falls back to mint. This is tested and safe, but the 4-layer depth makes reasoning about state ordering difficult.
 
-### What You Do NOT Need to Trust
+### Sucker registry → omnichain deployer → revnet deployer → 0% cashout
 
-- **Other projects**: Each project's balance is isolated by `(terminal, projectId, token)` in `JBTerminalStore`. One project cannot access another's funds.
-- **Token holders**: Token holders can only cash out proportional to the bonding curve. The protocol enforces the curve math.
-- **Permit2**: Optional. Projects work without Permit2 integration.
+- **Chain:** `JBSuckerRegistry.isSuckerOf` (nana-suckers) → `JBOmnichainDeployer.beforeCashOutRecordedWith` (nana-omnichain-deployers) → `REVDeployer.beforeCashOutRecordedWith` (revnet-core)
+- **Risk:** Both the omnichain deployer and revnet deployer grant 0% cashout tax to suckers identified by the registry. A compromised sucker registry entry affects every project across both deployer types simultaneously. The registry has `MAP_SUCKER_TOKEN` wildcard permission (`projectId=0`) from both deployers, meaning a single registry compromise has ecosystem-wide blast radius.
+- **Defense depth:** Sucker deployment requires `DEPLOY_SUCKERS` permission + per-stage `extraMetadata` bit check. But once deployed and registered, the sucker has permanent 0% cashout access.
 
-## Known Risks — By Design
+### Controller migration → terminal migration → held fee escape
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| Data hook omnipotence | Data hooks override bonding curve parameters | Only use audited, trusted data hooks |
-| Last-holder advantage | Last token holder redeems remaining surplus at 1:1 | Bonding curve math; inherent to the design |
-| Pending reserved inflation | Pending reserved tokens dilute cash out values | Call `sendReservedTokensToSplitsOf` regularly |
-| No reentrancy guard | Protocol relies on CEI ordering, not mutex | State updates before all external calls |
-| Weight cache requirement | Projects with >20k cycles need progressive cache updates | Anyone can call `updateRulesetWeightCache` |
-| Fee-on-fee compounding | Fees on hooks that themselves trigger fees | Each fee layer is bounded; no unbounded recursion |
-| Noop hook spec suppression | A data hook can return noop hook specifications, suppressing hook callbacks while its own weight/tax rate/supply overrides still take effect | By design — the `noop` flag controls only whether the pay/cashout hook callback executes. The data hook's parameter overrides (weight, tax rate, supply) are applied before hook callbacks and are unaffected by `noop`. |
+- **Chain:** `JBController.migrate` (nana-core) → `JBDirectory.setControllerOf` → `JBMultiTerminal.migrateBalanceOf` (nana-core)
+- **Risk:** Terminal migration moves balances but intentionally does NOT migrate held fees (they belong to project #1). A project owner could migrate to a new terminal to escape held fee obligations — the old terminal retains the held fees but the project's balance is in the new terminal. The held fees eventually unlock and are processed, but they draw from the old terminal's balance which may now be zero.
+- **Mitigation:** `processHeldFeesOf` returns fees to the project balance if the fee payment fails. But if the old terminal has zero balance, there's nothing to return. The fee is effectively forgiven.
 
-## Operational Risks
+## 2. Shared Singleton Risks
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| Price feed DoS | Stale/reverting price feed blocks multi-currency operations | Monitor feed health; single-currency projects unaffected |
-| Split gas exhaustion | Very large split arrays (100+) may exceed block gas | Keep split count reasonable (<50) |
-| Held fee storage growth | Held fees array grows without cleanup | `_nextHeldFeeIndexOf` pointer skips processed entries |
-| Sucker token immutability | Token mappings cannot be changed after first outbox entry | Verify mappings before first bridge operation |
+Contracts that serve as singletons across the ecosystem create correlated failure modes.
 
-## MEV / Front-Running Risks
+| Singleton | Used By | Failure Mode |
+|-----------|---------|-------------|
+| `JBBuybackHook` | All revnets from same deployer | Swap routing fails → all payments fall back to mint (economic inefficiency, not fund loss) |
+| `JBUniswapV4Hook` | All V4 pools referencing it as hook | Oracle stops recording → TWAP stales → routing degradation across all pools |
+| `JBSuckerRegistry` | All omnichain deployers + revnet deployers | False sucker registration → 0% cashout tax drain across all projects |
+| `JBPrices` (default feeds) | All projects using cross-currency | Feed goes stale → all cross-currency operations halt |
+| `REVDeployer` | All revnets from that deployer | Bug in `beforePayRecordedWith` → all revnet payments affected |
+| `JB721TiersHookStore` | All 721 hooks (Defifa, Croptop, Banny, revnets) | Store bug → all NFT operations across all projects affected |
+| `Sphinx Safe` (deployment) | All deployed contracts | Multisig compromise → total protocol control |
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| Buyback hook sandwich | Spot price fallback on oracle failure is manipulable | TWAP primary (5min min), sigmoid slippage, price limits |
-| Rebalance sandwich | Permissionless `rebalanceLiquidity` in LP hook | Min amount parameters; limited protection |
-| Cash out front-running | Large cash outs visible in mempool | Use private mempools; `minTokensReclaimed` parameter |
-| LP pool deploy sandwich | Pool initialization at non-market price | Pool parameters deterministic from hook config |
-| Fee collection MEV | Permissionless `collectAndRouteLPFees` with `minReturnedTokens: 0` | Add access control or slippage protection |
+## 3. Permission Escalation Paths
 
-## Subsystem-Specific Risks
+### Wildcard permissions (`projectId=0`)
 
-### REVLoans
+These contracts hold wildcard permissions that apply to ALL projects:
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| Collateral value drift | Bonding curve value changes with surplus over 10-year liquidation | Liquidation schedule gradually releases collateral |
-| Stage transition stranding | Active loans may become underwater after stage transition | Borrowers should monitor stage timelines |
-| Fee terminal revert DoS | Fee payments during loan ops not wrapped in try-catch | Fix: add try-catch |
+| Contract | Permission | Granted By | Risk |
+|----------|-----------|-----------|------|
+| `REVLoans` | `USE_ALLOWANCE` | `REVDeployer` constructor | Can draw surplus from ANY revnet's treasury |
+| `JBSuckerRegistry` | `MAP_SUCKER_TOKEN` | `JBOmnichainDeployer` + `CTDeployer` constructors | Can map tokens for ANY project |
+| `CTPublisher` | `ADJUST_721_TIERS` | `CTProjectOwner.onERC721Received` | Can adjust tiers for ANY project transferred to CTProjectOwner |
+| `OMNICHAIN_RULESET_OPERATOR` | `LAUNCH_RULESETS` + `QUEUE_RULESETS` + `SET_TERMINALS` | `JBController` constructor | Can queue rulesets for ANY project |
 
-### 721 Hook (NFTs)
+A vulnerability in any of these contracts has ecosystem-wide blast radius. Each should be audited at the highest scrutiny level.
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| Free mint arbitrage | 100% discount (`discountPercent = 200`) + cash out weight based on undiscounted price | Cap discount below 100% or weight by paid price |
-| Split overflow | `splitPercent` not validated against `SPLITS_TOTAL_PERCENT` | Add validation in `recordAddTiers` |
-| Split fund loss | Funds silently dropped when split terminal not found | Revert on missing terminal |
-| Price mismatch in splits | Split amounts use undiscounted tier price | Apply discount before computing splits |
+### ROOT permission cascade
 
-### Cross-Chain (Suckers)
+`ROOT` (permission ID 1) grants ALL permissions, including future ones. If ROOT is granted to a contract that is later found to have a vulnerability, the attacker inherits every permission in the system. ROOT cannot be set for wildcard `projectId=0` (enforced by `setPermissionsFor`), limiting blast radius to individual projects. But a ROOT holder on project X cannot escalate to ROOT on project Y through any known path.
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| Emergency hatch rug | No timelock on emergency hatch token recovery | Compromised owner key can drain bridge |
-| CCIP amount skip | Amount validation intentionally skipped to prevent lockup | CCIP failures extremely rare; authentication strong |
+## 4. Cross-Chain Consistency Requirements
 
-### Defifa (Prediction Games)
+### Project ID alignment
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| Whale tier dominance | Attacker buys majority of 6+ tiers, controls quorum | Per-tier cap at 1e9, but capital-intensive attack possible |
-| Dynamic quorum | Quorum uses live supply, not snapshot | Burns during SCORING prevented |
-| Grace period bypass | Early-submitted scorecards may expire before attestations begin | Fix `gracePeriodEnds` calculation |
-| Fulfillment blocks ratification | `fulfillCommitmentsOf` revert blocks scorecard permanently | Add try-catch around fulfillment |
+Project IDs are assigned sequentially per chain. The deployment script (`deploy-all-v6`) creates projects in a fixed order to ensure IDs match across chains:
+- Project 1: Fee project (NANA)
+- Project 2: CPN
+- Project 3: REV
+- Project 4: BAN
 
-### LP Split Hook (UniV4)
+If any chain's deployment diverges (extra `createFor` call, different ordering), project IDs shift and all cross-chain references break: sucker pairs route to wrong projects, auto-issuances target wrong beneficiaries, and loan collateral valuations use wrong project state.
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| Fee routing placeholder | `_getAmountForCurrency` returns hardcoded 0 | Replace with actual balance tracking |
-| Cross-token corruption | Single accumulator for multi-token projects | Key by `(projectId, token)` |
-| No reentrancy protection | External calls without ReentrancyGuard | Add guard to all entry points |
-| Position bricking | Stale `tokenIdOf` after zero-liquidity rebalance | Update token ID on position burn |
-| Re-initialization | `initialize()` callable again after `renounceOwnership` | Add initialized guard |
+### Sucker peer symmetry
 
-## Security Properties (Proven)
+For every `(chainA, chainB)` sucker pair, BOTH chains must have a sucker pointing to the other. If chain A has a sucker for chain B but chain B does not have the reciprocal sucker, tokens bridged from A→B can be claimed on B, but tokens cannot bridge back from B→A. This asymmetry is not detected at deploy time — it requires post-deployment verification.
 
-These invariants are verified by the test suite (165 test files):
+### Price feed consistency
 
-1. **No flash-loan profit**: Tested across 12 attack vectors including multi-step, cross-terminal, and time-manipulation strategies
-2. **Balance conservation**: Terminal ETH/token balance >= sum of all recorded project balances
-3. **Inflow >= Outflow**: Total funds received >= total funds distributed
-4. **Fee monotonicity**: Fee project (#1) balance only increases
-5. **Token supply consistency**: `creditSupply + erc20.totalSupply() == totalSupply`
-6. **Ruleset existence**: After launch, `currentOf(projectId)` always returns a valid ruleset
-7. **Fee accuracy**: Forward and backward fee calculations consistent within rounding bounds
+Each chain independently configures Chainlink feeds in `JBPrices`. If chain A uses a feed with 3600s staleness threshold and chain B uses the same feed with 86400s threshold, cross-chain surplus aggregation (via suckers) can produce inconsistent values. There is no mechanism to enforce cross-chain feed configuration parity.
 
-## Reentrancy Analysis
+## 5. Ecosystem Invariants
 
-The protocol uses no `ReentrancyGuard`. It relies on state ordering (CEI pattern):
+These should hold across the entire ecosystem, not just within individual contracts:
 
-| Function | State Before External Call | Risk |
-|----------|---------------------------|------|
-| `_cashOutTokensOf` | Balance deducted, tokens burned BEFORE transfer/hooks | LOW |
-| `_pay` | Balance added, tokens minted BEFORE pay hooks | LOW |
-| `executePayout` | Payout limit recorded BEFORE split hook calls | LOW |
-| `processHeldFeesOf` | Index updated BEFORE fee processing | LOW |
-| `_sendReservedTokensToSplitsOf` | Pending balance zeroed BEFORE minting | LOW |
-| `REVLoans.borrowFrom` | Collateral locked BEFORE funds transferred | LOW |
-| `REVLoans.repayLoan` | Loan state cleared BEFORE collateral returned | LOW |
+- **Total protocol fees (project #1 balance across all chains) monotonically increases** over time, excluding project #1's own payouts and cash-outs. Any decrease not attributable to these operations indicates a fee collection bug.
+- **Cross-chain token supply conservation.** For any project with suckers: `sum(tokenSupply[chain]) == totalMinted - totalBurned` across all chains. Sucker bridging burns on source and mints on destination — the total should be conserved.
+- **No cross-project fund leakage.** `sum(store.balanceOf(projectId, terminal, token)) <= terminal.balance(token)` for all terminals. The inequality accounts for held fees. Violation indicates cross-project balance corruption.
+- **Singleton liveness.** If any singleton in section 2 reverts unconditionally, all dependent operations degrade to fallback behavior (mint instead of swap, local surplus instead of cross-terminal, etc.). No singleton failure should cause permanent fund loss — only economic inefficiency or operational halt.
 
-**Key defense**: `JBTerminalStore_InadequateTerminalStoreBalance` revert prevents direct over-extraction of terminal balance.
+---
 
-**Gap**: Complex cross-function reentrancy (hook calling back into a *different* terminal function) is not explicitly prevented. The LP split hook has no reentrancy protection at all.
-
-## Recommendations
-
-**For project owners:**
-1. **Audit your data hooks** — they control your project's economics
-2. **Set approval hooks** — use `JBDeadline` to require minimum delay before ruleset changes
-3. **Distribute reserved tokens regularly** — pending reserves dilute cash out values
-4. **Always set `minTokensReclaimed`** — slippage protection on cash outs
-5. **Verify token mappings before bridging** — cross-chain token mappings are immutable once used
-
-**For integrators:**
-1. **Use `try-catch` for terminal calls** — the terminal may revert if rulesets are paused or limits exceeded
-2. **Set slippage on router terminal payments** — `JBRouterTerminal` swaps can be sandwiched without `minAmountOut`
-3. **Check loan health dynamically** — REVLoans collateral value changes with surplus; don't assume stable LTV
-4. **Monitor `FeeReverted` events** — indicates fee processing failures (temporary, fees remain held)
-
-See [SKILLS.md](./SKILLS.md) for API gotchas (return types, currency conventions, etc.).
+Per-repo risk details: see each subrepo's `RISKS.md`.
