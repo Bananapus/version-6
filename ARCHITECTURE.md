@@ -15,7 +15,7 @@ Juicebox V6 is an onchain programmable treasury protocol for Ethereum. Projects 
                             │
                           ┌─▼────────────────────────────────────────────────────┐
                           │                 APPLICATION LAYER                       │
-                          │  banny-retail-v6  │  croptop-core-v6  │  defifa-v6      │
+                          │  banny-retail-v6  │  croptop-core-v6  │  defifa-*-v6    │
                           └────────────┬──────┴──────┬────────────┴─────┬───────────┘
                                        │             │                  │
                           ┌────────────▼─────────────▼──────────────────▼───────────┐
@@ -26,7 +26,7 @@ Juicebox V6 is an onchain programmable treasury protocol for Ethereum. Projects 
                                   │                  │
           ┌───────────────────────▼──────────────────▼──────────────────┐
           │                       HOOK LAYER                            │
-          │  JB721TiersHook  │  JBBuybackHook  │  UniV4DeploymentSplit  │
+          │  JB721TiersHook  │  JBBuybackHook  │  JBUniswapV4LPSplitHook│
           │  REVLoans        │  JBUniswapV4Hook │  JBRouterTerminal     │
           │  DefifaHook      │  DefifaGovernor  │                       │
           └───────────┬──────┴────────┬────────┴───────┬───────────────┘
@@ -34,7 +34,8 @@ Juicebox V6 is an onchain programmable treasury protocol for Ethereum. Projects 
     ┌─────────────────▼───────────────▼────────────────▼───────────────┐
     │                        BRIDGE LAYER                               │
     │  JBSucker (abstract)  │  JBOptimismSucker  │  JBArbitrumSucker   │
-    │  JBBaseSucker (OP)    │  JBCCIPSucker      │  JBSuckerRegistry    │
+    │  JBBaseSucker (Base)  │  JBCeloSucker      │  JBCCIPSucker       │
+    │  JBSuckerRegistry    │                     │                     │
     └───────────────────────┬──────────────────────────────────────────┘
                             │
     ┌───────────────────────▼──────────────────────────────────────────┐
@@ -243,7 +244,7 @@ See [SKILLS.md](./SKILLS.md#contract-sizes) for per-contract line counts.
 | Repository | Role | Key Contracts |
 |-----------|------|---------------|
 | nana-core-v6 | Core protocol | JBMultiTerminal, JBController, JBTerminalStore, JBRulesets |
-| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBBaseSucker, JBArbitrumSucker, JBCCIPSucker |
+| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBBaseSucker, JBArbitrumSucker, JBCeloSucker, JBCCIPSucker |
 | nana-721-hook-v6 | NFT tiers | JB721TiersHook, JB721TiersHookStore |
 | defifa-collection-deployer-v6 | Prediction games | DefifaDeployer, DefifaHook, DefifaGovernor, DefifaHookLib |
 | revnet-core-v6 | Autonomous projects | REVDeployer, REVLoans |
@@ -272,4 +273,4 @@ See [SKILLS.md](./SKILLS.md#contract-sizes) for per-contract line counts.
 
 - **Compositional deployers over inheritance.** Higher-level products (revnets, Croptop, Defifa) are thin deployer contracts that wire together core primitives and hooks, rather than subclasses of the core. `REVDeployer` configures a project with specific rulesets, a buyback data hook, and split rules — but it delegates all runtime behavior to the same `JBController` and `JBMultiTerminal` that every other project uses. This means the core protocol's security properties hold uniformly regardless of which deployer created a project.
 
-- **Noop hook specifications for preview transparency.** Data hooks can return hook specifications marked `noop = true`, which the terminal skips during execution but still surfaces in `previewPayFrom` / `previewCashOutFrom` results. This lets hooks like the buyback hook communicate routing diagnostics (TWAP price, pool liquidity, which path won) to frontends without introducing a separate query interface or requiring off-chain indexing.
+- **Noop hook specifications for preview transparency.** Data hooks can return hook specifications marked `noop = true`, which the terminal skips during execution but still surfaces in `previewPayFor` / `previewCashOutFrom` results. This lets hooks like the buyback hook communicate routing diagnostics (TWAP price, pool liquidity, which path won) to frontends without introducing a separate query interface or requiring off-chain indexing.
