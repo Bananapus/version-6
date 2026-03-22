@@ -34,16 +34,26 @@ After deployment, protocol-level admin powers are held by the **Sphinx Safe mult
 
 | Power | Contract | Reversible? |
 |-------|----------|-------------|
-| Approve new controllers | JBDirectory | Yes (can add, cannot remove) |
+| Approve new controllers | JBDirectory | Yes (bool flag: can add and remove) |
 | Add default price feeds | JBPrices | No (immutable once set) |
 | Mark addresses as fee-exempt | JBFeelessAddresses | Yes |
 | Approve sucker deployers | JBSuckerRegistry | Yes |
 | Set default buyback hook | JBBuybackHookRegistry | Yes |
 | Set default router terminal | JBRouterTerminalRegistry | Yes |
-| Set loan NFT URI resolver | REVLoans | Yes |
-| Configure sucker deployer singletons | Sucker deployers | No (one-time) |
+| Set loan token URI resolver | REVLoans | Yes (setTokenUriResolver) |
+| Configure sucker deployer chain constants | Sucker deployers | No (one-time setChainSpecificConstants) |
+| Configure sucker deployer singletons | Sucker deployers | No (one-time configureSingleton) |
 
-The Sphinx Safe is also the **split operator** for the fee project (project #1), the REV revnet (project #3), and the BAN revnet (project #4). Split operator powers are limited to redistributing reserved token splits, configuring buyback/swap parameters, and updating metadata -- see revnet-core-v6's ADMINISTRATION.md for the full constraint set.
+### Split Operators
+
+Each revnet has a dedicated **split operator** (a hardcoded multisig address, not the Sphinx Safe). Split operator powers are limited to redistributing reserved token splits, configuring buyback/swap parameters, and updating metadata -- see revnet-core-v6's ADMINISTRATION.md for the full constraint set.
+
+| Project | ID | Split Operator |
+|---------|---:|----------------|
+| NANA (fee project) | 1 | `0x80a8F7a4bD75b539CE26937016Df607fdC9ABeb5` |
+| CPN | 2 | `0x240dc2085caEF779F428dcd103CFD2fB510EdE82` |
+| REV | 3 | `0x6b92c73682f0e1fac35A18ab17efa5e77DDE9fE1` |
+| BAN | 4 | `0x9E2a10aB3BD22831f19d02C648Bc2Cb49B127450` |
 
 ## Submodule Management
 
@@ -57,10 +67,16 @@ Submodules point to specific commits of each subrepo. Updating a submodule chang
 
 | File | Owner | Purpose |
 |------|-------|---------|
+| README.md | Maintainers | Monorepo overview and links |
 | ARCHITECTURE.md | Maintainers | Protocol architecture overview |
+| ADMINISTRATION.md | Maintainers | Admin privileges and coordination (this file) |
 | STYLE_GUIDE.md | Maintainers | Solidity style conventions |
 | AUDIT_INSTRUCTIONS.md | Maintainers | Instructions for auditors |
 | ENG_AUDIT.md | Maintainers | Engineering audit findings |
+| RISKS.md | Maintainers | Known risks and mitigations |
+| SKILLS.md | Maintainers | Contract API reference and gotchas |
+| USER_JOURNEYS.md | Maintainers | End-to-end user flow walkthroughs |
+| CHANGE_LOG.md | Maintainers | Protocol change history |
 | CLAUDE.md | Maintainers | AI assistant instructions |
 
 These files have no on-chain effect. They are informational and can be updated by anyone with push access.
