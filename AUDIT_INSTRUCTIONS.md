@@ -13,9 +13,9 @@ nana-721-hook-v6/src/                # NFT hooks (~5,100 lines)
 nana-suckers-v6/src/                 # Cross-chain bridging (~5,000 lines)
 defifa-collection-deployer-v6/src/   # Prediction games (~3,900 lines)
 revnet-core-v6/src/                  # Revnets + loans (~3,400 lines)
-nana-router-terminal-v6/src/         # Payment routing (~2,200 lines)
-nana-buyback-hook-v6/src/            # DEX buyback (~1,900 lines)
-deploy-all-v6/script/Deploy.s.sol    # Ecosystem deployment (~1,600 lines)
+nana-router-terminal-v6/src/         # Payment routing (~2,500 lines)
+nana-buyback-hook-v6/src/            # DEX buyback (~2,100 lines)
+deploy-all-v6/script/Deploy.s.sol    # Ecosystem deployment (~2,200 lines)
 banny-retail-v6/src/                 # Banny NFTs (~1,600 lines)
 univ4-lp-split-hook-v6/src/          # UniV4 LP management (~1,600 lines)
 univ4-router-v6/src/                 # UniV4 hook (~1,400 lines)
@@ -299,11 +299,11 @@ forge test --gas-report
 
 Each repo's tests are self-contained. For cross-repo interactions, write tests in the downstream repo (e.g., test a buyback hook exploit in `nana-buyback-hook-v6/test/`).
 
-The existing test suite is extensive (165 files in nana-core-v6 alone). Review the invariant tests to understand what's already been proven — then try to break those invariants with configurations the tests don't cover.
+The existing test suite is extensive (185 files in nana-core-v6 alone). Review the invariant tests to understand what's already been proven — then try to break those invariants with configurations the tests don't cover.
 
 ## Compiler and Version Info
 
-All contracts use **Solidity 0.8.26** targeting the **Cancun** EVM (transient storage opcodes available). Compiled with **via-IR** optimization at **200 runs**. All repos use Foundry for building and testing. Dependencies include OpenZeppelin 5.x, Solady, and Uniswap V4 core/periphery (where applicable). Overflow/underflow is checked by default (Solidity 0.8+); `unchecked` blocks are used sparingly and intentionally.
+All contracts use **Solidity 0.8.26** targeting the **Cancun** EVM (transient storage opcodes available). Most repos use **200 optimizer runs**; revnet-core-v6 uses **100 runs**. Some repos enable **via-IR** (revnet-core-v6, nana-buyback-hook-v6, univ4-lp-split-hook-v6, univ4-router-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6, deploy-all-v6); others do not (nana-core-v6, nana-suckers-v6, nana-721-hook-v6, croptop-core-v6). All repos use Foundry for building and testing. Dependencies include OpenZeppelin 5.x, Solady, and Uniswap V4 core/periphery (where applicable). Overflow/underflow is checked by default (Solidity 0.8+); `unchecked` blocks are used sparingly and intentionally.
 
 ## Top Trust Assumptions
 
