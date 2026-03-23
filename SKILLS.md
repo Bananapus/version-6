@@ -164,7 +164,7 @@ All paths in `nana-core-v6/src/` unless noted otherwise.
 | `WeightCacheRequired` | JBRulesets | >20k cycles without cache update |
 | `NoopHookSpecHasAmount` | JBTerminalStore | Noop hook spec has non-zero amount (noop specs are informational-only) |
 | `LeafAlreadyExecuted` | JBSucker | Cross-chain claim already processed |
-| `NothingToClaim` | DefifaHook | Cash out attempted during SCORING phase |
+| `NothingToClaim` | DefifaHook | Cash out yields no ETH and no fee tokens (e.g., 0-weight tier during COMPLETE phase) |
 
 ## Gotchas
 
