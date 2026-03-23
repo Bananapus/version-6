@@ -267,5 +267,5 @@ Queue future rulesets to change economics. Takes effect when the current ruleset
 | An autonomous project with locked economics | **Revnet** — no owner key, predetermined stages |
 | NFT tiers + cross-chain + buyback out of the box | **Omnichain Deployer** or **Revnet** — both bundle these |
 | Full control over every hook and parameter | **Direct Controller** — wire it all yourself |
-| A simple NFT collection with community publishing | **CTDeployer** (Croptop) — built on top of omnichain deployer |
+| A simple NFT collection with community publishing | **CTDeployer** (Croptop) — built on top of controller + 721 hook |
 | A prediction game with governance | **DefifaDeployer** — built on top of 721 hook |
