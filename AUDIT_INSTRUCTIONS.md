@@ -8,7 +8,7 @@ Juicebox V6: programmable treasuries on EVM. Projects collect funds through term
 
 **In scope — all Solidity in these directories:**
 ```
-nana-core-v6/src/                    # Core protocol (~11,200 lines)
+nana-core-v6/src/                    # Core protocol (~12,000 lines)
 nana-721-hook-v6/src/                # NFT hooks (~5,100 lines)
 nana-suckers-v6/src/                 # Cross-chain bridging (~5,000 lines)
 defifa-collection-deployer-v6/src/   # Prediction games (~3,900 lines)
@@ -20,7 +20,7 @@ banny-retail-v6/src/                 # Banny NFTs (~1,600 lines)
 univ4-lp-split-hook-v6/src/          # UniV4 LP management (~1,600 lines)
 univ4-router-v6/src/                 # UniV4 hook (~1,400 lines)
 croptop-core-v6/src/                 # NFT publishing (~1,400 lines)
-nana-omnichain-deployers-v6/src/     # Multi-chain deploy (~1,000 lines)
+nana-omnichain-deployers-v6/src/     # Multi-chain deploy (~1,100 lines)
 ```
 
 **Also in scope:** All deployment scripts (`*/script/*.sol`). Hardcoded addresses, initialization parameters, and deployment ordering are real attack surface.
@@ -197,10 +197,10 @@ Borrowers lock project tokens and borrow against their bonding curve value.
 
 ### 10. Permit2 Metadata Edge Cases
 
-`JBMultiTerminal._pay()` supports Permit2 for gasless token approvals. The metadata encoding path:
+`JBMultiTerminal._acceptFundsFor()` supports Permit2 for gasless token approvals. The metadata encoding path:
 
 ```
-metadata bytes → JBMetadataResolver.getDataFor(PERMIT2_METADATA_ID) → decode JBSingleAllowance → call permit2
+metadata bytes → JBMetadataResolver.getDataFor(JBMetadataResolver.getId("permit2")) → decode JBSingleAllowance → call permit2
 ```
 
 **What to test:**
@@ -303,7 +303,7 @@ The existing test suite is extensive (185 files in nana-core-v6 alone). Review t
 
 ## Compiler and Version Info
 
-All contracts use **Solidity 0.8.26** targeting the **Cancun** EVM (transient storage opcodes available). Most repos use **200 optimizer runs**; revnet-core-v6 uses **100 runs**. Some repos enable **via-IR** (revnet-core-v6, nana-buyback-hook-v6, univ4-lp-split-hook-v6, univ4-router-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6, deploy-all-v6); others do not (nana-core-v6, nana-suckers-v6, nana-721-hook-v6, croptop-core-v6). All repos use Foundry for building and testing. Dependencies include OpenZeppelin 5.x, Solady, and Uniswap V4 core/periphery (where applicable). Overflow/underflow is checked by default (Solidity 0.8+); `unchecked` blocks are used sparingly and intentionally.
+All contracts use **Solidity 0.8.26** targeting the **Cancun** EVM (transient storage opcodes available). Most repos use **200 optimizer runs**; revnet-core-v6 uses **100 runs**. Some repos enable **via-IR** (revnet-core-v6, nana-buyback-hook-v6, univ4-lp-split-hook-v6, univ4-router-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6, deploy-all-v6, defifa-collection-deployer-v6, banny-retail-v6); others do not (nana-core-v6, nana-suckers-v6, nana-721-hook-v6, croptop-core-v6). All repos use Foundry for building and testing. Dependencies include OpenZeppelin 5.x, Solady, and Uniswap V4 core/periphery (where applicable). Overflow/underflow is checked by default (Solidity 0.8+); `unchecked` blocks are used sparingly and intentionally.
 
 ## Top Trust Assumptions
 
