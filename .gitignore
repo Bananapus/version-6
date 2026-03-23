@@ -7,6 +7,7 @@ NEMESIS_SCOPE.md
 
 # Claude conveniences
 .claude/
+CLAUDE.md
 run-nemesis-all.sh
 
 # Logs
