@@ -113,7 +113,7 @@ forge test
 | Splits total | 1,000,000,000 | 9 decimal precision |
 | Token decimals | 18 | Enforced across all project tokens |
 | Loan liquidation | 3,650 days | 10 years |
-| Solidity version | 0.8.26 | All contracts |
+| Solidity version | 0.8.28 | All contracts |
 | EVM version | cancun | Required for transient storage (TSTORE/TLOAD) |
 
 ## External Dependencies
