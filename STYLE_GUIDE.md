@@ -21,7 +21,7 @@ One contract/interface/struct/enum per file. Name the file after the type it con
 
 ```solidity
 // Contracts — pin to exact version
-pragma solidity 0.8.26;
+pragma solidity 0.8.28;
 
 // Interfaces, structs, enums — caret for forward compatibility
 pragma solidity ^0.8.0;
@@ -326,7 +326,7 @@ Standard config across all repos:
 
 ```toml
 [profile.default]
-solc = '0.8.26'
+solc = '0.8.28'
 evm_version = 'cancun'
 optimizer_runs = 200
 libs = ["node_modules", "lib"]

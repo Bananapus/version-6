@@ -268,7 +268,7 @@ For each finding:
 - Is the "stale" state intentionally lazily evaluated (updated on next read)?
 - Does the protocol's try-catch fallback handle the failure case you're worried about?
 - Is the economic attack actually profitable after gas costs and 2.5% fees?
-- Does Solidity 0.8.26's built-in overflow protection prevent the arithmetic issue?
+- Does Solidity 0.8.28's built-in overflow protection prevent the arithmetic issue?
 - Has this already been reported or documented in [RISKS.md](./RISKS.md)?
 
 ## Testing Setup
@@ -303,7 +303,7 @@ The existing test suite is extensive (185 files in nana-core-v6 alone). Review t
 
 ## Compiler and Version Info
 
-All contracts use **Solidity 0.8.26** targeting the **Cancun** EVM (transient storage opcodes available). Most repos use **200 optimizer runs**; revnet-core-v6 uses **100 runs**. Some repos enable **via-IR** (revnet-core-v6, nana-buyback-hook-v6, univ4-lp-split-hook-v6, univ4-router-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6, deploy-all-v6, defifa-collection-deployer-v6, banny-retail-v6); others do not (nana-core-v6, nana-suckers-v6, nana-721-hook-v6, croptop-core-v6). All repos use Foundry for building and testing. Dependencies include OpenZeppelin 5.x, Solady, and Uniswap V4 core/periphery (where applicable). Overflow/underflow is checked by default (Solidity 0.8+); `unchecked` blocks are used sparingly and intentionally.
+All contracts use **Solidity 0.8.28** targeting the **Cancun** EVM (transient storage opcodes available). Most repos use **200 optimizer runs**; revnet-core-v6 uses **100 runs**. Some repos enable **via-IR** (revnet-core-v6, nana-buyback-hook-v6, univ4-lp-split-hook-v6, univ4-router-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6, deploy-all-v6, defifa-collection-deployer-v6, banny-retail-v6); others do not (nana-core-v6, nana-suckers-v6, nana-721-hook-v6, croptop-core-v6). All repos use Foundry for building and testing. Dependencies include OpenZeppelin 5.x, Solady, and Uniswap V4 core/periphery (where applicable). Overflow/underflow is checked by default (Solidity 0.8+); `unchecked` blocks are used sparingly and intentionally.
 
 ## Top Trust Assumptions
 

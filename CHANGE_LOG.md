@@ -131,4 +131,4 @@ Removed: `ADD_SWAP_TERMINAL_POOL`, `ADD_SWAP_TERMINAL_TWAP_PARAMS` (functions no
 
 ## Universal Changes
 
-All repos: Solidity 0.8.23 → 0.8.26. EVM target: cancun (TSTORE/TLOAD). Many `memory` params → `calldata` for gas efficiency. Error messages enriched with context parameters throughout.
+All repos: Solidity 0.8.23 → 0.8.28. EVM target: cancun (TSTORE/TLOAD). Many `memory` params → `calldata` for gas efficiency. Error messages enriched with context parameters throughout.
