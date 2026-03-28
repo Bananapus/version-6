@@ -107,6 +107,62 @@ New IDs: `LAUNCH_RULESETS` (3), `SET_TOKEN_METADATA` (21), `SET_BUYBACK_HOOK` (2
 
 Removed: `ADD_SWAP_TERMINAL_POOL`, `ADD_SWAP_TERMINAL_TWAP_PARAMS` (functions no longer exist).
 
+## Integration Hotspots
+
+If you are migrating an integration rather than a single repo, these are the highest-signal changes to check first:
+
+- **Functions and call sites**: `launchRulesetsFor`, `updateRulesetWeightCache`, `sendPayoutsOf`, `deployFor`, `beforePayRecordedWith`, `beforeCashOutRecordedWith`, `setTokenMetadataOf`, `setTerminalFor`, `setHookFor`, `lockTerminalFor`, `lockHookFor`.
+- **Structs and ABI decoding**: `JBPayHookSpecification`, `JBCashOutHookSpecification`, `JBBeforeCashOutRecordedContext`, `JB721TierConfig`, `JBStored721Tier`, `JBMessageRoot`, `JBRemoteToken`, `JBTokenMapping`.
+- **Events to re-index**: router-terminal registry events, buyback-hook pool events, `SetTokenMetadata`, new preview/noop-related hook metadata patterns, and all sucker events whose beneficiary/token fields changed from `address` to `bytes32`.
+- **Errors to handle explicitly**: `JBRulesets_WeightCacheRequired`, noop-hook validation errors in `JBTerminalStore`, router-terminal slippage/pool discovery errors, buyback-hook V4 pool validation errors, and sucker message-version / fee errors.
+
+For most integrators, the fastest safe migration path is:
+- replace raw permission numbers with `JBPermissionIds` constants;
+- update any hand-decoded hook metadata structs;
+- update cross-chain code from `address` to `bytes32`;
+- update swap-terminal references to router-terminal references;
+- re-check any indexer schemas built around renamed or widened event fields.
+
+## ABI Migration Map
+
+If your main concern is ABI compatibility, group the repos like this:
+
+| ABI category | Repos | What to expect |
+|---|---|---|
+| **Major ABI changes** | `nana-core-v6`, `nana-721-hook-v6`, `nana-buyback-hook-v6`, `nana-router-terminal-v6`, `nana-suckers-v6`, `revnet-core-v6`, `nana-omnichain-deployers-v6`, `croptop-core-v6`, `defifa-collection-deployer-v6` | Function signatures changed, struct layouts changed, events/errors changed or widened |
+| **Targeted ABI changes** | `banny-retail-v6`, `nana-ownable-v6` | Smaller but still relevant event/function/error updates |
+| **ABI-stable or nearly ABI-stable** | `nana-address-registry-v6` | External function signatures unchanged; behavior and one error changed |
+| **No runtime ABI focus** | `nana-permission-ids-v6`, `nana-fee-project-deployer-v6`, `deploy-all-v6` | Main migration work is constants/scripts/deployment artifacts, not runtime contract ABI |
+
+ABI migration checklist:
+- re-generate ABIs from v6 sources instead of diffing by hand;
+- update any off-chain decoders for widened structs/events/errors;
+- re-check return-value changes, not just parameter changes;
+- treat `address` → `bytes32` changes as schema changes, not cosmetic changes;
+- treat renamed contracts/interfaces as new ABI surfaces even when product concepts are similar.
+
+## Indexer Migration Guide
+
+If one of the main v5 integrations was an event-indexing pipeline or subgraph, the biggest v6 correlations to handle are:
+
+- **Renamed event families**:
+  - swap-terminal registry events moved to router-terminal registry events
+  - buyback events now describe V4 pool identity, not V3 pool addresses
+- **Widened payloads**:
+  - many admin/configuration events now include `caller`
+  - several config structs embedded in events have new fields (`JB721TierConfig`, `CTPost`, `CTAllowedPost`, `JBTokenMapping`)
+- **Changed identifier types**:
+  - cross-chain beneficiary/token/remote fields moved from `address` to `bytes32`
+- **Changed topology**:
+  - deploy flows now auto-provision 721 hooks in more places
+  - Defifa is part of canonical v6 rollouts
+
+Recommended indexing order:
+
+1. Start with [nana-core-v6/CHANGE_LOG.md](./nana-core-v6/CHANGE_LOG.md), [nana-permission-ids-v6/CHANGE_LOG.md](./nana-permission-ids-v6/CHANGE_LOG.md), and [nana-suckers-v6/CHANGE_LOG.md](./nana-suckers-v6/CHANGE_LOG.md) to update shared entity schemas.
+2. Port payment and hook surfaces from [nana-721-hook-v6/CHANGE_LOG.md](./nana-721-hook-v6/CHANGE_LOG.md), [nana-buyback-hook-v6/CHANGE_LOG.md](./nana-buyback-hook-v6/CHANGE_LOG.md), and [nana-router-terminal-v6/CHANGE_LOG.md](./nana-router-terminal-v6/CHANGE_LOG.md).
+3. Port deployer/product overlays from [revnet-core-v6/CHANGE_LOG.md](./revnet-core-v6/CHANGE_LOG.md), [nana-omnichain-deployers-v6/CHANGE_LOG.md](./nana-omnichain-deployers-v6/CHANGE_LOG.md), [croptop-core-v6/CHANGE_LOG.md](./croptop-core-v6/CHANGE_LOG.md), [banny-retail-v6/CHANGE_LOG.md](./banny-retail-v6/CHANGE_LOG.md), and [defifa-collection-deployer-v6/CHANGE_LOG.md](./defifa-collection-deployer-v6/CHANGE_LOG.md).
+
 ## Per-Repo Changes
 
 | Repo | Key changes | Changelog |
@@ -126,8 +182,8 @@ Removed: `ADD_SWAP_TERMINAL_POOL`, `ADD_SWAP_TERMINAL_TWAP_PARAMS` (functions no
 | nana-fee-project-deployer-v6 | Buyback/721 config removed (auto-configured), swap → router terminal | [CHANGE_LOG.md](./nana-fee-project-deployer-v6/CHANGE_LOG.md) |
 | univ4-lp-split-hook-v6 | **New in V6** — LP split hook for UniV4 concentrated liquidity | — |
 | univ4-router-v6 | **New in V6** — UniV4 hook with oracle tracking | — |
-| defifa-collection-deployer-v6 | Unchanged from V5 architecture | — |
-| deploy-all-v6 | Updated to deploy all V6 contracts | — |
+| defifa-collection-deployer-v6 | Defifa hook/deployer upgraded onto V6 core + 721 hook APIs, error prefixes standardized, `noop`-aware cash-out specs | [CHANGE_LOG.md](./defifa-collection-deployer-v6/CHANGE_LOG.md) |
+| deploy-all-v6 | Canonical V6 rollout script with 10 phases, including Defifa, V4 stack, suckers, and router terminal deployment | [CHANGE_LOG.md](./deploy-all-v6/CHANGE_LOG.md) |
 
 ## Universal Changes
 
