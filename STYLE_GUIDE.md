@@ -26,8 +26,8 @@ pragma solidity 0.8.28;
 // Interfaces, structs, enums — caret for forward compatibility
 pragma solidity ^0.8.0;
 
-// Libraries — caret, may use newer features
-pragma solidity ^0.8.17;
+// Libraries — pin to exact version like contracts
+pragma solidity 0.8.28;
 ```
 
 ## Imports
