@@ -2,9 +2,36 @@
 
 Admin privileges and coordination across the Juicebox V6 EVM monorepo.
 
+## At A Glance
+
+| Item | Details |
+|------|---------|
+| Scope | Monorepo coordination only. This repo has documentation, submodule pointers, and review context, but no deployable contracts of its own. |
+| Operators | Monorepo maintainers who update docs and submodule SHAs, plus protocol operators who use this index to find the real contract-level admin docs. |
+| Highest-risk changes | Moving a submodule pointer to a new commit, leaving top-level docs inconsistent with the underlying repos, or publishing stale links that misstate the active control surface. |
+| Source of truth | Each subrepo's `ADMINISTRATION.md` remains authoritative for its own contract-level powers and recovery paths. |
+
+## Routine Operations
+
+- Keep the submodule pointer table in this file aligned with the actual active `*-v6` repos in the workspace.
+- Update the top-level protocol admin summary whenever `deploy-all-v6` changes the canonical deployment ownership or operator assignment model.
+- Treat this file as the ecosystem directory: when a subrepo gains or loses an admin surface, reflect that here and then link to the detailed repo-level runbook.
+- Review monorepo docs after any coordinated protocol rollout so architecture, risks, audit instructions, and administration notes stay internally consistent.
+
+## One-Way Or High-Risk Actions
+
+- Changing a submodule pointer can silently change the codebase version auditors, integrators, and reviewers believe is canonical for that package.
+- Top-level documentation edits have no on-chain effect, but inaccurate summaries here can still cause unsafe operational decisions if they diverge from subrepo reality.
+- This repo should never be treated as the place to recover on-chain state. Recovery procedures live in the repo that owns the relevant contracts.
+
+## Recovery Notes
+
+- Monorepo mistakes are recovered with normal git changes: correct the docs, fix the submodule SHA, and republish the right references.
+- If an operational issue is contract-level, start from the linked subrepo `ADMINISTRATION.md` rather than improvising from the top-level summary.
+
 ## Overview
 
-This repo is a coordination layer for the Juicebox V6 EVM ecosystem. It contains 17 submodule repos and top-level documentation (architecture, style guide, audit instructions). It has no runtime contracts of its own.
+This repo is a coordination layer for the Juicebox V6 EVM ecosystem. It currently contains 18 active `*-v6` repos plus top-level documentation (architecture, style guide, audit instructions). It has no runtime contracts of its own.
 
 For contract-level admin documentation, see each subrepo's ADMINISTRATION.md:
 
@@ -20,6 +47,7 @@ For contract-level admin documentation, see each subrepo's ADMINISTRATION.md:
 | nana-ownable-v6 | JBOwnable bridge pattern | [Link](nana-ownable-v6/ADMINISTRATION.md) |
 | nana-permission-ids-v6 | Permission ID reference (no admin surface) | [Link](nana-permission-ids-v6/ADMINISTRATION.md) |
 | nana-address-registry-v6 | Address registration (no admin surface) | [Link](nana-address-registry-v6/ADMINISTRATION.md) |
+| nana-privacy-v6 | Privacy hooks and registries (no admin surface) | [Link](nana-privacy-v6/ADMINISTRATION.md) |
 | nana-fee-project-deployer-v6 | Fee project (project #1) deployment | [Link](nana-fee-project-deployer-v6/ADMINISTRATION.md) |
 | croptop-core-v6 | Croptop publishing, posting criteria | [Link](croptop-core-v6/ADMINISTRATION.md) |
 | deploy-all-v6 | Canonical deployment script | [Link](deploy-all-v6/ADMINISTRATION.md) |
@@ -76,7 +104,7 @@ Submodules point to specific commits of each subrepo. Updating a submodule chang
 | RISKS.md | Maintainers | Known risks and mitigations |
 | SKILLS.md | Maintainers | Contract API reference and gotchas |
 | USER_JOURNEYS.md | Maintainers | End-to-end user flow walkthroughs |
-| CHANGE_LOG.md | Maintainers | Protocol change history |
+| CHANGELOG.md | Maintainers | Protocol change history |
 | CLAUDE.md | Maintainers | AI assistant instructions |
 
 These files have no on-chain effect. They are informational and can be updated by anyone with push access.

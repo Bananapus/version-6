@@ -1,8 +1,23 @@
-# Juicebox V6 EVM -- Ecosystem Risk Map
+# Juicebox V6 Ecosystem Risk Register
 
-Cross-repo composition risks that span multiple contracts. Individual repo-level risks are documented in each subrepo's own `RISKS.md`.
+Cross-repo composition risks that span multiple contracts, deployers, and chains. Repo-level risks live in each subrepo's `RISKS.md`; this file covers failure modes that only appear once the system is composed end to end.
 
 For protocol architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+
+## How to use this file
+
+- Start with `Priority risks` to understand the ecosystem-wide failure modes with the largest blast radius.
+- Use the detailed sections below to trace each risk through concrete contract boundaries.
+- Treat `Ecosystem invariants` as the cross-repo checks that should be continuously tested or monitored.
+
+## Priority risks
+
+| Priority | Risk | Why it matters | Primary controls |
+|----------|------|----------------|------------------|
+| P0 | Shared singleton or registry compromise | A failure in `JBUniswapV4Hook`, `JBSuckerRegistry`, `JBPrices`, `JB721TiersHookStore`, or a deployment safe can affect many repos and many projects at once. | Strict singleton review, deployment verification, invariant monitoring, and limited wildcard permissions. |
+| P0 | Cross-chain configuration drift | If project IDs, sucker peers, or price feed configs diverge by chain, bridging and omnichain assumptions silently break. | Fixed deploy ordering, post-deploy parity checks, and recovery scripts that resume instead of replaying. |
+| P1 | Cross-boundary pricing errors | Price feeds and surplus calculations propagate into loans, LP positioning, and routing decisions; a bad upstream input can misprice several surfaces at once. | Chainlink staleness checks, sequencer checks, try/catch fallbacks, and operator verification of feed parity. |
+| P1 | Permission concentration | Wildcard grants and singleton-owned permissions create ecosystem-wide blast radius if one privileged contract is wrong. | Audit privileged contracts at highest scrutiny, minimize broad grants, and verify grant surfaces after deployment. |
 
 ---
 
