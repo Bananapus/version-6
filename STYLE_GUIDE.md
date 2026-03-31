@@ -87,10 +87,18 @@ contract JBExample is JBPermissioned, IJBExample {
     uint256 internal constant _FEE_BENEFICIARY_PROJECT_ID = 1;
 
     //*********************************************************************//
+    // ------------------------ private constants ------------------------ //
+    //*********************************************************************//
+
+    //*********************************************************************//
     // --------------- public immutable stored properties ---------------- //
     //*********************************************************************//
 
     IJBDirectory public immutable override DIRECTORY;
+
+    //*********************************************************************//
+    // -------------- internal immutable stored properties -------------- //
+    //*********************************************************************//
 
     //*********************************************************************//
     // --------------------- public stored properties -------------------- //
@@ -105,11 +113,19 @@ contract JBExample is JBPermissioned, IJBExample {
     //*********************************************************************//
 
     //*********************************************************************//
+    // ---------------------------- modifiers ---------------------------- //
+    //*********************************************************************//
+
+    //*********************************************************************//
     // ---------------------- external transactions ---------------------- //
     //*********************************************************************//
 
     //*********************************************************************//
     // ----------------------- external views ---------------------------- //
+    //*********************************************************************//
+
+    //*********************************************************************//
+    // -------------------------- public views --------------------------- //
     //*********************************************************************//
 
     //*********************************************************************//
@@ -134,17 +150,20 @@ contract JBExample is JBPermissioned, IJBExample {
 1. Custom errors
 2. Public constants
 3. Internal constants
-4. Public immutable stored properties
-5. Internal immutable stored properties
-6. Public stored properties
-7. Internal stored properties
-8. Constructor
-9. External transactions
-10. External views
-11. Public transactions
-12. Internal helpers
-13. Internal views
-14. Private helpers
+4. Private constants
+5. Public immutable stored properties
+6. Internal immutable stored properties
+7. Public stored properties
+8. Internal stored properties
+9. Constructor
+10. Modifiers
+11. External transactions
+12. External views
+13. Public views
+14. Public transactions
+15. Internal helpers
+16. Internal views
+17. Private helpers
 
 Functions are alphabetized within each section.
 
