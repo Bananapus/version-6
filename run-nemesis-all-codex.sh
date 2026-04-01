@@ -228,10 +228,19 @@ $(cat "$BUNDLE")"
   # Build the full prompt (skills + instructions in one block for Codex)
   CODEX_PROMPT="You are running a Nemesis security audit. Follow the nemesis-auditor skill instructions below EXACTLY.
 
-SCOPE: Audit ALL Solidity files in BOTH src/ and script/ directories (recursively):
+SCOPE: Perform ONE integrated audit for THIS REPOSITORY.
+Treat the repo as a single system with shared invariants, cross-file coupling, deployment flows, and dependency boundaries.
+Review ALL Solidity files in BOTH src/ and script/ directories (recursively) as inputs to that single repo-level audit:
 - src/**/*.sol — all contracts, interfaces, structs, enums, libraries, utils
 - script/**/*.sol — all deployment and configuration scripts
 Do NOT skip deploy scripts. They are in-scope and may contain hardcoded addresses, initialization parameter errors, or deployment ordering bugs.
+
+CRITICAL — EXECUTION UNIT:
+Run Nemesis ONCE for the repo, NOT once per file.
+Do NOT restart the audit separately for each Solidity file.
+Do NOT create per-file audit loops or per-file summaries.
+Instead, do one Recon phase for the whole repo, build one shared hit list, then run the iterative passes over the repo's combined attack surface.
+Use individual files only as evidence while tracing whole-repo invariants, call graphs, state coupling, and multi-contract attack paths.
 
 CRITICAL — FRESH ROUND:
 This is a COMPLETELY FRESH audit round. You have NO prior findings, NO previous context.
@@ -252,6 +261,11 @@ Since this audit is running via Codex (in parallel with a Claude audit), you MUS
 - Write feynman findings to: .audit/findings/codex-feynman-verified.md (NOT feynman-verified.md)
 - Write state findings to: .audit/findings/codex-state-inconsistency-verified.md (NOT state-inconsistency-verified.md)
 - Any other output files should also be prefixed with 'codex-'
+
+CRITICAL — OUTPUT SHAPE:
+Produce repo-level outputs, not one output section per file.
+Consolidate duplicate observations across files into shared root causes, affected paths, and exploit sequences.
+Prioritize cross-contract and cross-script interactions when they matter.
 
 Begin the audit now. Start with Phase 0 (Recon) then proceed through all passes until convergence.
 
