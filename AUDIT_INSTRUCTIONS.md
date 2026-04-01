@@ -1,342 +1,232 @@
 # Audit Instructions
 
-Juicebox V6: programmable treasuries on EVM. Projects collect funds through terminals, issue tokens, cash out along bonding curves, and compose features through hooks. Your goal: find bugs that lose funds, break invariants, or enable unauthorized access.
+Juicebox V6 is a modular treasury protocol ecosystem. Audit it as one composed system, not as isolated repos.
+
+Start here:
+- `ARCHITECTURE.md`: cross-repo call graph and data flow
+- `RISKS.md`: shared trust assumptions and ecosystem-wide failure modes
+- `USER_JOURNEYS.md`: user-facing flows worth replaying end to end
+
+## Objective
+
+Find issues that:
+- lose, lock, misroute, or misaccount funds
+- mint, burn, bridge, or redeem more value than intended
+- grant permissions or ownership beyond the documented model
+- break stage, ruleset, or cross-chain invariants
+- create economically exploitable route-selection, fee, or rounding errors
+
+This codebase is unusually composition-heavy. A large share of the real attack surface lives in:
+- data hook output feeding terminal accounting
+- terminal fulfillment calling pay, cash-out, and split hooks
+- deployers that proxy privileges into other repos
+- shared singletons used by many projects
+- deployment wiring that makes otherwise-safe contracts unsafe in production
+
+## First Pass
+
+If you are seeing the ecosystem for the first time, spend the first pass in this order:
+- read `ARCHITECTURE.md` once end to end
+- audit `nana-core-v6` entrypoints and extension points
+- audit one representative hook composition chain:
+  `nana-core-v6` -> `nana-buyback-hook-v6` -> `univ4-router-v6`
+- audit one representative cross-chain chain:
+  `nana-core-v6` -> `nana-suckers-v6` -> deployer or registry trust
+- audit `deploy-all-v6` only after you know what the runtime contracts are expecting to be true
+
+## Canonical Scope
+
+Primary runtime and deployment scope:
+- `nana-core-v6`
+- `nana-721-hook-v6`
+- `nana-suckers-v6`
+- `nana-buyback-hook-v6`
+- `nana-router-terminal-v6`
+- `nana-omnichain-deployers-v6`
+- `revnet-core-v6`
+- `univ4-router-v6`
+- `univ4-lp-split-hook-v6`
+- `croptop-core-v6`
+- `defifa-collection-deployer-v6`
+- `banny-retail-v6`
+- `nana-ownable-v6`
+- `nana-address-registry-v6`
+- `nana-fee-project-deployer-v6`
+- `nana-privacy-v6`
+- `nana-permission-ids-v6`
+- `deploy-all-v6`
+
+Also in scope:
+- root and per-repo deployment scripts
+- constructor and initializer parameters
+- permission grants, owner transfers, registry writes, and deterministic deployment salts
+- interactions with Chainlink feeds, Uniswap V4, Permit2, and bridge messengers
+
+Assume third-party dependency internals are correct unless Juicebox integration makes them unsafe.
+
+## System Model
+
+At the center is `nana-core-v6`:
+- `JBMultiTerminal` holds funds
+- `JBTerminalStore` records accounting and surplus
+- `JBController` manages projects, rulesets, and token minting/burning
+- `JBRulesets`, `JBSplits`, `JBPrices`, `JBTokens`, and `JBPermissions` provide shared governance and accounting primitives
 
-**Context:** [ARCHITECTURE.md](./ARCHITECTURE.md) (how it works) | [RISKS.md](./RISKS.md) (trust model) | [USER_JOURNEYS.md](./USER_JOURNEYS.md) (user paths)
+Everything else composes around those primitives:
+- NFT issuance and NFT cash-out: `nana-721-hook-v6`
+- swap-vs-mint routing: `nana-buyback-hook-v6` and `univ4-router-v6`
+- multi-asset routing into accepted project tokens: `nana-router-terminal-v6`
+- cross-chain project token movement: `nana-suckers-v6`
+- launchers and protocol compositions: `nana-omnichain-deployers-v6`, `revnet-core-v6`, `croptop-core-v6`, `defifa-collection-deployer-v6`
+- application-level surfaces: `banny-retail-v6`, `nana-privacy-v6`
+- deployment orchestration: `deploy-all-v6`
 
-## Scope
+## Highest-Value Invariants
 
-**In scope — all Solidity in these directories:**
-```
-nana-core-v6/src/                    # Core protocol (~12,000 lines)
-nana-721-hook-v6/src/                # NFT hooks (~5,100 lines)
-nana-suckers-v6/src/                 # Cross-chain bridging (~5,000 lines)
-defifa-collection-deployer-v6/src/   # Prediction games (~3,900 lines)
-revnet-core-v6/src/                  # Revnets + loans (~3,400 lines)
-nana-router-terminal-v6/src/         # Payment routing (~2,500 lines)
-nana-buyback-hook-v6/src/            # DEX buyback (~2,100 lines)
-deploy-all-v6/script/Deploy.s.sol    # Ecosystem deployment (~2,200 lines)
-banny-retail-v6/src/                 # Banny NFTs (~1,600 lines)
-univ4-lp-split-hook-v6/src/          # UniV4 LP management (~1,600 lines)
-univ4-router-v6/src/                 # UniV4 hook (~1,400 lines)
-croptop-core-v6/src/                 # NFT publishing (~1,400 lines)
-nana-omnichain-deployers-v6/src/     # Multi-chain deploy (~1,100 lines)
-```
+These are the first properties to break if something is materially wrong:
 
-**Also in scope:** All deployment scripts (`*/script/*.sol`). Hardcoded addresses, initialization parameters, and deployment ordering are real attack surface.
+1. Terminal solvency
+`terminal token balance >= aggregate internal balance tracked for that terminal/token`, modulo held-fee mechanics and intentional in-flight behavior.
 
-**Out of scope:** Test files (`*/test/`), OpenZeppelin/Solady/Uniswap dependencies (assume correct), forge-std.
+2. Project isolation
+One project must not be able to consume another project's balance, allowance, payout capacity, bridgeable value, or NFT state.
 
-## The Protocol in 60 Seconds
+3. Ruleset correctness
+The active ruleset, its decay, hooks, tax rate, reserved rate, and accounting contexts must be the ones the protocol intends at the exact execution timestamp.
+
+4. Hook boundedness
+Data hooks may modify accounting inputs only within the intended model. Hook specifications must not create value, skip fees unexpectedly, or move funds without matching accounting.
 
-Every project is an ERC-721 NFT. The NFT owner governs the project.
+5. Fee correctness
+Protocol fees and repo-specific fees must either be paid, held, or explicitly redirected by documented fallback logic. They must not silently disappear.
 
-**Money in**: Users pay a project via `JBMultiTerminal.pay()`. The terminal records the payment in `JBTerminalStore`, then asks `JBController` to mint project tokens to the payer. A data hook can override the mint rate. Pay hooks execute afterward (e.g., mint NFTs).
+6. Token accounting consistency
+Mint, burn, reserve, bridge, and reclaim paths must preserve intended supply and price relationships across ERC-20 credits, ERC-721 tiers, and bridged representations.
 
-**Money out — three paths**:
-1. **Cash out** (`cashOutTokensOf`): Burn tokens, reclaim surplus via bonding curve. Tax rate controls how much goes back.
-2. **Payouts** (`sendPayoutsOf`): Owner distributes funds to splits (addresses, other projects, hooks). Bounded by payout limits.
-3. **Surplus allowance** (`useAllowanceOf`): Owner withdraws from surplus. Bounded by allowance limits.
+7. Cross-chain conservation
+Prepare, send-root, receive-root, and claim paths must not enable replay, double claim, stranded balance creation, or source/destination divergence beyond documented emergency-hatch behavior.
 
-All three paths pay a 2.5% fee to project #1.
+8. Privilege containment
+Wildcard permissions, project ownership helpers, registries, and deployers must not let one compromised component escalate across unrelated projects.
 
-**Rulesets** govern economics per time period: mint weight, tax rate, reserved percent, hook configuration. They form a linked list — when one expires, the next queued one takes effect (or the current one cycles with decayed weight).
+9. Preview and execution coherence
+Any repo that treats a preview, estimate, or hook-returned spec as execution truth must receive values that remain valid once the terminal actually records and fulfills the action.
 
-**Hooks** are the composition layer. Five extension points:
-- Data hooks: override payment weight or cash out parameters (absolute control)
-- Pay hooks: execute after payment (mint NFTs, swap tokens)
-- Cash out hooks: execute after cash out
-- Split hooks: execute during payout distribution
-- Approval hooks: approve/reject ruleset transitions
+10. Singleton failure containment
+If a shared registry, oracle, or hook instance fails, dependent flows may degrade, but they must not mint unbacked value, bypass fees, or permanently desynchronize accounting.
 
-## Where the Money Is
+## Concrete Audit Sequences
 
-All project funds are held by `JBMultiTerminal`. Accounting lives in `JBTerminalStore`. The terminal holds real tokens; the store tracks per-project balances.
+If you only have time for a first serious pass, start with these sequences:
 
-**Value extraction paths (ordered by blast radius):**
+1. Pay -> data hook override -> mint -> pay hook callback -> immediate cash-out
+Look for state that is already recorded in the store before downstream hooks can re-enter another path.
 
-| Path | Entry Point | What to Verify |
-|------|------------|----------------|
-| Cash out | `cashOutTokensOf()` | Bonding curve math, surplus calculation, data hook overrides |
-| Payouts | `sendPayoutsOf()` | Payout limit enforcement, split distribution, fee calculation |
-| Surplus allowance | `useAllowanceOf()` | Allowance limit enforcement, surplus calculation |
-| Fee processing | `_processFee()` / `processHeldFeesOf()` | Fee arithmetic, held fee lifecycle, try-catch fallback |
-| Loans | `REVLoans.borrowFrom()` | Collateral valuation, liquidation schedule, surplus manipulation |
-| Cross-chain bridge | `JBSucker.prepare()` → `claim()` | Merkle proof verification, double-claim prevention, amount conservation |
-| NFT cash out | `JB721TiersHook.afterCashOutRecordedWith()` | Cash out weight calculation, tier price vs discount |
+2. Payout -> split hook -> terminal re-entry or downstream pay
+Check whether payout limits are consumed before externally controlled code can create a value loop.
 
-If you can extract more value than the protocol intends through any of these paths, that's a critical finding.
+3. Cross-currency pay or cash-out with stale or missing price context
+Follow value through `JBPrices`, surplus logic, hook normalization, and any repo that scales weight or reclaim from converted amounts.
 
-## Domain-Specific Attack Vectors
+4. Sucker prepare -> root send -> out-of-order receive -> claim or emergency exit
+This is where conservation, replay protection, and nonce assumptions are most exposed.
 
-These are the attack patterns most likely to yield findings in this codebase. They're ordered by estimated likelihood of undiscovered bugs.
+5. Deployer launch -> ownership transfer -> registry write -> privileged runtime callback
+Many bugs here are not “deployment only”; they become permanent runtime privilege mistakes.
 
-### 1. Hook Composition Attacks
+6. Swap-vs-mint or swap-vs-cashout routing under adversarial liquidity conditions
+The risky cases are not just bad spot quotes. They are stale TWAP, fallback branches, sign mistakes, and partial-fill leftovers.
 
-The hook system is the largest attack surface. Individual hooks may work correctly in isolation, but their **composition** — where one hook's output feeds into another's input, or where hooks re-enter the protocol during execution — is where bugs hide.
+## Threat Model
 
-**The composition model:**
-```
-Data hook called during RECORDING (store) → Pay/cashout hooks called during FULFILLMENT (terminal)
-                                          → Split hooks called during PAYOUT (terminal)
-```
+Assume adversaries can:
+- call public and external functions in adversarial order
+- front-run, back-run, sandwich, and replay cross-domain timing edges
+- exploit rounding, stale pricing, partial fills, and fallback branches
+- interact through malicious hooks, recipients, ERC-20s, ERC-721 receivers, or bridge peers
+- exploit privileged operators if a grant is broader than intended
 
-Data hooks see the raw payment context. They return modified weights and hook specifications. The terminal then calls those hooks with funds. Hooks can themselves interact with the protocol.
+Do not assume:
+- a project owner is honest
+- a hook is well-behaved just because it is “owned”
+- a swap path is economically neutral
+- a deployment script will always run in one clean shot
 
-**Specific compositions to test:**
-- REVDeployer (data hook) + JB721TiersHook (pay hook) + JBBuybackHook (nested data hook call): What happens when the buyback hook returns empty specifications vs. non-empty? Does the REVDeployer handle both cases?
-- JBOmnichainDeployer (data hook overrides cash out tax to 0%) + any cash out hook: Can the 0% tax override be exploited outside of legitimate sucker operations?
-- JB721TiersHook (pay hook) minting NFTs during a payment where JBBuybackHook is swapping tokens: Does the swap callback interact safely with the NFT mint?
-- JBUniswapV4LPSplitHook receiving payout during `sendPayoutsOf` while the same project is being paid into: Cross-function reentrancy through split hook.
+Explicit trust assumptions still matter:
+- external price feeds can stall or revert
+- cross-chain bridges are trusted only to the degree each repo documents
+- certain governance or operator roles are intentionally powerful
 
-**What to look for:** State that's partially committed when hooks execute. The terminal updates the store, then mints tokens, then calls hooks. At hook execution time, the store has the new balance but the hook might be able to manipulate other state.
+## Priority Areas
 
-### 2. Bonding Curve Economic Attacks
+Order your effort roughly like this:
 
-The cash out formula in `JBCashOuts.cashOutFrom()`:
-```
-reclaimAmount = (surplus * count / supply) * [(MAX - tax) + tax * (count / supply)] / MAX
-```
+1. `nana-core-v6`
+Terminal solvency, cash-out math, payout and allowance enforcement, fee processing, ruleset transition logic, migrations, and wildcard permission boundaries.
 
-**Key inputs an attacker controls:**
-- `count` — how many tokens to cash out (directly)
-- `surplus` — by paying into the project or manipulating via data hooks
-- `supply` — indirectly, via pending reserved tokens
+2. Hook composition
+`nana-721-hook-v6`, `nana-buyback-hook-v6`, `univ4-router-v6`, `univ4-lp-split-hook-v6`, `nana-router-terminal-v6`, and deployer data hooks. Most subtle bugs appear when one repo's “preview” or “weight adjustment” logic is consumed by another repo as hard accounting truth.
 
-**Attack sequences to try:**
-1. Pay → immediate cash out in same block: should never profit after fees (invariant tested, but test with different hook configurations)
-2. Pay with data hook that inflates weight → cash out before reserved tokens are distributed: pending reserved tokens inflate supply, reducing your share — but what if you time it right?
-3. Multi-project attack: pay into project A (which has a split to project B), then cash out from project B before the split executes
-4. Cash out with `cashOutCount >= totalSupply` returns entire surplus (known, by design). Can you engineer this condition without being the actual last holder? (e.g., front-running a burn)
-5. Cross-terminal surplus aggregation: `useTotalSurplusForCashOuts` flag aggregates surplus across all terminals via `JBSurplus`. Can you manipulate surplus in one terminal to inflate cash out value in another?
+3. Cross-chain
+`nana-suckers-v6` and any deployer or owner helper that grants sucker privileges or fee exemptions.
 
-### 3. Currency and Price Feed Manipulation
+4. Autonomous compositions
+`revnet-core-v6`, `croptop-core-v6`, and `defifa-collection-deployer-v6`, where project-specific economics are built out of many shared primitives.
 
-The protocol has **two currency systems** that interact at conversion boundaries:
-- **Abstract**: `baseCurrency` in rulesets (1=ETH, 2=USD). Used for surplus calculations.
-- **Concrete**: `uint32(uint160(tokenAddress))` in accounting contexts. Identifies payment tokens.
+5. Deployment correctness
+`deploy-all-v6` and per-repo `script/` entries. Wrong wiring, wrong singleton addresses, missing ownership transfers, and missing registry writes are production-critical findings.
 
-`JBPrices` mediates between them. Price feeds are immutable once set.
+## Shared Ecosystem Hotspots
 
-**Attack vectors:**
-- A price feed that returns a manipulated price could inflate/deflate surplus calculations. Chainlink feeds have staleness checks, but project-specific feeds don't have to.
-- `JBMatchingPriceFeed` returns 1:1 — if deployed for the wrong pair, all conversions are wrong.
-- `normalizePaymentValue` in `JB721TiersHookLib` converts payment amounts to tier pricing denomination. If the price feed returns an extreme value, NFTs could be minted for effectively free.
-- Rounding compounds through conversion chains: pay in token A → normalize to pricing currency → compute split → convert back. Each step rounds via `mulDiv`. Can N payments each rounding in the attacker's favor compound to a meaningful loss?
+These boundaries deserve explicit cross-repo review:
+- `JBTerminalStore` output consumed by downstream hooks as economic truth
+- `preview*` values consumed off-chain and then assumed on-chain by routering or hook logic
+- shared registries: buyback, router terminal, sucker registry, address registry
+- wildcard permissions and project-owner abstractions
+- cross-chain identity assumptions: project IDs, peer addresses, mapped tokens, bridge messengers
+- deployer-owned contracts that later act as runtime hooks or privileged operators
 
-### 4. Reentrancy Through Hooks
+## Repo-Specific Guidance
 
-No contract uses `ReentrancyGuard`. The protocol relies on CEI ordering.
+Each repo root has its own `AUDIT_INSTRUCTIONS.md`. Use those files for:
+- exact scope in that repo
+- repo-local invariants
+- threat boundaries and intended privileges
+- hotspots tied to the current source tree
 
-**The critical reentrancy surfaces (in order of risk):**
+If a repo-level instruction conflicts with this file, prefer the narrower repo-level statement for that repo and keep the ecosystem-level invariants in mind.
 
-1. **LP Split Hook** (no protection at all): `deployPool`, `collectAndRouteLPFees`, `rebalanceLiquidity`, and `claimFeeTokensFor` all make external calls without any reentrancy protection. The hook calls `terminal.pay()` (which triggers pay hooks), `POSITION_MANAGER.modifyLiquidities`, and `controller.burnTokensOf`. If any of these re-enter the hook, state corruption is possible.
+## What Not To Spend Time On
 
-2. **Pay hook → cash out reentrancy**: When a pay hook executes, tokens have been minted and the store balance is updated. The hook could call `cashOutTokensOf` on the same project. Tokens are burned, reclaim is computed against the post-payment surplus. Is this profitable?
+Low-value findings in this ecosystem:
+- purely theoretical gas grief that does not change reachability or solvency
+- admin centralization that is already an explicit design choice with no bypass
+- stale comments, naming issues, or style-only inconsistencies
+- test-only issues that do not affect runtime or deployment correctness
 
-3. **Split hook → pay reentrancy**: During `sendPayoutsOf`, split hooks receive funds. A split hook could call `pay()` on the same project. The payout limit is already consumed, but the payment adds to balance and mints tokens. Does this create a value loop?
+High-value findings here usually need a concrete sequence:
+- who calls what
+- what state is already committed
+- which repo supplies the wrong assumption
+- where the value, permission, or invariant breaks
 
-4. **Fee processing → re-entry**: `_processFee` calls `terminal.pay()` on project #1's terminal. If project #1 has a pay hook that calls back into the originating terminal, what happens? The fee amount is already deducted.
+## Finding Bar
 
-### 5. Ruleset Transition Timing
+A strong ecosystem finding usually has at least one of these shapes:
+- the wrong amount is recorded in core accounting, then a downstream repo faithfully amplifies the error
+- a preview, estimate, or registry lookup is treated as authoritative when it is only advisory
+- a privileged deployer or helper finishes deployment with one capability too many
+- a cross-chain or cross-hook fallback path preserves liveness by sacrificing an invariant
 
-Rulesets transition at exact block timestamps. Transaction ordering at boundaries matters.
+Weak findings here are usually ones that never survive composition into a concrete money, permission, or liveness break.
 
-**What to test:**
-- A payment landing in the last second of a ruleset vs. the first second of the next: do both execute with correct weights?
-- Approval hook rejection at boundary: if the approval hook says "not yet approved," the protocol falls back to the basedOnId chain and simulates cycling from the last approved ruleset. Is this fallback always equivalent to the intended behavior?
-- `duration = 0` rulesets never expire — they're immediately replaced when a new one is queued. Can you pay and queue a ruleset in the same transaction to get the old weight but the new parameters?
-- Weight decay across 20,000+ cycles without cache: `WeightCacheRequired` revert. This is a DoS — can an attacker force a project into this state?
+## Reproduction Standard
 
-### 6. REVLoans Collateral Manipulation
+A strong finding should include:
+- exact contracts and entrypoints involved
+- minimal triggering sequence
+- why current tests do not already cover it, if applicable
+- concrete impact on funds, permissions, liveness, or economic guarantees
+- a Foundry proof when practical
 
-Borrowers lock project tokens and borrow against their bonding curve value.
-
-**The key insight**: Loan collateral value depends on the bonding curve, which depends on the project surplus, which changes with every payment and cash out.
-
-**Attack sequences:**
-1. Inflate surplus (pay) → borrow max → deflate surplus (large cash out from another account) → collateral is now worth less than borrowed amount → wait for liquidation to release collateral at a loss to the protocol
-2. Borrow → stage transition changes bonding curve parameters → collateral value drops below loan → effectively an unsecured loan
-3. Collateral reallocation between loans: is it atomic? Can you reallocate and borrow in a single transaction to temporarily have both the old and new collateral active?
-4. Can you manipulate the `prepaidFee` calculation for early repayment to pay less than intended?
-
-### 7. Cross-Chain Bridge Exploits
-
-`JBSucker` uses incremental merkle trees (eth2-style) for cross-chain token movement.
-
-**What to verify:**
-- **Double claim**: Leaf hash includes `(token, beneficiary, amount, index)`. Claimed leaves are tracked in a bitmap. Can you construct a valid proof for a different beneficiary using the same leaf data?
-- **Cross-sucker replay**: Suckers are 1:1 pairs. Can you prepare on chain A, then somehow claim on chain C (not the paired chain)?
-- **Race between deprecation and claim**: SENDING_DISABLED means new prepares are blocked, but existing outbox entries should still be claimable. Verify this works correctly.
-- **Emergency hatch**: Project owner can enable `emergencyHatchOf` instantly — no timelock, no multisig. This is a known trust assumption. But verify: can emergency hatch drain tokens that are in transit (prepared but not yet claimed)?
-- **CCIP amount mismatch**: The protocol intentionally skips amount validation to prevent lockup. Can an attacker exploit this to mint more tokens than were prepared?
-
-### 8. NFT Economics Exploits (721 Hook + Defifa)
-
-**721 Hook:**
-- `discountPercent` denominator is 200 (not 100). `200 = 100% discount`. Does cash out weight use original (undiscounted) price or effective (discounted) price? If original, 100% discounted NFTs carry free arbitrage.
-- `splitPercent` — is it validated against `SPLITS_TOTAL_PERCENT` (1,000,000,000)? If uncapped, a `splitPercent` of 4e9 would forward 4x the payment amount.
-- Reserve mints are based on frequency, not time. Can you time reserve mints to get more than intended?
-- Tier category ordering: `recordAddTiers` reverts with `InvalidCategorySortOrder` if categories aren't ascending. Can this be exploited to prevent legitimate tier additions?
-
-**Defifa:**
-- Whale attack: buy majority of 6+ tiers out of 10, accumulate 6e9 of 10e9 attestation power, exceed 50% quorum, ratify self-serving scorecard. Cost? Risk?
-- `computeCashOutWeight` uses integer division (`weight / tokens`). Dust is permanently locked. At what scale does this become meaningful?
-- Grace period: is `gracePeriodEnds` calculated from scorecard submission time or from when attestations actually begin? If submission time, can a scorecard's grace period expire before anyone can attest?
-- Fee token dilution: reserved mints get fee tokens proportional to tier price (not amount paid). How much does this dilute real payers in realistic scenarios?
-- Can a `fulfillCommitmentsOf` revert block scorecard ratification permanently?
-
-### 9. Deployment Script Verification
-
-**What to verify:**
-- **Every hardcoded address** in `deploy-all-v6/script/Deploy.s.sol` and all per-repo deploy scripts. Cross-reference against canonical contract addresses for each target chain (Ethereum, Optimism, Base, Arbitrum + testnets). Uniswap V4 PoolManager and PositionManager addresses differ per chain.
-- **Constructor parameter correctness**: Do permission grants match intended access control? Are initial rulesets configured correctly?
-- **Deployment ordering**: Can a partially-deployed state be exploited? Sphinx proposals are atomic per phase, but between phases?
-- **Sphinx project name consistency**: Do v5 vs v6 naming mismatches cause artifact resolution failures?
-- **Salt determinism for CREATE2**: Can an attacker front-run a deterministic deployment to squat the address?
-
-### 10. Permit2 Metadata Edge Cases
-
-`JBMultiTerminal._acceptFundsFor()` supports Permit2 for gasless token approvals. The metadata encoding path:
-
-```
-metadata bytes → JBMetadataResolver.getDataFor(JBMetadataResolver.getId("permit2")) → decode JBSingleAllowance → call permit2
-```
-
-**What to test:**
-- Malformed metadata: What if the metadata claims to be Permit2 but has wrong length?
-- Replayed permit: Does the nonce mechanism prevent reuse?
-- Signature deadline manipulation: `sigDeadline` is attacker-controlled. Can a stale permit be used after intended expiry?
-- Amount mismatch: The permit amount vs. the actual payment amount — are these validated against each other?
-
-## Invariants to Verify
-
-These MUST hold. If you can break any of them, it's a finding:
-
-1. **Balance conservation**: `terminal.balance(token) >= sum(store.balanceOf(projectId, terminal, token))` for all projects
-2. **Inflow >= Outflow**: Total funds received by a project >= total funds distributed
-3. **Fee monotonicity**: Project #1's balance only increases over time
-4. **Token supply consistency**: `JBTokens.totalSupplyOf(projectId) == creditSupply + erc20.totalSupply()`
-5. **Ruleset existence**: After `launchProjectFor()`, `currentOf(projectId)` always returns a valid ruleset
-6. **No flash-loan profit**: Pay + cashout in same block should never yield more than was paid (minus fees)
-7. **Payout limits**: A project cannot extract more than its configured payout limit per ruleset cycle
-8. **Surplus allowance**: A project cannot withdraw more than its configured surplus allowance per ruleset cycle
-9. **Cross-chain conservation**: Tokens prepared on source == tokens claimable on destination (for a given tree root)
-10. **NFT supply caps**: Minted count per tier never exceeds tier's initial supply
-11. **Defifa prize pool conservation**: Total cashout value across all tiers == total project surplus (minus fees)
-
-## Anti-Patterns to Hunt
-
-These code patterns are where bugs hide in this codebase:
-
-| Pattern | Where to look | Why it's dangerous |
-|---------|--------------|-------------------|
-| `try-catch` swallowing errors | JBMultiTerminal (hooks, fees, splits) | Failed external calls silently change control flow. The fee try-catch can be used for temporary fee avoidance. |
-| `mulDiv` rounding direction | JBCashOuts, JBFees, JBTerminalStore, JB721TiersHookLib | Rounding in attacker's favor compounds over many transactions. |
-| Hardcoded 0 / placeholder functions | JBUniswapV4LPSplitHook | A function that should compute real values but returns 0. Are there other placeholders? |
-| Currency type confusion | JBTerminalStore, JB721TiersHookLib, JBFundAccessLimits | Abstract (1=ETH, 2=USD) vs concrete (`uint32(address)`) currencies. `groupId` (`uint256`) vs `currency` (`uint32`) truncation. |
-| Uncapped input parameters | JB721TiersHookStore | Parameters that accept `uint32` but should be bounded by protocol constants. What other parameters lack bounds checks? |
-| Silent fund drops | JB721TiersHookLib | Funds consumed from accounting but never sent when target address is `address(0)`. Any other path where funds disappear without revert? |
-| Undiscounted price usage | JB721TiersHookLib, JB721TiersHookStore | Cash out weight and split amounts use original tier price instead of discounted price. Is this consistent across all code paths? |
-| Sign convention mismatch | JBUniswapV4Hook | V4 uses a credit/debit convention where output amounts are negative. Slippage checks expecting positive values never fire. Any other V4 integration paths with this issue? |
-| Missing ownership transfer | Deployer contracts | Hooks or contracts deployed by a deployer but never transferred to the project owner. Any deployers that forget `transferOwnershipToProject`? |
-| Stale references after mutation | JBUniswapV4LPSplitHook | Stored IDs or addresses that become dangling after the referenced object is burned or destroyed. |
-| Re-initialization after ownership renounce | Clone patterns | `initialize()` guard that checks `owner != address(0)` passes again after `renounceOwnership`. Any other clone patterns with this issue? |
-| Array OOB from conditional returns | REVDeployer, hook compositions | Unconditional `[0]` access on arrays that may be empty depending on which code path a hook takes. Scan for all array index accesses after hook/external calls. |
-| External call in loop | JBMultiTerminal (payout splits), processHeldFeesOf | Gas griefing by making external calls revert. Each revert is caught by try-catch but still costs gas. |
-
-## How to Report Findings
-
-For each finding:
-
-1. **Title** — one line, starts with severity (CRITICAL/HIGH/MEDIUM/LOW)
-2. **Affected contract(s)** — exact file path and line numbers
-3. **Description** — what's wrong, in plain language
-4. **Trigger sequence** — step-by-step, minimal steps to reproduce
-5. **Impact** — what an attacker gains, what a user loses (with numbers if possible)
-6. **Proof** — code trace showing the exact execution path, or a Foundry test
-7. **Fix** — minimal code change that resolves the issue
-
-**Severity guide:**
-- **CRITICAL**: Direct fund loss, permanent DoS, or system insolvency. Exploitable with no preconditions.
-- **HIGH**: Conditional fund loss, privilege escalation, or broken core invariant. Requires specific but realistic setup.
-- **MEDIUM**: Value leakage, griefing with cost to attacker, incorrect accounting, degraded functionality.
-- **LOW**: Informational, cosmetic inconsistency, edge-case-only with no material impact.
-
-**Before reporting — verify it's not a false positive:**
-- Is there a modifier, hook, or internal call that reconciles the state you think is inconsistent?
-- Is the "stale" state intentionally lazily evaluated (updated on next read)?
-- Does the protocol's try-catch fallback handle the failure case you're worried about?
-- Is the economic attack actually profitable after gas costs and 2.5% fees?
-- Does Solidity 0.8.28's built-in overflow protection prevent the arithmetic issue?
-- Has this already been reported or documented in [RISKS.md](./RISKS.md)?
-
-## Testing Setup
-
-```bash
-# Clone everything
-git clone --recursive https://github.com/Bananapus/version-6.git
-cd version-6
-
-# Build and test a single repo
-cd nana-core-v6
-npm install
-forge build
-forge test
-
-# Run with high verbosity for debugging
-forge test -vvvv --match-test testExploitName
-
-# Write a PoC
-forge test --match-path test/audit/ExploitPoC.t.sol -vvv
-
-# Run invariant tests
-forge test --match-contract Invariant
-
-# Gas analysis
-forge test --gas-report
-```
-
-Each repo's tests are self-contained. For cross-repo interactions, write tests in the downstream repo (e.g., test a buyback hook exploit in `nana-buyback-hook-v6/test/`).
-
-The existing test suite is extensive (185 files in nana-core-v6 alone). Review the invariant tests to understand what's already been proven — then try to break those invariants with configurations the tests don't cover.
-
-## Compiler and Version Info
-
-All contracts use **Solidity 0.8.28** targeting the **Cancun** EVM (transient storage opcodes available). Most repos use **200 optimizer runs**; revnet-core-v6 uses **100 runs**. Some repos enable **via-IR** (revnet-core-v6, nana-buyback-hook-v6, univ4-lp-split-hook-v6, univ4-router-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6, deploy-all-v6, defifa-collection-deployer-v6, banny-retail-v6); others do not (nana-core-v6, nana-suckers-v6, nana-721-hook-v6, croptop-core-v6). All repos use Foundry for building and testing. Dependencies include OpenZeppelin 5.x, Solady, and Uniswap V4 core/periphery (where applicable). Overflow/underflow is checked by default (Solidity 0.8+); `unchecked` blocks are used sparingly and intentionally.
-
-## Top Trust Assumptions
-
-These are the most impactful trust assumptions in the protocol. A broken assumption = a finding:
-
-1. **Project owners are trusted by their token holders.** Owners can queue rulesets that change economics (weight, tax rate, reserved percent) with only an approval hook delay as protection. If the approval hook is `JBDeadline(0)` or absent, changes are instant.
-
-2. **Data hooks have absolute control over payment and cashout terms.** A malicious data hook can set `weight = type(uint256).max` (minting infinite tokens), `cashOutTaxRate = 0` (draining all surplus), or `totalSupply = 1` (concentrating all cashout value). Projects opt into hooks; users trust that the project's hook is safe.
-
-3. **Price feeds are immutable and trusted once set.** `JBPrices` does not allow replacing a feed. If a Chainlink feed goes stale beyond the threshold, operations using that currency pair revert (DoS but not fund loss). Project-specific feeds have no staleness requirement.
-
-4. **No reentrancy guards — CEI ordering is the only defense.** All hook callbacks (pay, cashout, split) can re-enter the protocol. The protocol relies on state being fully committed before external calls. Any deviation from this pattern is a critical finding.
-
-5. **Cross-chain bridge messages are trusted once verified by the underlying bridge.** Suckers verify merkle proofs against roots posted by the bridge (Optimism, Arbitrum, CCIP). If the bridge itself is compromised, sucker funds are at risk. This is a known, accepted dependency.
-
-## Priority Order
-
-Audit in this order. Earlier items have higher blast radius:
-
-| Priority | Target | Why |
-|----------|--------|-----|
-| 1 | **Hook composition** (REVDeployer + JBBuybackHook + JB721TiersHook) | Hooks compose in ways that aren't tested end-to-end. Conditional array returns, nested hook calls, and re-entrant hook → protocol interactions are the most likely source of undiscovered bugs. |
-| 2 | **JBMultiTerminal + JBTerminalStore** | All funds flow through here. No reentrancy guard — CEI ordering is the only defense. |
-| 3 | **JBUniswapV4LPSplitHook** | Complex contract with Uniswap V4 integration, permissionless entry points, no reentrancy protection, and placeholder code. |
-| 4 | **REVLoans** | Lending against a bonding curve whose parameters change with stage transitions. Collateral manipulation surface is large. |
-| 5 | **JB721TiersHookLib + JB721TiersHookStore** | NFT discount/split/price economics have multiple interacting parameters (discountPercent, splitPercent, cash out weight, reserve frequency). |
-| 6 | **JBRulesets** | Weight decay, approval hooks, ruleset transitions — timing-dependent logic with 20k-cycle cache thresholds. |
-| 7 | **JBSucker** | Cross-chain merkle tree bridge. Bridge bugs have outsized impact. |
-| 8 | **DefifaDeployer + DefifaHook + DefifaGovernor** | Governance quorum manipulation, phase timing, scorecard attacks. |
-| 9 | **Deployment scripts** | Hardcoded addresses per chain. Verify every address against canonical deployments. |
-| 10 | **JBController** | Token minting, reserved distribution, ruleset lifecycle. |
-| 11 | **JBBuybackHook** | TWAP manipulation, swap failure handling, spot price fallback. |
-| 12 | **JBRouterTerminal** | Multi-hop routing, slippage across swap steps. |
-| 13 | **Everything else** | Utilities, registries, constants. |
-
-Go break it.
+Prefer end-to-end reproductions for composition bugs. Many issues here look harmless in unit isolation and only become real when routed through terminals, hooks, deployers, or bridge peers.

@@ -2,275 +2,162 @@
 
 ## Purpose
 
-Juicebox V6 is an onchain programmable treasury protocol for Ethereum. Projects use it to accept payments, issue tokens along a bonding curve, distribute payouts to preset splits, and let token holders cash out their share of surplus — all governed by time-bound rulesets that the project owner queues in advance. The protocol is designed around a small, audited core (terminals, controllers, rulesets, token accounting) that exposes hook interfaces at every decision point, so that features like NFT tiers, DEX buybacks, cross-chain bridging, and autonomous revenue networks are implemented as composable extensions rather than baked into the core contracts.
+Juicebox V6 is a programmable treasury stack. The core protocol handles balances, token issuance, cash outs, payouts, rulesets, permissions, and project ownership. Everything else in this workspace either extends those primitives through hooks, composes them into higher-level products, or deploys a canonical multi-chain rollout.
 
-## Ecosystem Layers
+This document is the ecosystem map. Each repo-level `ARCHITECTURE.md` should answer the local question, "how does this package work and how can I change it safely?" This file answers the larger question, "how do the packages fit together?"
 
-```
-    ┌──────────────────────────────────────────────────────────────────┐
-    │                    DEPLOYMENT LAYER                               │
-    │  deploy-all-v6 (Deploy.s.sol via Sphinx)                         │
-    └───────────────────────┬──────────────────────────────────────────┘
-                            │ deploys everything below
-                            │
-                          ┌─▼────────────────────────────────────────────────────┐
-                          │                 APPLICATION LAYER                       │
-                          │  banny-retail-v6  │  croptop-core-v6  │  defifa-*-v6    │
-                          └────────────┬──────┴──────┬────────────┴─────┬───────────┘
-                                       │             │                  │
-                          ┌────────────▼─────────────▼──────────────────▼───────────┐
-                          │                    DEPLOYER LAYER                         │
-                          │  REVDeployer  │  JBOmnichainDeployer  │  DefifaDeployer   │
-                          │  CTDeployer   │  JB721TiersHookDeployer                   │
-                          └───────┬───────┴──────────┬────────────────────────────────┘
-                                  │                  │
-          ┌───────────────────────▼──────────────────▼──────────────────┐
-          │                       HOOK LAYER                            │
-          │  JB721TiersHook  │  JBBuybackHook  │  JBUniswapV4LPSplitHook│
-          │  REVLoans        │  JBUniswapV4Hook │  JBRouterTerminal     │
-          │  DefifaHook      │  DefifaGovernor  │                       │
-          └───────────┬──────┴────────┬────────┴───────┬───────────────┘
-                      │               │                │
-    ┌─────────────────▼───────────────▼────────────────▼───────────────┐
-    │                        BRIDGE LAYER                               │
-    │  JBSucker (abstract)  │  JBOptimismSucker  │  JBArbitrumSucker   │
-    │  JBBaseSucker (Base)  │  JBCeloSucker      │  JBCCIPSucker       │
-    │  JBSuckerRegistry    │                     │                     │
-    └───────────────────────┬──────────────────────────────────────────┘
-                            │
-    ┌───────────────────────▼──────────────────────────────────────────┐
-    │                     CORE PROTOCOL LAYER                          │
-    │                                                                  │
-    │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐     │
-    │  │ JBController │  │ JBDirectory  │  │ JBMultiTerminal    │     │
-    │  │ (orchestrator)│  │ (routing)    │  │ (funds in/out)     │     │
-    │  └──────┬───────┘  └──────┬───────┘  └────────┬───────────┘     │
-    │         │                 │                    │                  │
-    │  ┌──────▼───────┐  ┌─────▼────────┐  ┌───────▼──────────┐      │
-    │  │ JBRulesets   │  │ JBTokens     │  │ JBTerminalStore  │      │
-    │  │ (governance) │  │ (supply)     │  │ (bookkeeping)    │      │
-    │  └──────────────┘  └──────────────┘  └──────────────────┘      │
-    │                                                                  │
-    │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐     │
-    │  │ JBSplits     │  │ JBPrices     │  │ JBPermissions      │     │
-    │  │ (payouts)    │  │ (oracles)    │  │ (access control)   │     │
-    │  └──────────────┘  └──────────────┘  └────────────────────┘     │
-    │                                                                  │
-    │  JBProjects (ERC-721)  │  JBERC20 (token)  │  JBFundAccessLimits │
-    │  JBFeelessAddresses    │  JBDeadline        │  JBChainlinkV3*     │
-    └──────────────────────────────────────────────────────────────────┘
+## Layering
 
-    ┌──────────────────────────────────────────────────────────────────┐
-    │                      UTILITY LAYER                               │
-    │  JBPermissionIds  │  JBOwnable  │  JBAddressRegistry             │
-    └──────────────────────────────────────────────────────────────────┘
+```text
+deploy-all-v6
+  -> deploys the canonical multi-chain rollout
+
+nana-core-v6
+  -> defines treasury state transitions, permissions, project ownership, and hooks
+
+Extension repos
+  -> nana-721-hook-v6
+  -> nana-buyback-hook-v6
+  -> nana-router-terminal-v6
+  -> nana-suckers-v6
+  -> nana-omnichain-deployers-v6
+  -> univ4-router-v6
+  -> univ4-lp-split-hook-v6
+  -> nana-ownable-v6
+  -> nana-address-registry-v6
+  -> nana-permission-ids-v6
+  -> nana-privacy-v6
+
+Application / product repos
+  -> revnet-core-v6
+  -> croptop-core-v6
+  -> banny-retail-v6
+  -> defifa-collection-deployer-v6
+  -> nana-fee-project-deployer-v6
 ```
 
-## Core Data Flow
+The dependency direction matters. `nana-core-v6` must stay generic. Product repos should absorb app-specific complexity instead of pushing it downward into shared protocol packages.
 
-### Payment Flow
-```
-User → JBMultiTerminal.pay()
-         │
-         ├──→ JBTerminalStore.recordPaymentFrom()
-         │      ├── Read current ruleset
-         │      ├── [Optional] Data hook overrides weight
-         │      ├── Calculate token count from weight
-         │      └── Update balance
-         │
-         ├──→ JBController.mintTokensOf()
-         │      ├── Calculate reserved tokens
-         │      ├── Mint beneficiary tokens
-         │      └── Accumulate pendingReservedTokenBalanceOf
-         │
-         └──→ [Optional] Pay hooks execute
-                ├── JBBuybackHook: swap vs mint decision
-                ├── JB721TiersHook: mint NFT tiers
-                └── Custom hooks
+## System Model
+
+### Payments
+
+```text
+payer
+  -> terminal receives funds
+  -> terminal store reads the active ruleset
+  -> optional data hooks adjust the economics and return hook specs
+  -> controller mints beneficiary tokens and accrues reserved tokens
+  -> optional pay hooks execute post-settlement logic
 ```
 
-### Cash Out Flow
-```
-Holder → JBMultiTerminal.cashOutTokensOf()
-           │
-           ├──→ JBTerminalStore.recordCashOutFor()
-           │      ├── Calculate surplus
-           │      ├── Get totalSupply (including pending reserved)
-           │      ├── [Optional] Data hook overrides parameters
-           │      ├── JBCashOuts.cashOutFrom() — bonding curve
-           │      └── Deduct balance
-           │
-           ├──→ JBController.burnTokensOf()
-           │
-           ├──→ Transfer reclaimed tokens to beneficiary
-           │
-           ├──→ [Optional] Cash out hooks execute
-           │
-           └──→ Take fees (2.5% to project #1)
+The core protocol never hardcodes NFT tiers, DEX routing, buybacks, privacy announcements, or cross-chain behavior. Those all enter through hook surfaces.
+
+### Cash Outs
+
+```text
+holder
+  -> terminal store computes reclaim amount from surplus, supply, and ruleset state
+  -> optional data hooks adjust tax rate, count, supply, or callbacks
+  -> controller burns tokens
+  -> terminal pays reclaimed funds and protocol fees
+  -> optional cash-out hooks execute follow-on logic
 ```
 
-### Preview Flow
-```
-Frontend → JBMultiTerminal.previewPayFor()
-             │
-             ├──→ JBTerminalStore.previewPayFrom()
-             │      ├── Read current ruleset
-             │      ├── [Optional] Data hook overrides weight
-             │      ├── Calculate token count from weight
-             │      └── Return hook specifications (active or noop)
-             │
-             └──→ JBController.previewMintOf()
-                    └── Split token count into beneficiary + reserved
+### Payouts And Splits
 
-Frontend → JBMultiTerminal.previewCashOutFrom()
-             │
-             └──→ JBTerminalStore.previewCashOutFrom()
-                    ├── Calculate surplus
-                    ├── Get totalSupply (including pending reserved)
-                    ├── [Optional] Data hook overrides parameters
-                    ├── JBCashOuts.cashOutFrom() — bonding curve
-                    └── Return reclaim amount, tax rate, hook specifications
+```text
+project owner or operator
+  -> terminal spends payout allowance
+  -> direct transfers, project-to-project payments, or split hooks run
 ```
 
-Both are `view` functions — no state changes. Hook specifications may include
-noop specs (informational-only, `noop = true`) carrying routing diagnostics
-from data hooks like the buyback hook.
+This is how the LP split hook, fee routing, and many "treasury-owned automation" patterns integrate.
 
-### Payout Flow
-```
-Owner → JBMultiTerminal.sendPayoutsOf()
-          │
-          ├──→ JBTerminalStore.recordPayoutFor()
-          │      └── Deduct balance, check payout limits
-          │
-          ├──→ Distribute to splits (JBSplits)
-          │      ├── Split to project → pay project's terminal
-          │      ├── Split to address → direct transfer
-          │      └── Split to hook → IJBSplitHook.processSplitWith()
-          │
-          └──→ Take fees on non-feeless payouts
+### Cross-Chain
+
+```text
+holder
+  -> cashes out locally into terminal tokens through a sucker
+  -> local sucker inserts a merkle leaf
+  -> bridge-specific transport moves funds and the latest root
+  -> remote sucker verifies the proof and remints value on the destination chain
 ```
 
-### Cross-Chain Bridge Flow
-```
-Source Chain                          Destination Chain
-────────────                          ──────────────────
-User → JBSucker.prepare()            JBSucker.claim()  ← User
-         │                                  │
-         ├── Cash out tokens                ├── Verify merkle proof
-         ├── Insert into outbox tree        ├── Check not already claimed
-         ├── Bridge tokens via              ├── Mint/transfer tokens
-         │   OP/Arb/CCIP messenger          └── Mark leaf as executed
-         └── Send tree root
-```
+Cross-chain support is deliberately implemented outside the core so the core remains chain-local and easier to reason about.
 
-## Contract Relationships
+## Cross-Repo Seams
 
-### Dependency Graph (imports)
-```
-nana-permission-ids-v6 ←── nana-core-v6 ←──┬── nana-suckers-v6
-                                             ├── nana-721-hook-v6 ←── defifa-collection-deployer-v6
-                                             ├── nana-buyback-hook-v6
-                                             ├── nana-router-terminal-v6
-                                             ├── nana-ownable-v6
-                                             │
-                                             ├── revnet-core-v6 ←──── banny-retail-v6
-                                             ├── croptop-core-v6
-                                             ├── nana-omnichain-deployers-v6
-                                             ├── univ4-lp-split-hook-v6
-                                             └── univ4-router-v6
-```
+### Stable Seams
 
-### Hook Composition Model
+- `nana-core-v6` interfaces and storage expectations are the ecosystem's main compatibility surface.
+- `nana-permission-ids-v6` assigns shared permission IDs. Reordering or repurposing IDs is ecosystem-breaking.
+- Hook repos rely on `IJBRulesetDataHook`, `IJBPayHook`, `IJBCashOutHook`, and `IJBSplitHook` semantics staying stable.
+- Product repos rely on deployer wrappers preserving Juicebox behavior while composing extra policies.
 
-Juicebox V6 uses a compositional hook system where features plug into the core protocol at well-defined extension points:
+### Common Compositions
 
-| Extension Point | Interface | Called By | Examples |
-|----------------|-----------|-----------|----------|
-| Data Hook (pay) | `IJBRulesetDataHook.beforePayRecordedWith` | JBTerminalStore | JBBuybackHook, REVDeployer |
-| Data Hook (cashout) | `IJBRulesetDataHook.beforeCashOutRecordedWith` | JBTerminalStore | JBBuybackHook, JBOmnichainDeployer, REVDeployer |
-| Pay Hook | `IJBPayHook.afterPayRecordedWith` | JBMultiTerminal | JB721TiersHook, JBBuybackHook |
-| Cash Out Hook | `IJBCashOutHook.afterCashOutRecordedWith` | JBMultiTerminal | JB721TiersHook, JBBuybackHook, REVDeployer, DefifaHook |
-| Split Hook | `IJBSplitHook.processSplitWith` | JBMultiTerminal | JBUniswapV4LPSplitHook |
-| Approval Hook | `IJBRulesetApprovalHook.approvalStatusOf` | JBRulesets | JBDeadline |
+- `nana-721-hook-v6` plus `nana-buyback-hook-v6` can be composed through `nana-omnichain-deployers-v6`.
+- `univ4-router-v6` provides oracle and routing behavior that `nana-buyback-hook-v6` and `univ4-lp-split-hook-v6` depend on.
+- `nana-suckers-v6` and `nana-router-terminal-v6` are common building blocks for revnets and fee-project deployments.
+- `nana-ownable-v6` lets helper contracts follow project NFT ownership instead of a static EOA.
 
-Data hooks return hook specifications that can be marked **noop** (`noop = true`). Noop specs are informational-only — the terminal skips the hook callback but the spec's metadata is still available to preview clients. The buyback hook uses this to return routing diagnostics (TWAP tick, liquidity, pool ID) even when the protocol path wins. Noop specs with `amount != 0` revert (`JBTerminalStore_NoopHookSpecHasAmount`).
+## Ecosystem Invariants
 
-#### Hook Composition Flow
+- Project ownership is represented by `JBProjects` NFTs, and many higher-level contracts derive authority from that fact.
+- Rulesets are time-ordered and queued ahead of activation. Most product behavior is expressed as ruleset configuration, not mutable admin state.
+- The core protocol owns accounting. Extension repos may redirect or transform flows, but they should not invent parallel balance ledgers for project funds.
+- Data hooks may modify economics before settlement; pay and cash-out hooks run after settlement. Crossing that boundary incorrectly usually creates accounting bugs.
+- Reserved-token behavior, fee behavior, and permission checks are cross-cutting concerns. Any repo that changes them must be read against the core contracts, not in isolation.
+- Deterministic deployment matters. Multiple repos assume stable addresses across chains and CREATE2-based recovery or pairing.
 
-```
-Data Hook (beforePayRecordedWith / beforeCashOutRecordedWith)
-│
-├── Returns: modified weight/tax rate/supply
-│   (these overrides are ALWAYS applied)
-│
-└── Returns: hook specifications[]
-    │
-    ├── spec.noop = false, spec.amount > 0
-    │   └── Terminal calls hook.afterPayRecordedWith / afterCashOutRecordedWith
-    │       (active callback — hook receives funds and executes logic)
-    │
-    ├── spec.noop = true, spec.amount = 0
-    │   └── Terminal SKIPS callback
-    │       (informational — metadata available to preview clients only)
-    │
-    └── spec.noop = true, spec.amount > 0
-        └── REVERTS: JBTerminalStore_NoopHookSpecHasAmount
-            (noop specs cannot carry funds)
-```
+## Repository Roles
 
-### Permission System
+| Repo | Role |
+| --- | --- |
+| `nana-core-v6` | Canonical accounting, routing, governance, and permission layer |
+| `nana-permission-ids-v6` | Shared permission constants used across the ecosystem |
+| `nana-ownable-v6` | Ownership adapter that follows project NFTs and JB permissions |
+| `nana-address-registry-v6` | On-chain deployer attestation registry |
+| `nana-721-hook-v6` | Tiered NFT minting and NFT-based cash-out economics |
+| `nana-buyback-hook-v6` | Best-execution mint-or-swap and cash-out-or-sell routing |
+| `nana-router-terminal-v6` | Accept-any-token payment router |
+| `nana-suckers-v6` | Cross-chain token migration primitives |
+| `nana-omnichain-deployers-v6` | Project launcher that composes 721 hooks, custom hooks, and suckers |
+| `univ4-router-v6` | Uniswap V4 hook plus TWAP oracle used by other repos |
+| `univ4-lp-split-hook-v6` | Reserved-token liquidity automation |
+| `revnet-core-v6` | Autonomous, ownerless project pattern with stage-based economics and loans |
+| `croptop-core-v6` | Permissioned NFT publishing product |
+| `banny-retail-v6` | On-chain composable avatar metadata system |
+| `defifa-collection-deployer-v6` | Prediction-game product built on tiered NFTs and governance |
+| `nana-fee-project-deployer-v6` | Deployment of the protocol's fee beneficiary project |
+| `deploy-all-v6` | Canonical deployment orchestration for the entire stack |
+| `nana-privacy-v6` | Optional privacy components layered on top of existing payment flows |
 
-```
-JBPermissions (256-bit packed)
-├── ROOT (ID 1) — grants all permissions
-├── Wildcard projectId=0 — applies to all projects
-├── Per-project permissions (IDs 2-33)
-│   ├── Core: QUEUE_RULESETS, MINT_TOKENS, BURN_TOKENS, SET_TERMINALS, etc.
-│   ├── 721 Hook: ADJUST_721_TIERS, SET_721_METADATA, SET_721_DISCOUNT_PERCENT
-│   ├── Buyback: SET_BUYBACK_TWAP, SET_BUYBACK_POOL, SET_BUYBACK_HOOK
-│   ├── Router: SET_ROUTER_TERMINAL
-│   └── Suckers: MAP_SUCKER_TOKEN, DEPLOY_SUCKERS, SUCKER_SAFETY, SET_SUCKER_DEPRECATION
-└── Guards:
-    ├── ROOT cannot be set via wildcard projectId
-    ├── ROOT operators cannot grant ROOT to others
-    └── Permission 0 is reserved (cannot be set)
-```
+## Where Complexity Lives
 
-## Repository Summary
+- `nana-core-v6`: accounting, fee, supply, and preview/live-path alignment
+- `nana-721-hook-v6`: tier storage, reserve semantics, and NFT-aware cash-out behavior
+- `nana-buyback-hook-v6` plus `univ4-router-v6`: route selection, oracle assumptions, and swap settlement
+- `nana-suckers-v6` plus `nana-omnichain-deployers-v6`: cross-chain state transitions and wrapper-hook composition
+- `revnet-core-v6`: permanent staged economics and loan math under adversarial treasury conditions
+- `deploy-all-v6`: deployment ordering, chain-specific wiring, and resumable recovery
 
-See [SKILLS.md](./SKILLS.md#contract-sizes) for per-contract line counts.
+## How To Change The Ecosystem Safely
 
-| Repository | Role | Key Contracts |
-|-----------|------|---------------|
-| nana-core-v6 | Core protocol | JBMultiTerminal, JBController, JBTerminalStore, JBRulesets |
-| nana-suckers-v6 | Cross-chain | JBSucker, JBOptimismSucker, JBBaseSucker, JBArbitrumSucker, JBCeloSucker, JBCCIPSucker |
-| nana-721-hook-v6 | NFT tiers | JB721TiersHook, JB721TiersHookStore |
-| defifa-collection-deployer-v6 | Prediction games | DefifaDeployer, DefifaHook, DefifaGovernor, DefifaHookLib |
-| revnet-core-v6 | Autonomous projects | REVDeployer, REVLoans |
-| nana-router-terminal-v6 | Payment routing | JBRouterTerminal, JBRouterTerminalRegistry |
-| nana-buyback-hook-v6 | DEX buyback | JBBuybackHook, JBBuybackHookRegistry, JBSwapLib |
-| deploy-all-v6 | Ecosystem deployment | Deploy.s.sol (Sphinx orchestration) |
-| banny-retail-v6 | Banny NFTs | Banny721TokenUriResolver |
-| univ4-lp-split-hook-v6 | LP management | JBUniswapV4LPSplitHook |
-| croptop-core-v6 | NFT publishing | CTDeployer, CTPublisher |
-| univ4-router-v6 | UniV4 integration | JBUniswapV4Hook |
-| nana-omnichain-deployers-v6 | Omnichain | JBOmnichainDeployer |
-| nana-ownable-v6 | JB ownership | JBOwnable |
-| nana-fee-project-deployer-v6 | Fee project | Deploy.s.sol (script only) |
-| nana-address-registry-v6 | Registry | JBAddressRegistry |
-| nana-permission-ids-v6 | Constants | JBPermissionIds |
+1. Start from the narrowest repo that can own the change.
+2. If a change touches settlement, fee accounting, supply, or permission semantics, read `nana-core-v6` first.
+3. If a change introduces a new operator permission, update `nana-permission-ids-v6` intentionally and audit every downstream assumption.
+4. If a change affects deployment order or canonical addresses, update `deploy-all-v6` and any deployment-specific repos together.
+5. If a change composes multiple hooks, reason about callback order, noop specs, and whether the earlier hook changes the inputs to the later one.
+6. If a change is cross-chain, verify both the local accounting path and the remote claim path.
 
-## Design Decisions
+## Reading Order
 
-- **Layered hook composition over monolithic features.** The core protocol deliberately knows nothing about NFTs, buybacks, LP positions, or cross-chain bridging. Every feature is an external hook that plugs into one of six well-defined extension points (data hook, pay hook, cash out hook, split hook, approval hook, deployer). This keeps the audited surface small and lets anyone ship new functionality without modifying or redeploying the core.
+If you are new to the codebase, read in this order:
 
-- **Data hooks separated from pay/cashout hooks.** Data hooks (`IJBRulesetDataHook`) run as `view` calls *before* the terminal records a transaction, so they can safely override economic parameters (weight, cash out tax rate, total supply) without holding funds. Pay and cash out hooks (`IJBPayHook`, `IJBCashOutHook`) run *after* the terminal has already settled state (updated balances, minted or burned tokens), so they receive funds and execute side effects like minting NFTs or performing swaps. This before/after split means a single data hook can orchestrate multiple downstream hooks via hook specifications, and the core never transfers funds to a contract that is also deciding how much to mint.
-
-- **Ruleset-based governance instead of admin functions.** Project parameters (weight, payout limits, cash out tax rate, hook addresses, permission flags) are bundled into immutable rulesets that activate on a schedule. Once a ruleset is active it cannot be changed — the owner can only queue a *future* ruleset. This gives contributors a guaranteed window to inspect upcoming changes and exit (cash out) before they take effect, without requiring a separate timelock contract.
-
-- **Terminal/store separation for bookkeeping isolation.** `JBMultiTerminal` handles fund custody, access control, fee processing, and hook execution. `JBTerminalStore` handles all arithmetic — balances, surplus calculation, payout limit tracking, bonding curve math. Because the store never holds funds or makes external calls, its logic can be reasoned about (and formally verified) in isolation from reentrancy concerns.
-
-- **Compositional deployers over inheritance.** Higher-level products (revnets, Croptop, Defifa) are thin deployer contracts that wire together core primitives and hooks, rather than subclasses of the core. `REVDeployer` configures a project with specific rulesets, a buyback data hook, and split rules — but it delegates all runtime behavior to the same `JBController` and `JBMultiTerminal` that every other project uses. This means the core protocol's security properties hold uniformly regardless of which deployer created a project.
-
-- **Noop hook specifications for preview transparency.** Data hooks can return hook specifications marked `noop = true`, which the terminal skips during execution but still surfaces in `previewPayFor` / `previewCashOutFrom` results. This lets hooks like the buyback hook communicate routing diagnostics (TWAP price, pool liquidity, which path won) to frontends without introducing a separate query interface or requiring off-chain indexing.
+1. `nana-core-v6/ARCHITECTURE.md`
+2. `nana-permission-ids-v6/ARCHITECTURE.md`
+3. The extension repo you care about
+4. Any deployer or product repo that composes that extension
+5. `deploy-all-v6/ARCHITECTURE.md` for canonical rollout assumptions

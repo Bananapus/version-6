@@ -26,8 +26,8 @@ pragma solidity 0.8.28;
 // Interfaces, structs, enums — caret for forward compatibility
 pragma solidity ^0.8.0;
 
-// Libraries — caret, may use newer features
-pragma solidity ^0.8.17;
+// Libraries — pin to exact version like contracts
+pragma solidity 0.8.28;
 ```
 
 ## Imports
@@ -87,10 +87,18 @@ contract JBExample is JBPermissioned, IJBExample {
     uint256 internal constant _FEE_BENEFICIARY_PROJECT_ID = 1;
 
     //*********************************************************************//
+    // ------------------------ private constants ------------------------ //
+    //*********************************************************************//
+
+    //*********************************************************************//
     // --------------- public immutable stored properties ---------------- //
     //*********************************************************************//
 
     IJBDirectory public immutable override DIRECTORY;
+
+    //*********************************************************************//
+    // -------------- internal immutable stored properties -------------- //
+    //*********************************************************************//
 
     //*********************************************************************//
     // --------------------- public stored properties -------------------- //
@@ -101,7 +109,23 @@ contract JBExample is JBPermissioned, IJBExample {
     //*********************************************************************//
 
     //*********************************************************************//
+    // -------------------- private stored properties -------------------- //
+    //*********************************************************************//
+
+    //*********************************************************************//
+    // ------------------- transient stored properties ------------------- //
+    //*********************************************************************//
+
+    //*********************************************************************//
     // -------------------------- constructor ---------------------------- //
+    //*********************************************************************//
+
+    //*********************************************************************//
+    // ---------------------------- modifiers ---------------------------- //
+    //*********************************************************************//
+
+    //*********************************************************************//
+    // ------------------------- receive / fallback ---------------------- //
     //*********************************************************************//
 
     //*********************************************************************//
@@ -113,7 +137,15 @@ contract JBExample is JBPermissioned, IJBExample {
     //*********************************************************************//
 
     //*********************************************************************//
+    // -------------------------- public views --------------------------- //
+    //*********************************************************************//
+
+    //*********************************************************************//
     // ----------------------- public transactions ----------------------- //
+    //*********************************************************************//
+
+    //*********************************************************************//
+    // ---------------------- internal transactions ---------------------- //
     //*********************************************************************//
 
     //*********************************************************************//
@@ -134,17 +166,28 @@ contract JBExample is JBPermissioned, IJBExample {
 1. Custom errors
 2. Public constants
 3. Internal constants
-4. Public immutable stored properties
-5. Internal immutable stored properties
-6. Public stored properties
-7. Internal stored properties
-8. Constructor
-9. External transactions
-10. External views
-11. Public transactions
-12. Internal helpers
-13. Internal views
-14. Private helpers
+4. Private constants
+5. Public immutable stored properties
+6. Internal immutable stored properties
+7. Public stored properties
+8. Internal stored properties
+9. Private stored properties
+10. Transient stored properties
+11. Constructor
+12. Modifiers
+13. Receive / fallback
+14. External transactions
+15. External views
+16. Public views
+17. Public transactions
+18. Internal transactions
+19. Internal helpers
+20. Internal views
+21. Private helpers
+
+Use these additional section labels where they better match the contents of the block:
+- `internal functions` is accepted as equivalent to `internal helpers`
+- `events` and `structs` are acceptable in specialized contracts that define them explicitly
 
 Functions are alphabetized within each section.
 
