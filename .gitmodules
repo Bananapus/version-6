@@ -34,9 +34,6 @@
 [submodule "croptop-core-v6"]
 	path = croptop-core-v6
 	url = https://github.com/mejango/croptop-core-v6.git
-[submodule "defifa-collection-deployer-v6"]
-	path = defifa-collection-deployer-v6
-	url = https://github.com/BallKidz/defifa-collection-deployer-v6.git
 [submodule "banny-retail-v6"]
 	path = banny-retail-v6
 	url = https://github.com/mejango/banny-retail-v6.git
@@ -52,3 +49,6 @@
 [submodule "nana-cli-v6"]
 	path = nana-cli-v6
 	url = https://github.com/Bananapus/nana-cli-v6.git
+[submodule "defifa"]
+	path = defifa
+	url = https://github.com/BallKidz/defifa.git
