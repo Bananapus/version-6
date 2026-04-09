@@ -49,10 +49,24 @@ This file answers one question: "I want to do something in Juicebox V6. Where do
 1. Define stage parameters, accepted terminals, optional NFT tiers, optional suckers, and the split operator.
 2. Deploy through `REVDeployer`.
 3. Participants buy in, receive revnet tokens, and move through the staged issuance schedule.
-4. Holders can cash out, bridge, or borrow against tokens through the configured revnet surfaces.
+4. Holders can cash out, bridge, borrow against, or temporarily hide tokens through the configured revnet surfaces.
 5. Post-launch changes remain limited to the bounded surfaces the revnet design leaves adjustable.
 
 **Tradeoff:** less governance flexibility, more credible economic immutability.
+
+## Journey 3a: Hide Or Reveal Revnet Tokens Temporarily
+
+**Use when:** token holders want to exclude their tokens from supply temporarily to benefit remaining holders' cash-out value.
+
+**Start here:** [revnet-core-v6](./revnet-core-v6/USER_JOURNEYS.md)
+
+**Flow**
+1. Grant `BURN_TOKENS` permission to the `REVHiddenTokens` contract.
+2. Call `REVHiddenTokens.hideTokensOf(revnetId, tokenCount)` to burn tokens and track them.
+3. Hidden tokens are excluded from `totalSupply`, increasing cash-out value for remaining holders.
+4. At any time, the original holder calls `REVHiddenTokens.revealTokensOf(revnetId, tokenCount, beneficiary)` to re-mint tokens without reserved percent.
+
+**Tradeoff:** tokens must be revealed before they can be used as loan collateral (explicit two-step process).
 
 ## Journey 4: Sell NFTs Or Content Alongside Treasury Participation
 
@@ -62,7 +76,7 @@ This file answers one question: "I want to do something in Juicebox V6. Where do
 - [nana-721-hook-v6](./nana-721-hook-v6/USER_JOURNEYS.md): fixed tiered NFT rewards, memberships, editions, raffles, claims.
 - [croptop-core-v6](./croptop-core-v6/USER_JOURNEYS.md): permissioned publishing, where allowed posters create new NFT tiers on an existing project.
 - [banny-retail-v6](./banny-retail-v6/USER_JOURNEYS.md): composable on-chain avatars and accessories.
-- [defifa-collection-deployer-v6](./defifa-collection-deployer-v6/USER_JOURNEYS.md): game-like collections where scorecards decide payout weights.
+- [defifa](./defifa/USER_JOURNEYS.md): game-like collections where scorecards decide payout weights.
 
 **Shared pattern**
 1. Configure or deploy the project and NFT surface.

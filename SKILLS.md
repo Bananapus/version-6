@@ -14,8 +14,8 @@
 | Buyback routing, TWAP quoting, or mint-vs-swap behavior | [`nana-buyback-hook-v6/SKILLS.md`](./nana-buyback-hook-v6/SKILLS.md) |
 | Router-terminal execution or route registry behavior | [`nana-router-terminal-v6/SKILLS.md`](./nana-router-terminal-v6/SKILLS.md) |
 | Cross-chain sucker bridging or token mapping behavior | [`nana-suckers-v6/SKILLS.md`](./nana-suckers-v6/SKILLS.md) |
-| Revnet deployer, owner, or loan logic | [`revnet-core-v6/SKILLS.md`](./revnet-core-v6/SKILLS.md) |
-| Croptop, Defifa, or Banny application-layer behavior | [`croptop-core-v6/SKILLS.md`](./croptop-core-v6/SKILLS.md), [`defifa-collection-deployer-v6/SKILLS.md`](./defifa-collection-deployer-v6/SKILLS.md), [`banny-retail-v6/SKILLS.md`](./banny-retail-v6/SKILLS.md) |
+| Revnet deployer, owner, loan, or hidden token logic | [`revnet-core-v6/SKILLS.md`](./revnet-core-v6/SKILLS.md) |
+| Croptop, Defifa, or Banny application-layer behavior | [`croptop-core-v6/SKILLS.md`](./croptop-core-v6/SKILLS.md), [`defifa/SKILLS.md`](./defifa/SKILLS.md), [`banny-retail-v6/SKILLS.md`](./banny-retail-v6/SKILLS.md) |
 | Utility repos like address registry, permission IDs, ownership helpers, or privacy | [`nana-address-registry-v6/SKILLS.md`](./nana-address-registry-v6/SKILLS.md), [`nana-permission-ids-v6/SKILLS.md`](./nana-permission-ids-v6/SKILLS.md), [`nana-ownable-v6/SKILLS.md`](./nana-ownable-v6/SKILLS.md), [`nana-privacy-v6/SKILLS.md`](./nana-privacy-v6/SKILLS.md) |
 | Uniswap V4 hook repos | [`univ4-lp-split-hook-v6/SKILLS.md`](./univ4-lp-split-hook-v6/SKILLS.md), [`univ4-router-v6/SKILLS.md`](./univ4-router-v6/SKILLS.md) |
 | Ecosystem deployment orchestration | [`deploy-all-v6/SKILLS.md`](./deploy-all-v6/SKILLS.md), [`nana-fee-project-deployer-v6/SKILLS.md`](./nana-fee-project-deployer-v6/SKILLS.md), [`nana-omnichain-deployers-v6/SKILLS.md`](./nana-omnichain-deployers-v6/SKILLS.md) |
@@ -29,9 +29,9 @@
 | `nana-buyback-hook-v6` | Buyback data hooks and swap quoting |
 | `nana-router-terminal-v6` | Router terminal and route registry |
 | `nana-suckers-v6` | Cross-chain suckers and deployers |
-| `revnet-core-v6` | Revnet deployer, owner, and loans |
+| `revnet-core-v6` | Revnet deployer, owner, loans, and hidden tokens |
 | `croptop-core-v6` | Croptop publishing and project deployer |
-| `defifa-collection-deployer-v6` | Defifa game deployer, hook, governor, resolver |
+| `defifa` | Defifa game deployer, hook, governor, resolver |
 | `banny-retail-v6` | Banny token URI resolver and outfit rendering |
 | `nana-omnichain-deployers-v6` | Omnichain deployment wrapper |
 | `nana-address-registry-v6` | Address registry for deployed contracts |

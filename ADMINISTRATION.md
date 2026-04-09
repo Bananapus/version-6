@@ -40,7 +40,7 @@ For contract-level admin documentation, see each subrepo's ADMINISTRATION.md:
 | nana-core-v6 | Protocol core: permissions, projects, directory, rulesets, terminals, tokens, prices, splits, fund access limits | [Link](nana-core-v6/ADMINISTRATION.md) |
 | nana-721-hook-v6 | NFT tiers, minting, metadata, discount percents | [Link](nana-721-hook-v6/ADMINISTRATION.md) |
 | nana-suckers-v6 | Cross-chain bridging, token mapping, deprecation, emergency hatch | [Link](nana-suckers-v6/ADMINISTRATION.md) |
-| revnet-core-v6 | Autonomous revnets, split operators, loans | [Link](revnet-core-v6/ADMINISTRATION.md) |
+| revnet-core-v6 | Autonomous revnets, split operators, loans, hidden tokens | [Link](revnet-core-v6/ADMINISTRATION.md) |
 | nana-buyback-hook-v6 | Buyback hook registry, pool configuration, TWAP | [Link](nana-buyback-hook-v6/ADMINISTRATION.md) |
 | nana-omnichain-deployers-v6 | Omnichain project deployment, data hook proxy | [Link](nana-omnichain-deployers-v6/ADMINISTRATION.md) |
 | nana-router-terminal-v6 | Router terminal registry, swap routing | [Link](nana-router-terminal-v6/ADMINISTRATION.md) |
@@ -52,7 +52,7 @@ For contract-level admin documentation, see each subrepo's ADMINISTRATION.md:
 | croptop-core-v6 | Croptop publishing, posting criteria | [Link](croptop-core-v6/ADMINISTRATION.md) |
 | deploy-all-v6 | Canonical deployment script | [Link](deploy-all-v6/ADMINISTRATION.md) |
 | banny-retail-v6 | Banny NFT metadata, outfit custodial model | [Link](banny-retail-v6/ADMINISTRATION.md) |
-| defifa-collection-deployer-v6 | Defifa game lifecycle, scorecard governance | [Link](defifa-collection-deployer-v6/ADMINISTRATION.md) |
+| defifa | Defifa game lifecycle, scorecard governance | [Link](defifa/ADMINISTRATION.md) |
 | univ4-lp-split-hook-v6 | LP split hook, pool deployment, fee routing | [Link](univ4-lp-split-hook-v6/ADMINISTRATION.md) |
 | univ4-router-v6 | V4 oracle hook (no admin surface) | [Link](univ4-router-v6/ADMINISTRATION.md) |
 

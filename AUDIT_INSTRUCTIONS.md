@@ -47,7 +47,7 @@ Primary runtime and deployment scope:
 - `univ4-router-v6`
 - `univ4-lp-split-hook-v6`
 - `croptop-core-v6`
-- `defifa-collection-deployer-v6`
+- `defifa`
 - `banny-retail-v6`
 - `nana-ownable-v6`
 - `nana-address-registry-v6`
@@ -77,7 +77,7 @@ Everything else composes around those primitives:
 - swap-vs-mint routing: `nana-buyback-hook-v6` and `univ4-router-v6`
 - multi-asset routing into accepted project tokens: `nana-router-terminal-v6`
 - cross-chain project token movement: `nana-suckers-v6`
-- launchers and protocol compositions: `nana-omnichain-deployers-v6`, `revnet-core-v6`, `croptop-core-v6`, `defifa-collection-deployer-v6`
+- launchers and protocol compositions: `nana-omnichain-deployers-v6`, `revnet-core-v6`, `croptop-core-v6`, `defifa`
 - application-level surfaces: `banny-retail-v6`, `nana-privacy-v6`
 - deployment orchestration: `deploy-all-v6`
 
@@ -101,7 +101,7 @@ Data hooks may modify accounting inputs only within the intended model. Hook spe
 Protocol fees and repo-specific fees must either be paid, held, or explicitly redirected by documented fallback logic. They must not silently disappear.
 
 6. Token accounting consistency
-Mint, burn, reserve, bridge, and reclaim paths must preserve intended supply and price relationships across ERC-20 credits, ERC-721 tiers, and bridged representations.
+Mint, burn, reserve, bridge, and reclaim paths must preserve intended supply and price relationships across ERC-20 credits, ERC-721 tiers, and bridged representations. Hidden token mechanics (temporarily burning and re-minting via `REVHiddenTokens`) must not enable supply manipulation or unexpected cash-out value changes beyond the intended effect of reducing totalSupply.
 
 7. Cross-chain conservation
 Prepare, send-root, receive-root, and claim paths must not enable replay, double claim, stranded balance creation, or source/destination divergence beyond documented emergency-hatch behavior.
@@ -171,7 +171,7 @@ Terminal solvency, cash-out math, payout and allowance enforcement, fee processi
 `nana-suckers-v6` and any deployer or owner helper that grants sucker privileges or fee exemptions.
 
 4. Autonomous compositions
-`revnet-core-v6`, `croptop-core-v6`, and `defifa-collection-deployer-v6`, where project-specific economics are built out of many shared primitives.
+`revnet-core-v6`, `croptop-core-v6`, and `defifa`, where project-specific economics are built out of many shared primitives.
 
 5. Deployment correctness
 `deploy-all-v6` and per-repo `script/` entries. Wrong wiring, wrong singleton addresses, missing ownership transfers, and missing registry writes are production-critical findings.

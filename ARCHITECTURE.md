@@ -32,7 +32,7 @@ Application / product repos
   -> revnet-core-v6
   -> croptop-core-v6
   -> banny-retail-v6
-  -> defifa-collection-deployer-v6
+  -> defifa
   -> nana-fee-project-deployer-v6
 ```
 
@@ -126,10 +126,10 @@ Cross-chain support is deliberately implemented outside the core so the core rem
 | `nana-omnichain-deployers-v6` | Project launcher that composes 721 hooks, custom hooks, and suckers |
 | `univ4-router-v6` | Uniswap V4 hook plus TWAP oracle used by other repos |
 | `univ4-lp-split-hook-v6` | Reserved-token liquidity automation |
-| `revnet-core-v6` | Autonomous, ownerless project pattern with stage-based economics and loans |
+| `revnet-core-v6` | Autonomous, ownerless project pattern with stage-based economics, loans, and temporary token hiding |
 | `croptop-core-v6` | Permissioned NFT publishing product |
 | `banny-retail-v6` | On-chain composable avatar metadata system |
-| `defifa-collection-deployer-v6` | Prediction-game product built on tiered NFTs and governance |
+| `defifa` | Prediction-game product built on tiered NFTs and governance |
 | `nana-fee-project-deployer-v6` | Deployment of the protocol's fee beneficiary project |
 | `deploy-all-v6` | Canonical deployment orchestration for the entire stack |
 | `nana-privacy-v6` | Optional privacy components layered on top of existing payment flows |
