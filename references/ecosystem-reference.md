@@ -137,24 +137,30 @@ CLAIM_TOKENS             = 12    Claim ERC-20 from credits
 TRANSFER_CREDITS         = 13    Transfer token credits
 SET_CONTROLLER           = 14    Set project controller
 SET_TERMINALS            = 15    Set project terminals
-SET_PRIMARY_TERMINAL     = 16    Set primary terminal
-USE_ALLOWANCE            = 17    Withdraw from surplus allowance
-SET_SPLIT_GROUPS         = 18    Configure splits
-ADD_PRICE_FEED           = 19    Add price feeds
-ADD_ACCOUNTING_CONTEXTS  = 20    Add accepted tokens
-SET_TOKEN_METADATA       = 21    Update token name/symbol
-ADJUST_721_TIERS         = 22    Modify NFT tiers
-SET_721_METADATA         = 23    Set NFT metadata
-MINT_721                 = 24    Owner-mint NFTs
-SET_721_DISCOUNT_PERCENT = 25    Set tier discounts
-SET_BUYBACK_TWAP         = 26    Configure TWAP window
-SET_BUYBACK_POOL         = 27    Set buyback pool
-SET_BUYBACK_HOOK         = 28    Set buyback hook (also locks)
-SET_ROUTER_TERMINAL      = 29    Set router terminal (also locks)
-MAP_SUCKER_TOKEN         = 30    Map cross-chain tokens
-DEPLOY_SUCKERS           = 31    Deploy sucker pairs
-SUCKER_SAFETY            = 32    Emergency hatch control
-SET_SUCKER_DEPRECATION   = 33    Deprecate suckers
+ADD_TERMINALS            = 16    Add terminals (implicit via setPrimaryTerminalOf)
+SET_PRIMARY_TERMINAL     = 17    Set primary terminal
+USE_ALLOWANCE            = 18    Withdraw from surplus allowance
+SET_SPLIT_GROUPS         = 19    Configure splits
+ADD_PRICE_FEED           = 20    Add price feeds
+ADD_ACCOUNTING_CONTEXTS  = 21    Add accepted tokens
+SET_TOKEN_METADATA       = 22    Update token name/symbol
+ADJUST_721_TIERS         = 23    Modify NFT tiers
+SET_721_METADATA         = 24    Set NFT metadata
+MINT_721                 = 25    Owner-mint NFTs
+SET_721_DISCOUNT_PERCENT = 26    Set tier discounts
+SET_BUYBACK_TWAP         = 27    Configure TWAP window
+SET_BUYBACK_POOL         = 28    Set buyback pool
+SET_BUYBACK_HOOK         = 29    Set buyback hook (also locks)
+SET_ROUTER_TERMINAL      = 30    Set router terminal (also locks)
+MAP_SUCKER_TOKEN         = 31    Map cross-chain tokens
+DEPLOY_SUCKERS           = 32    Deploy sucker pairs
+SUCKER_SAFETY            = 33    Emergency hatch control
+SET_SUCKER_DEPRECATION   = 34    Deprecate suckers
+HIDE_TOKENS              = 35    Hide tokens on behalf of holder (REVHiddenTokens)
+OPEN_LOAN                = 36    Open loan on behalf of holder (REVLoans)
+REALLOCATE_LOAN          = 37    Reallocate loan collateral on behalf of owner (REVLoans)
+REPAY_LOAN               = 38    Repay loan on behalf of owner (REVLoans)
+REVEAL_TOKENS            = 39    Reveal hidden tokens on behalf of holder (REVHiddenTokens)
 ```
 
 ## Libraries
@@ -170,7 +176,7 @@ SET_SUCKER_DEPRECATION   = 33    Deprecate suckers
 | `JBConstants` | Protocol constants (FEE, MAX values) | `nana-core-v6/src/libraries/` |
 | `JBSwapLib` | Uniswap quote/swap + TWAP oracle | `nana-buyback-hook-v6/src/libraries/` |
 | `MerkleLib` | Incremental merkle tree (eth2-style) | `nana-suckers-v6/src/utils/` |
-| `DefifaHookLib` | Cash-out weight, fee tokens, attestation | `defifa-collection-deployer-v6/src/libraries/` |
+| `DefifaHookLib` | Cash-out weight, fee tokens, attestation | `defifa/src/libraries/` |
 
 ## Contract Sizes
 
@@ -197,7 +203,7 @@ nana-suckers-v6
 univ4-lp-split-hook-v6
   JBUniswapV4LPSplitHook.sol
 
-defifa-collection-deployer-v6
+defifa
   DefifaHook.sol
   DefifaDeployer.sol
   DefifaGovernor.sol

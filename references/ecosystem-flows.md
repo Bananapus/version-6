@@ -26,7 +26,9 @@ Use this file when you need the fastest path from a user-facing flow or debuggin
 | Deploy a project | `JBController.launchProjectFor()` | For revnets: `REVDeployer.deployFor()`. For Croptop: `CTDeployer`. For Defifa: `DefifaDeployer.launchGameWith()`. |
 | NFT tier mint | `JB721TiersHookStore.recordMint()` | Tier selection by price, supply cap check |
 | Buyback decision | `JBBuybackHook._getQuote()` | TWAP oracle query, mint vs swap |
-| Loan creation | `REVLoans.borrowFrom()` | Collateral lock, bonding curve valuation |
+| Loan creation | `REVLoans.borrowFrom()` | Collateral lock, bonding curve valuation. Supports operator delegation via `holder` param (OPEN_LOAN permission). |
+| Hide tokens | `REVHiddenTokens.hideTokensOf()` | Burns tokens, tracks hidden balance. Reduces totalSupply, increases cash-out value for remaining holders. |
+| Reveal tokens | `REVHiddenTokens.revealTokensOf()` | Re-mints previously hidden tokens to beneficiary. |
 | Cross-chain prepare | `JBSucker.prepare()` | Cash out + insert into outbox merkle tree |
 | Cross-chain claim | `JBSucker.claim()` | Verify merkle proof + mint/transfer |
 | LP pool deploy | `JBUniswapV4LPSplitHook.deployPool()` | Concentrated liquidity from accumulated tokens |
@@ -88,7 +90,7 @@ forge coverage --match-path "./src/*.sol"      # coverage
 ```
 nana-permission-ids-v6
   └── nana-core-v6
-        ├── nana-721-hook-v6 ──── defifa-collection-deployer-v6
+        ├── nana-721-hook-v6 ──── defifa
         ├── nana-buyback-hook-v6
         ├── nana-router-terminal-v6
         ├── nana-suckers-v6

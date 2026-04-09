@@ -68,7 +68,6 @@ If the goal is to understand live execution quickly, start here:
 | [nana-buyback-hook-v6](./nana-buyback-hook-v6) | Buy-side and sell-side routing hook that compares Juicebox economics with a Uniswap V4 market. |
 | [univ4-lp-split-hook-v6](./univ4-lp-split-hook-v6) | Split hook that accumulates reserved tokens and deploys them into a Uniswap V4 LP position. |
 | [univ4-router-v6](./univ4-router-v6) | Uniswap V4 hook and oracle used by the buyback surface. |
-| [nana-privacy-v6](./nana-privacy-v6) | Privacy-oriented helpers for stealth-address payments and private NFT denomination patterns. |
 
 The distinction between these hook repos matters:
 
@@ -94,7 +93,7 @@ The distinction between these hook repos matters:
 
 | Repo | Purpose |
 | --- | --- |
-| [revnet-core-v6](./revnet-core-v6) | Autonomous treasury-backed networks with staged economics, buybacks, cross-chain support, and loans. |
+| [revnet-core-v6](./revnet-core-v6) | Autonomous treasury-backed networks with staged economics, buybacks, cross-chain support, loans, and hidden tokens. |
 | [croptop-core-v6](./croptop-core-v6) | Permissioned publishing system for creating NFT content tiers on Juicebox projects. |
 | [nana-fee-project-deployer-v6](./nana-fee-project-deployer-v6) | Deployment package for protocol fee project `#1`. |
 | [deploy-all-v6](./deploy-all-v6) | Full-stack deployment orchestrator for the entire V6 ecosystem. |
@@ -104,7 +103,7 @@ The distinction between these hook repos matters:
 | Repo | Purpose |
 | --- | --- |
 | [banny-retail-v6](./banny-retail-v6) | Fully on-chain composable avatar and outfit system built on the 721 hook stack. |
-| [defifa-collection-deployer-v6](./defifa-collection-deployer-v6) | On-chain prediction game system with NFT pieces, scorecards, and pot-weighted settlement. |
+| [defifa](./defifa) | On-chain prediction game system with NFT pieces, scorecards, and pot-weighted settlement. |
 
 ## Working Locally
 
