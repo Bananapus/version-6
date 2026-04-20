@@ -1,174 +1,245 @@
-# Juicebox V6
+# Juicebox V6 EVM Workspace
 
-Juicebox V6 is a modular EVM protocol for programmable treasuries. This workspace contains the full contract ecosystem: core protocol, hooks, deployers, cross-chain infrastructure, applications, and deployment orchestration.
+This directory is the main entrypoint into the Juicebox V6 EVM ecosystem.
+
+It is not a single Foundry package. It is a coordinated workspace of sibling repos that are developed together, versioned separately, and composed through npm packages and local `file:` dependencies. The center of gravity is [`nana-core-v6`](./nana-core-v6), but most real deployments also compose hooks, routers, deployers, or product repos around it.
+
+Use this README when you need to answer four questions quickly:
+
+- which repo owns the behavior I care about
+- what order should I read the ecosystem in
+- where should I start if I am auditing, integrating, or debugging
+- which directories are active workspace surfaces versus supporting or legacy material
 
 App: <https://juicebox.money>  
-Docs: <https://docs.juicebox.money>
-Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md)
+Docs: <https://docs.juicebox.money>  
+Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md)  
+User journeys: [USER_JOURNEYS.md](./USER_JOURNEYS.md)  
+Workspace navigation: [SKILLS.md](./SKILLS.md)  
+Risks: [RISKS.md](./RISKS.md)  
+Administration: [ADMINISTRATION.md](./ADMINISTRATION.md)  
+Audit instructions: [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md)
+RISKS maintenance: [docs/RISKS_MAINTENANCE.md](./docs/RISKS_MAINTENANCE.md)
 
-## Overview
+## Workspace Scope
 
-The V6 system is organized as a set of sibling Foundry repos that depend on each other through published npm packages and local `file:` references. At the center is [`nana-core-v6`](./nana-core-v6), which provides projects, rulesets, terminals, splits, permissions, prices, and token accounting. The rest of the ecosystem plugs into those primitives:
+This workspace contains several different kinds of material:
 
-- hooks add NFT issuance, buybacks, LP management, routing, and privacy behavior
-- deployers package common protocol compositions into one-shot entrypoints
-- suckers bridge project tokens and reclaimed terminal assets across chains
-- applications build complete products on top of the shared primitives
+- active protocol and product repos at the top level, such as [`nana-core-v6`](./nana-core-v6) and [`revnet-core-v6`](./revnet-core-v6)
+- workspace-level guidance docs like [ARCHITECTURE.md](./ARCHITECTURE.md), [RISKS.md](./RISKS.md), and [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md)
+- templates under [`documentation_templates`](./documentation_templates) for creating repo-local docs
+- workspace maintenance notes such as [`docs/RISKS_MAINTENANCE.md`](./docs/RISKS_MAINTENANCE.md) for keeping repo docs aligned with code
+- archived packages under [`archive`](./archive), which are not part of the active V6 surface unless a specific investigation sends you there
+- references, audit artifacts, and local tooling that support review work but are not themselves protocol packages
 
-If you are reading the codebase for the first time, the dependency order is:
+If you are tracing live behavior, start from active top-level repos, not `archive/`, `documentation_templates/`, or old audit output.
 
-1. `nana-core-v6`
-2. `nana-permission-ids-v6`, `nana-ownable-v6`, `nana-address-registry-v6`
-3. hooks and routing packages
-4. cross-chain packages
-5. deployers and applications
+## What This Workspace Contains
 
-Two framing points matter when reading V6:
+The V6 EVM surface is organized into a few recurring roles:
 
-- `nana-core-v6` is the accounting truth. Downstream repos may wrap, route, or condition execution, but they are not the canonical ledger.
-- most of the interesting behavior in V6 comes from composition, not inheritance. The hard part is usually identifying which hook, deployer, or bridge wrapper is in the call path.
+- core protocol repos define canonical accounting, permissions, ownership resolution, and shared registries
+- hook repos modify issuance, redemption, routing, liquidity deployment, or sidecar reward behavior around a project
+- cross-chain repos move project tokens and reclaimed assets between configured chains
+- deployer repos package multi-contract compositions into launch surfaces
+- application repos build opinionated products on top of the shared protocol primitives
+
+The main reading rule is simple:
+
+- if a repo owns accounting state or settlement semantics, read it first
+- if a repo only routes, deploys, wraps, or names another repo, treat it as composition rather than protocol truth
 
 ## Start Here
 
-| If you want to... | Read this |
+| If you want to... | Read this first |
 | --- | --- |
-| navigate the ecosystem as an agent or operator | [SKILLS.md](./SKILLS.md) |
-| understand the repo map | [ARCHITECTURE.md](./ARCHITECTURE.md) |
-| follow user-facing flows | [USER_JOURNEYS.md](./USER_JOURNEYS.md) |
-| review protocol risks | [RISKS.md](./RISKS.md) |
-| audit the codebase | [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md) |
-| follow local conventions | [STYLE_GUIDE.md](./STYLE_GUIDE.md) |
+| understand the ecosystem map | [ARCHITECTURE.md](./ARCHITECTURE.md) |
+| follow cross-repo actor flows | [USER_JOURNEYS.md](./USER_JOURNEYS.md) |
+| navigate quickly across repos | [SKILLS.md](./SKILLS.md) |
+| review ecosystem-level risks | [RISKS.md](./RISKS.md) |
+| run or structure an audit | [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md) |
+| follow local documentation norms | [STYLE_GUIDE.md](./STYLE_GUIDE.md) |
 
-## Auditor-First Reading Order
+If you are new to Juicebox V6, start with [`nana-core-v6/README.md`](./nana-core-v6/README.md) and then move outward into the repo that changes the execution path you care about.
 
-If the goal is to understand live execution quickly, start here:
+## High-Signal Entrypoints
 
-1. [`nana-core-v6/README.md`](./nana-core-v6/README.md)
-2. [`nana-core-v6/src/JBController.sol`](./nana-core-v6/src/JBController.sol)
-3. [`nana-core-v6/src/JBMultiTerminal.sol`](./nana-core-v6/src/JBMultiTerminal.sol)
-4. [`nana-core-v6/src/JBTerminalStore.sol`](./nana-core-v6/src/JBTerminalStore.sol)
-5. the hook, router, bridge, or deployer repo the target project actually composes
+If you need the shortest high-signal path into the codebase, start from these contracts and then branch into the attached extension repo:
+
+- [`nana-core-v6/src/JBController.sol`](./nana-core-v6/src/JBController.sol): project configuration, token issuance, and controller-led state transitions
+- [`nana-core-v6/src/JBMultiTerminal.sol`](./nana-core-v6/src/JBMultiTerminal.sol): payment, cash-out, payout, and fee-facing terminal entrypoint
+- [`nana-core-v6/src/JBTerminalStore.sol`](./nana-core-v6/src/JBTerminalStore.sol): reclaim math, surplus accounting, and preview-sensitive terminal state
+- [`nana-721-hook-v6/src/JB721TiersHook.sol`](./nana-721-hook-v6/src/JB721TiersHook.sol): tiered NFT issuance and NFT-aware cash-out behavior
+- [`nana-buyback-hook-v6/src/JBBuybackHook.sol`](./nana-buyback-hook-v6/src/JBBuybackHook.sol): protocol-vs-market route selection for pay and cash-out flows
+- [`nana-router-terminal-v6/src/JBRouterTerminal.sol`](./nana-router-terminal-v6/src/JBRouterTerminal.sol): terminal-side token routing before settlement
+- [`nana-suckers-v6/src/JBSucker.sol`](./nana-suckers-v6/src/JBSucker.sol): cross-chain reclaim and remint primitive
+- [`univ4-router-v6/src/JBUniswapV4Hook.sol`](./univ4-router-v6/src/JBUniswapV4Hook.sol): Uniswap V4 routing and observation infrastructure for buyback flows
+- [`revnet-core-v6/src/REVDeployer.sol`](./revnet-core-v6/src/REVDeployer.sol): opinionated network launch surface built from multiple shared packages
+
+## Reading Order
+
+If the goal is fast orientation, use this order:
+
+1. [`nana-core-v6`](./nana-core-v6)
+2. [`nana-permission-ids-v6`](./nana-permission-ids-v6), [`nana-ownable-v6`](./nana-ownable-v6), [`nana-address-registry-v6`](./nana-address-registry-v6)
+3. [`nana-721-hook-v6`](./nana-721-hook-v6), [`nana-buyback-hook-v6`](./nana-buyback-hook-v6), [`nana-router-terminal-v6`](./nana-router-terminal-v6), [`univ4-router-v6`](./univ4-router-v6), [`univ4-lp-split-hook-v6`](./univ4-lp-split-hook-v6)
+4. [`nana-suckers-v6`](./nana-suckers-v6), [`nana-omnichain-deployers-v6`](./nana-omnichain-deployers-v6)
+5. [`nana-distributor-v6`](./nana-distributor-v6), [`project-handles-v6`](./project-handles-v6), [`nana-fee-project-deployer-v6`](./nana-fee-project-deployer-v6), [`deploy-all-v6`](./deploy-all-v6)
+6. [`revnet-core-v6`](./revnet-core-v6), [`croptop-core-v6`](./croptop-core-v6), [`banny-retail-v6`](./banny-retail-v6), [`defifa`](./defifa)
+
+If the goal is a live-path audit, start here instead:
+
+1. [`nana-core-v6/src/JBController.sol`](./nana-core-v6/src/JBController.sol)
+2. [`nana-core-v6/src/JBMultiTerminal.sol`](./nana-core-v6/src/JBMultiTerminal.sol)
+3. [`nana-core-v6/src/JBTerminalStore.sol`](./nana-core-v6/src/JBTerminalStore.sol)
+4. the hook, router, bridge, or deployer repo attached to the target project
+5. the application repo, if the project is not a plain protocol deployment
 
 ## Repository Map
 
-### Core
+### Core Protocol
+
+| Repo | Owns |
+| --- | --- |
+| [nana-core-v6](./nana-core-v6) | Projects, rulesets, controller flows, terminals, splits, prices, permissions, fund-access limits, and token accounting. |
+| [nana-permission-ids-v6](./nana-permission-ids-v6) | Shared permission ID constants that downstream repos rely on. |
+| [nana-ownable-v6](./nana-ownable-v6) | Ownership helpers that resolve authority from Juicebox project NFTs instead of fixed EOAs. |
+| [nana-address-registry-v6](./nana-address-registry-v6) | Registry that records deployer claims for already-deployed contracts. |
+
+### Hooks And Execution Modifiers
+
+| Repo | Changes |
+| --- | --- |
+| [nana-721-hook-v6](./nana-721-hook-v6) | Tiered ERC-721 issuance and cash-out behavior for project payments and redemptions. |
+| [nana-buyback-hook-v6](./nana-buyback-hook-v6) | Buy-side and sell-side path selection between Juicebox issuance economics and external Uniswap V4 liquidity. |
+| [nana-router-terminal-v6](./nana-router-terminal-v6) | Terminal-side routing from many input tokens into the token a destination project actually accepts. |
+| [univ4-router-v6](./univ4-router-v6) | Uniswap V4 routing and observation infrastructure used by the buyback surface. |
+| [univ4-lp-split-hook-v6](./univ4-lp-split-hook-v6) | Split hook that deploys reserved-token value into a Uniswap V4 LP position. |
+| [nana-distributor-v6](./nana-distributor-v6) | Distribution helpers for token- and NFT-based reward allocation that can sit beside a project's main payment flow. |
+| [project-handles-v6](./project-handles-v6) | Handle storage and resolution helpers for ENS-style project naming. |
+
+### Cross-Chain And Multi-Chain Launch
 
 | Repo | Purpose |
 | --- | --- |
-| [nana-core-v6](./nana-core-v6) | Core Juicebox protocol: projects, rulesets, controller, terminals, prices, permissions, splits, and token accounting. |
-| [nana-permission-ids-v6](./nana-permission-ids-v6) | Shared permission ID constants used across the entire V6 surface. |
-| [nana-ownable-v6](./nana-ownable-v6) | Ownership helpers that can follow a Juicebox project NFT instead of a fixed EOA. |
-| [nana-address-registry-v6](./nana-address-registry-v6) | Permissionless registry that maps deployed contracts to the deployer that created them. |
+| [nana-suckers-v6](./nana-suckers-v6) | Cross-chain movement of project tokens and reclaimed terminal assets across configured bridge paths. |
+| [nana-omnichain-deployers-v6](./nana-omnichain-deployers-v6) | Launch surfaces that compose core projects, 721 hooks, and sucker infrastructure into multi-chain deployments. |
 
-### Hooks
+### Deployment And Ecosystem Composition
 
 | Repo | Purpose |
 | --- | --- |
-| [nana-721-hook-v6](./nana-721-hook-v6) | Tiered ERC-721 issuance hook for Juicebox payments and cash outs. |
-| [nana-buyback-hook-v6](./nana-buyback-hook-v6) | Buy-side and sell-side routing hook that compares Juicebox economics with a Uniswap V4 market. |
-| [univ4-lp-split-hook-v6](./univ4-lp-split-hook-v6) | Split hook that accumulates reserved tokens and deploys them into a Uniswap V4 LP position. |
-| [univ4-router-v6](./univ4-router-v6) | Uniswap V4 hook and oracle used by the buyback surface. |
+| [nana-fee-project-deployer-v6](./nana-fee-project-deployer-v6) | Deployer package for the protocol fee project and its surrounding configuration. |
+| [deploy-all-v6](./deploy-all-v6) | Chain-aware orchestration for deploying the wider V6 stack together. |
 
-The distinction between these hook repos matters:
+### Applications And Opinionated Products
 
-- `nana-721-hook-v6` changes NFT issuance semantics for a project
-- `nana-buyback-hook-v6` changes price selection between Juicebox and market liquidity
-- `univ4-lp-split-hook-v6` changes how reserved tokens are deployed after issuance
-- `univ4-router-v6` is primarily infrastructure for routing and oracle-aware swap decisions
-
-### Terminals And Routing
-
-| Repo | Purpose |
+| Repo | Product surface |
 | --- | --- |
-| [nana-router-terminal-v6](./nana-router-terminal-v6) | Terminal that accepts many input tokens and routes value into the token a destination project actually accepts. |
-
-### Cross-Chain
-
-| Repo | Purpose |
-| --- | --- |
-| [nana-suckers-v6](./nana-suckers-v6) | Cross-chain token bridging for Juicebox projects across OP Stack, Arbitrum, CCIP, and related variants. |
-| [nana-omnichain-deployers-v6](./nana-omnichain-deployers-v6) | Project deployer that wires together core launch, 721 hooks, and suckers in one entrypoint. |
-
-### Deployers And Protocol Compositions
-
-| Repo | Purpose |
-| --- | --- |
-| [revnet-core-v6](./revnet-core-v6) | Autonomous treasury-backed networks with staged economics, buybacks, cross-chain support, loans, and hidden tokens. |
-| [croptop-core-v6](./croptop-core-v6) | Permissioned publishing system for creating NFT content tiers on Juicebox projects. |
-| [nana-fee-project-deployer-v6](./nana-fee-project-deployer-v6) | Deployment package for protocol fee project `#1`. |
-| [deploy-all-v6](./deploy-all-v6) | Full-stack deployment orchestrator for the entire V6 ecosystem. |
-
-### Applications
-
-| Repo | Purpose |
-| --- | --- |
-| [banny-retail-v6](./banny-retail-v6) | Fully on-chain composable avatar and outfit system built on the 721 hook stack. |
+| [revnet-core-v6](./revnet-core-v6) | Treasury-backed network primitive with staged economics, cross-chain extensions, loans, and hidden tokens. |
+| [croptop-core-v6](./croptop-core-v6) | Publishing and NFT-content system built on Juicebox projects and 721 hooks. |
+| [banny-retail-v6](./banny-retail-v6) | On-chain avatar and outfit system built on the 721 hook stack. |
 | [defifa](./defifa) | On-chain prediction game system with NFT pieces, scorecards, and pot-weighted settlement. |
+
+## How To Pick The Right Repo
+
+Start from the question you are trying to answer:
+
+- payment accounting, redemption math, rulesets, permissions, splits, terminals: `nana-core-v6`
+- NFT minting tiers, category pricing, pack or collection behavior: `nana-721-hook-v6`, then the product repo
+- buybacks, AMM-vs-protocol routing, Uniswap V4 sell paths: `nana-buyback-hook-v6` and `univ4-router-v6`
+- terminal token conversion before payment: `nana-router-terminal-v6`
+- cross-chain token movement or reclaim forwarding: `nana-suckers-v6`
+- omnichain launch wiring: `nana-omnichain-deployers-v6`
+- named handles or ENS-backed naming: `project-handles-v6`
+- reward distribution detached from the main terminal path: `nana-distributor-v6`
+- ecosystem deployment sequencing: `deploy-all-v6`
+
+## Common Reading Mistakes
+
+These mistakes waste the most time in V6:
+
+- treating a deployer repo as if it owned runtime accounting truth
+- treating a router repo as if it owned downstream accounting after settlement
+- reading an application repo before understanding the shared hook or core surface it composes
+- assuming every top-level directory is an active protocol package, instead of separating active repos from `archive/`, templates, and audit artifacts
+- tracing only preview logic or only execution logic when the bug sits in the mismatch between the two
+
+Ask of each repo:
+
+- does it own state
+- does it execute settlement logic
+- does it route into another repo
+- does it package deployment or product behavior on top of shared primitives
+
+## Workspace Conventions
+
+This workspace behaves more like a coordinated multi-repo development environment than a monorepo:
+
+- each major package directory is its own git repo
+- many repos depend on sibling packages through npm metadata or local `file:` references
+- most repos use Foundry for builds and tests
+- many repos ship Sphinx deployment scripts for deterministic multi-chain deployment
+- README files explain package boundaries, while repo-local `SKILLS.md` files are the faster operational map
+
+Common patterns you will see repeatedly:
+
+- `src/` owns contracts and interfaces
+- `script/Deploy.s.sol` is usually the primary deployment entrypoint when a repo has deploy scripts
+- `test/` tends to include adversarial, regression, fork, and invariant coverage rather than only happy-path tests
+- `references/` and local architecture docs often explain intended composition or deployment envelopes
 
 ## Working Locally
 
-All repos use Foundry. Most published packages also ship npm metadata and Sphinx deployment scripts.
+There is no single command that fully bootstraps every repo in the workspace. The practical workflow is:
+
+1. enter the repo you care about
+2. install its npm dependencies if it has a `package.json`
+3. build and test that repo in isolation
+4. only move to `deploy-all-v6` when you need chain-aware ecosystem deployment context
+
+Typical package workflow:
 
 ```bash
-git clone --recursive https://github.com/Bananapus/version-6.git
-cd version-6
-
 cd nana-core-v6
 npm install
 forge build
 forge test
 ```
 
-General expectations across the workspace:
+General environment expectations across the workspace:
 
 - Node `>=20` for npm-managed repos
-- Solidity `0.8.28` or repo-specific pinned versions noted in local `foundry.toml`
-- Cancun EVM where transient storage or newer opcode behavior is required
-- sibling repos available locally when using `file:` dependencies instead of published npm packages
+- Foundry installed locally
+- Solidity versions pinned per repo in `foundry.toml`
+- Cancun-compatible execution environment where transient storage or newer opcode behavior is required
+- sibling repos present locally when a package uses local `file:` dependencies instead of published npm artifacts
 
-The practical workflow is usually:
+## For AI Agents
 
-1. start in the repo that owns the invariant you care about
-2. move outward into the hook, deployer, or application that composes it
-3. use `deploy-all-v6` only when you need ecosystem-level deployment or rehearsal context
+When summarizing this workspace or answering codebase questions:
 
-## Reading Strategy
-
-- Use the workspace-level [SKILLS.md](./SKILLS.md) for cross-repo navigation.
-- Use each repo-local `SKILLS.md` for the shortest path to the right source files, scripts, and tests.
-- Treat README files as package overviews and `SKILLS.md` files as operational runbooks.
-
-In practice:
-
-- debugging accounting or permissions starts in `nana-core-v6`
-- debugging NFT issuance starts in `nana-721-hook-v6` and then the application repo that supplies metadata or extra behavior
-- debugging cross-chain behavior starts in `nana-suckers-v6` and then the deployer that wrapped it
-- debugging route selection starts in `nana-router-terminal-v6` or `nana-buyback-hook-v6`, depending on whether the path is terminal-side or hook-side
+- treat [`nana-core-v6`](./nana-core-v6) as the main accounting and settlement surface for the workspace
+- treat deployer repos as packaging surfaces unless the question is specifically about launch policy or retained admin wiring
+- treat router repos as path-selection or token-conversion surfaces unless they explicitly own post-route state
+- distinguish active top-level repos from `archive/`, `documentation_templates/`, audit snapshots, and third-party `lib/` code
+- prefer repo-local README, `ARCHITECTURE.md`, `RISKS.md`, and `AUDIT_INSTRUCTIONS.md` together rather than any one file in isolation
+- if tracing a live project, identify the exact terminal, hook, deployer, and product repo in the call path before making claims
 
 If you are tracing a live payment path, the usual order is:
 
-1. terminal selection in `nana-core-v6` or `nana-router-terminal-v6`
-2. ruleset lookup in `nana-core-v6`
+1. terminal resolution in `nana-core-v6` or `nana-router-terminal-v6`
+2. ruleset and fund-access lookup in `nana-core-v6`
 3. hook execution in the attached hook repo
 4. post-settlement side effects in the deployer or application repo that composed the project
 
-## Shared Conventions
+## What This README Does Not Cover
 
-- `script/Deploy.s.sol` is the canonical deployment entrypoint in most repos
-- Sphinx is used for deterministic multi-chain deployments where relevant
-- tests intentionally include adversarial, fork, regression, and invariant coverage rather than only happy paths
-- README files are scoped to the root package only; nested `lib/` READMEs belong to third-party dependencies
-
-Two common mistakes when reading the workspace:
-
-- assuming a deployer repo is the source of runtime truth. Usually it is only packaging and wiring.
-- assuming a routing repo owns downstream accounting. Usually it does not.
-
-Ask of every repo: does it own state, execution, wiring, or metadata? Most confusion in V6 comes from mixing those roles up.
+This file is a workspace map. It does not restate every repo's invariants, risks, or deployment assumptions. Once you know which package owns the path you care about, switch to that repo's local README and architecture docs.
 
 ## External Dependencies
 
-The ecosystem integrates with:
+The ecosystem frequently integrates with:
 
 - OpenZeppelin
 - PRBMath

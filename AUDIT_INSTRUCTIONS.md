@@ -1,42 +1,19 @@
 # Audit Instructions
 
-Juicebox V6 is a modular treasury protocol ecosystem. Audit it as one composed system, not as isolated repos.
+`v6/evm` is a modular Ethereum protocol workspace. Audit it as one composed system, not as isolated repositories.
 
-Start here:
-- `ARCHITECTURE.md`: cross-repo call graph and data flow
-- `RISKS.md`: shared trust assumptions and ecosystem-wide failure modes
-- `USER_JOURNEYS.md`: user-facing flows worth replaying end to end
-
-## Objective
+## Audit Objective
 
 Find issues that:
-- lose, lock, misroute, or misaccount funds
-- mint, burn, bridge, or redeem more value than intended
-- grant permissions or ownership beyond the documented model
-- break stage, ruleset, or cross-chain invariants
-- create economically exploitable route-selection, fee, or rounding errors
+- lose, lock, misroute, or misaccount value across repo boundaries
+- mint, burn, bridge, reclaim, or redeem more value than intended
+- grant permissions, ownership, or registry trust beyond the documented model
+- break ruleset, phase, routing, or cross-chain invariants only when multiple repos are composed
+- make otherwise-correct contracts unsafe because deployment wiring or singleton assumptions are wrong
 
-This codebase is unusually composition-heavy. A large share of the real attack surface lives in:
-- data hook output feeding terminal accounting
-- terminal fulfillment calling pay, cash-out, and split hooks
-- deployers that proxy privileges into other repos
-- shared singletons used by many projects
-- deployment wiring that makes otherwise-safe contracts unsafe in production
+## Scope
 
-## First Pass
-
-If you are seeing the ecosystem for the first time, spend the first pass in this order:
-- read `ARCHITECTURE.md` once end to end
-- audit `nana-core-v6` entrypoints and extension points
-- audit one representative hook composition chain:
-  `nana-core-v6` -> `nana-buyback-hook-v6` -> `univ4-router-v6`
-- audit one representative cross-chain chain:
-  `nana-core-v6` -> `nana-suckers-v6` -> deployer or registry trust
-- audit `deploy-all-v6` only after you know what the runtime contracts are expecting to be true
-
-## Canonical Scope
-
-Primary runtime and deployment scope:
+Primary in-workspace protocol scope:
 - `nana-core-v6`
 - `nana-721-hook-v6`
 - `nana-suckers-v6`
@@ -47,186 +24,127 @@ Primary runtime and deployment scope:
 - `univ4-router-v6`
 - `univ4-lp-split-hook-v6`
 - `croptop-core-v6`
-- `defifa-collection-deployer-v6`
+- `defifa`
 - `banny-retail-v6`
 - `nana-ownable-v6`
 - `nana-address-registry-v6`
+- `nana-distributor-v6`
 - `nana-fee-project-deployer-v6`
-- `nana-privacy-v6`
 - `nana-permission-ids-v6`
+- `project-handles-v6`
 - `deploy-all-v6`
 
 Also in scope:
-- root and per-repo deployment scripts
+- root architecture and risk docs in this repo
+- repo-local deployment scripts and registry wiring
 - constructor and initializer parameters
-- permission grants, owner transfers, registry writes, and deterministic deployment salts
-- interactions with Chainlink feeds, Uniswap V4, Permit2, and bridge messengers
+- cross-repo assumptions about project IDs, singletons, registries, and privileged helpers
 
-Assume third-party dependency internals are correct unless Juicebox integration makes them unsafe.
+## Out Of Scope
 
-## System Model
+- re-auditing third-party dependency internals in `node_modules` or `lib/` unless Juicebox composition makes them unsafe
+- purely stylistic, naming, or comment-only issues
 
-At the center is `nana-core-v6`:
-- `JBMultiTerminal` holds funds
-- `JBTerminalStore` records accounting and surplus
-- `JBController` manages projects, rulesets, and token minting/burning
-- `JBRulesets`, `JBSplits`, `JBPrices`, `JBTokens`, and `JBPermissions` provide shared governance and accounting primitives
+## Start Here
 
-Everything else composes around those primitives:
-- NFT issuance and NFT cash-out: `nana-721-hook-v6`
-- swap-vs-mint routing: `nana-buyback-hook-v6` and `univ4-router-v6`
-- multi-asset routing into accepted project tokens: `nana-router-terminal-v6`
-- cross-chain project token movement: `nana-suckers-v6`
-- launchers and protocol compositions: `nana-omnichain-deployers-v6`, `revnet-core-v6`, `croptop-core-v6`, `defifa-collection-deployer-v6`
-- application-level surfaces: `banny-retail-v6`, `nana-privacy-v6`
-- deployment orchestration: `deploy-all-v6`
+1. `ARCHITECTURE.md`
+2. `RISKS.md`
+3. `nana-core-v6/AUDIT_INSTRUCTIONS.md`
+4. one routing chain: `nana-buyback-hook-v6` -> `univ4-router-v6`
+5. one cross-chain chain: `nana-suckers-v6` plus its deployer or registry assumptions
 
-## Highest-Value Invariants
+## Security Model
 
-These are the first properties to break if something is materially wrong:
+The ecosystem centers on `nana-core-v6`:
+- terminals hold funds and execute pay, payout, allowance, and cash-out flows
+- the store records accounting that downstream hooks often treat as economic truth
+- controllers, rulesets, prices, splits, and permissions define canonical project state
+
+The rest of the workspace composes around that core:
+- hooks alter minting, accounting inputs, or cash-out behavior
+- routers and swap-aware hooks compare external market execution against native protocol execution
+- bridge components move project-token value across chains
+- deployers, registries, and owner helpers create and preserve the runtime trust model
+- app-level repos like `defifa`, `croptop-core-v6`, `revnet-core-v6`, and `banny-retail-v6` turn shared primitives into higher-level products
+
+The main audit mindset here is composition:
+- one repo often treats another repo's preview, registry lookup, or hook output as authoritative
+- deployment-time wiring creates runtime trust assumptions
+- many high-severity bugs only appear when correct local logic is connected to an unsafe external assumption
+
+## Roles And Privileges
+
+| Role | Powers | How constrained |
+|------|--------|-----------------|
+| Project owner or operator | Configure project rulesets, hooks, terminals, and permissions | Must remain bounded by core permission checks and repo-local invariants |
+| Shared singleton or registry controller | Influence many projects through one contract or deployment surface | Must not retain broader authority than the ecosystem expects |
+| Deployer or owner helper | Launch projects, transfer ownership, or stand in for runtime authority | Must fully converge to the intended post-launch trust model |
+| Hook or router | Alter accounting, routing, or settlement decisions at runtime | Must not create value or invalidate core accounting assumptions |
+| Bridge peer or messenger | Install remote roots or move cross-chain value | Must be authenticated and replay-resistant per transport |
+
+## Integration Assumptions
+
+| Dependency | Assumption | What breaks if wrong |
+|------------|------------|----------------------|
+| `nana-core-v6` previews and accounting surfaces | Other repos can safely consume them as economic inputs | Hooks and routers choose the wrong path or scale the wrong amount |
+| Shared registries | Buyback, router, sucker, address, and owner registries identify the intended contracts only | Privileged paths widen across unrelated projects |
+| Deployment scripts | Constructor args, ownership transfers, and registry writes match runtime expectations | Safe code is deployed into an unsafe topology |
+| Cross-chain transports | Only authentic peers can update remote state | Bridged value can be spoofed, replayed, or stranded |
+| External pricing and market surfaces | Price feeds and AMM callbacks remain coherent enough for routing and settlement | Cross-currency and swap-aware logic misprices or misroutes funds |
+
+## Critical Invariants
 
 1. Terminal solvency
-`terminal token balance >= aggregate internal balance tracked for that terminal/token`, modulo held-fee mechanics and intentional in-flight behavior.
+Aggregate internal accounting for a terminal and token must remain reconcilable with actual redeemable balances.
 
 2. Project isolation
-One project must not be able to consume another project's balance, allowance, payout capacity, bridgeable value, or NFT state.
+One project must not consume another project's balance, allowance, bridgeable value, NFT state, or privileges.
 
-3. Ruleset correctness
-The active ruleset, its decay, hooks, tax rate, reserved rate, and accounting contexts must be the ones the protocol intends at the exact execution timestamp.
+3. Ruleset and phase correctness
+The active ruleset, lifecycle phase, and time-bound permissions must be the ones the protocol intends at execution time.
 
 4. Hook boundedness
-Data hooks may modify accounting inputs only within the intended model. Hook specifications must not create value, skip fees unexpectedly, or move funds without matching accounting.
+Hooks may alter accounting inputs or fulfillment order only within the documented model. They must not create value or skip fees unexpectedly.
 
 5. Fee correctness
-Protocol fees and repo-specific fees must either be paid, held, or explicitly redirected by documented fallback logic. They must not silently disappear.
+Protocol and repo-local fees must be paid, held, or intentionally redirected by documented fallback behavior. They must not silently disappear.
 
 6. Token accounting consistency
-Mint, burn, reserve, bridge, and reclaim paths must preserve intended supply and price relationships across ERC-20 credits, ERC-721 tiers, and bridged representations.
+ERC-20, ERC-721, reserve, routing, and bridged representations must preserve intended supply and reclaim relationships.
 
 7. Cross-chain conservation
-Prepare, send-root, receive-root, and claim paths must not enable replay, double claim, stranded balance creation, or source/destination divergence beyond documented emergency-hatch behavior.
+Prepare, root-send, root-receive, and claim flows must not allow replay, double claim, or unbacked destination value.
 
 8. Privilege containment
-Wildcard permissions, project ownership helpers, registries, and deployers must not let one compromised component escalate across unrelated projects.
+Wildcard permissions, registries, owner helpers, and deployers must not let one compromised component escalate across unrelated projects.
 
 9. Preview and execution coherence
-Any repo that treats a preview, estimate, or hook-returned spec as execution truth must receive values that remain valid once the terminal actually records and fulfills the action.
+Any repo that consumes a preview, estimate, or hook-produced spec as execution truth must remain safe when execution actually occurs.
 
-10. Singleton failure containment
-If a shared registry, oracle, or hook instance fails, dependent flows may degrade, but they must not mint unbacked value, bypass fees, or permanently desynchronize accounting.
+## Attack Surfaces
 
-## Concrete Audit Sequences
+- `nana-core-v6` settlement entrypoints consumed by downstream hooks
+- routing stacks that compare external market execution against native protocol execution
+- bridge prepare, root, claim, and emergency-exit paths
+- deployers and helpers that retain one privilege too many after launch
+- wildcard permissions, project-owner abstractions, and shared registries
+- chain-specific constants and singleton wiring in deployment orchestration
 
-If you only have time for a first serious pass, start with these sequences:
+Replay these ecosystem sequences:
+1. pay -> data hook override -> downstream hook callback -> immediate cash-out
+2. payout -> split hook -> downstream pay or terminal re-entry
+3. cross-currency pay or cash-out with stale or missing price context
+4. sucker prepare -> out-of-order root delivery -> claim or emergency exit
+5. deployer launch -> ownership transfer -> registry write -> privileged runtime callback
+6. swap-versus-mint or swap-versus-cash-out routing under adversarial liquidity
 
-1. Pay -> data hook override -> mint -> pay hook callback -> immediate cash-out
-Look for state that is already recorded in the store before downstream hooks can re-enter another path.
+## Accepted Risks Or Behaviors
 
-2. Payout -> split hook -> terminal re-entry or downstream pay
-Check whether payout limits are consumed before externally controlled code can create a value loop.
+- Some repos intentionally preserve liveness through conservative fallback behavior rather than failing closed on every external integration problem.
+- Composition is a first-class design goal, so bugs that only arise in multi-repo flows are the default audit target, not an edge case.
 
-3. Cross-currency pay or cash-out with stale or missing price context
-Follow value through `JBPrices`, surplus logic, hook normalization, and any repo that scales weight or reclaim from converted amounts.
+## Verification
 
-4. Sucker prepare -> root send -> out-of-order receive -> claim or emergency exit
-This is where conservation, replay protection, and nonce assumptions are most exposed.
-
-5. Deployer launch -> ownership transfer -> registry write -> privileged runtime callback
-Many bugs here are not “deployment only”; they become permanent runtime privilege mistakes.
-
-6. Swap-vs-mint or swap-vs-cashout routing under adversarial liquidity conditions
-The risky cases are not just bad spot quotes. They are stale TWAP, fallback branches, sign mistakes, and partial-fill leftovers.
-
-## Threat Model
-
-Assume adversaries can:
-- call public and external functions in adversarial order
-- front-run, back-run, sandwich, and replay cross-domain timing edges
-- exploit rounding, stale pricing, partial fills, and fallback branches
-- interact through malicious hooks, recipients, ERC-20s, ERC-721 receivers, or bridge peers
-- exploit privileged operators if a grant is broader than intended
-
-Do not assume:
-- a project owner is honest
-- a hook is well-behaved just because it is “owned”
-- a swap path is economically neutral
-- a deployment script will always run in one clean shot
-
-Explicit trust assumptions still matter:
-- external price feeds can stall or revert
-- cross-chain bridges are trusted only to the degree each repo documents
-- certain governance or operator roles are intentionally powerful
-
-## Priority Areas
-
-Order your effort roughly like this:
-
-1. `nana-core-v6`
-Terminal solvency, cash-out math, payout and allowance enforcement, fee processing, ruleset transition logic, migrations, and wildcard permission boundaries.
-
-2. Hook composition
-`nana-721-hook-v6`, `nana-buyback-hook-v6`, `univ4-router-v6`, `univ4-lp-split-hook-v6`, `nana-router-terminal-v6`, and deployer data hooks. Most subtle bugs appear when one repo's “preview” or “weight adjustment” logic is consumed by another repo as hard accounting truth.
-
-3. Cross-chain
-`nana-suckers-v6` and any deployer or owner helper that grants sucker privileges or fee exemptions.
-
-4. Autonomous compositions
-`revnet-core-v6`, `croptop-core-v6`, and `defifa-collection-deployer-v6`, where project-specific economics are built out of many shared primitives.
-
-5. Deployment correctness
-`deploy-all-v6` and per-repo `script/` entries. Wrong wiring, wrong singleton addresses, missing ownership transfers, and missing registry writes are production-critical findings.
-
-## Shared Ecosystem Hotspots
-
-These boundaries deserve explicit cross-repo review:
-- `JBTerminalStore` output consumed by downstream hooks as economic truth
-- `preview*` values consumed off-chain and then assumed on-chain by routering or hook logic
-- shared registries: buyback, router terminal, sucker registry, address registry
-- wildcard permissions and project-owner abstractions
-- cross-chain identity assumptions: project IDs, peer addresses, mapped tokens, bridge messengers
-- deployer-owned contracts that later act as runtime hooks or privileged operators
-
-## Repo-Specific Guidance
-
-Each repo root has its own `AUDIT_INSTRUCTIONS.md`. Use those files for:
-- exact scope in that repo
-- repo-local invariants
-- threat boundaries and intended privileges
-- hotspots tied to the current source tree
-
-If a repo-level instruction conflicts with this file, prefer the narrower repo-level statement for that repo and keep the ecosystem-level invariants in mind.
-
-## What Not To Spend Time On
-
-Low-value findings in this ecosystem:
-- purely theoretical gas grief that does not change reachability or solvency
-- admin centralization that is already an explicit design choice with no bypass
-- stale comments, naming issues, or style-only inconsistencies
-- test-only issues that do not affect runtime or deployment correctness
-
-High-value findings here usually need a concrete sequence:
-- who calls what
-- what state is already committed
-- which repo supplies the wrong assumption
-- where the value, permission, or invariant breaks
-
-## Finding Bar
-
-A strong ecosystem finding usually has at least one of these shapes:
-- the wrong amount is recorded in core accounting, then a downstream repo faithfully amplifies the error
-- a preview, estimate, or registry lookup is treated as authoritative when it is only advisory
-- a privileged deployer or helper finishes deployment with one capability too many
-- a cross-chain or cross-hook fallback path preserves liveness by sacrificing an invariant
-
-Weak findings here are usually ones that never survive composition into a concrete money, permission, or liveness break.
-
-## Reproduction Standard
-
-A strong finding should include:
-- exact contracts and entrypoints involved
-- minimal triggering sequence
-- why current tests do not already cover it, if applicable
-- concrete impact on funds, permissions, liveness, or economic guarantees
-- a Foundry proof when practical
-
-Prefer end-to-end reproductions for composition bugs. Many issues here look harmless in unit isolation and only become real when routed through terminals, hooks, deployers, or bridge peers.
+- read repo-local `AUDIT_INSTRUCTIONS.md` files for the precise scope and invariants of each component
+- use `ARCHITECTURE.md`, `RISKS.md`, and `USER_JOURNEYS.md` as the cross-repo map
+- run the repo-local verification commands from each in-scope repo when validating a concrete finding
