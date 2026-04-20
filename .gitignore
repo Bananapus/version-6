@@ -1,14 +1,20 @@
 # Audit materials
 .audit/
-.audit-findings-prev-*/
+.audit-findings-*/
 .audit-logs/
 AUDIT_FINDINGS*.md
+AUDIT_REPORT.md
 NEMESIS_SCOPE.md
+
+# Audit/CI scripts
+run-nemesis-all.sh
+run-nemesis-all-codex.sh
+run-pashov-all.sh
+run-pashov-all-codex.sh
 
 # Claude conveniences
 .claude/
 CLAUDE.md
-run-nemesis-all.sh
 
 # Logs
 nohup.out

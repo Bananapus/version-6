@@ -1,10 +1,11 @@
 # Audit Instructions
 
-`v6/evm` is a modular Ethereum protocol workspace. Audit it as one composed system, not as isolated repositories.
+`v6/evm` is a modular Ethereum protocol workspace. Audit it as one composed system, not as isolated repos.
 
 ## Audit Objective
 
 Find issues that:
+
 - lose, lock, misroute, or misaccount value across repo boundaries
 - mint, burn, bridge, reclaim, or redeem more value than intended
 - grant permissions, ownership, or registry trust beyond the documented model
@@ -14,6 +15,7 @@ Find issues that:
 ## Scope
 
 Primary in-workspace protocol scope:
+
 - `nana-core-v6`
 - `nana-721-hook-v6`
 - `nana-suckers-v6`
@@ -31,14 +33,27 @@ Primary in-workspace protocol scope:
 - `nana-distributor-v6`
 - `nana-fee-project-deployer-v6`
 - `nana-permission-ids-v6`
-- `project-handles-v6`
+- `nana-project-handles-v6`
 - `deploy-all-v6`
 
 Also in scope:
+
 - root architecture and risk docs in this repo
 - repo-local deployment scripts and registry wiring
 - constructor and initializer parameters
 - cross-repo assumptions about project IDs, singletons, registries, and privileged helpers
+
+## Gas Efficiency
+
+If you notice gas optimizations while reviewing, please flag them. Common areas of interest:
+
+- redundant storage reads that could be cached in memory
+- loops with avoidable external calls or storage writes per iteration
+- struct packing or storage layout improvements
+- calldata vs memory for read-only parameters
+- unchecked arithmetic where overflow is already bounded
+
+Gas findings are welcome alongside security findings — they don't need a separate pass.
 
 ## Out Of Scope
 
@@ -56,11 +71,13 @@ Also in scope:
 ## Security Model
 
 The ecosystem centers on `nana-core-v6`:
+
 - terminals hold funds and execute pay, payout, allowance, and cash-out flows
 - the store records accounting that downstream hooks often treat as economic truth
 - controllers, rulesets, prices, splits, and permissions define canonical project state
 
 The rest of the workspace composes around that core:
+
 - hooks alter minting, accounting inputs, or cash-out behavior
 - routers and swap-aware hooks compare external market execution against native protocol execution
 - bridge components move project-token value across chains
@@ -68,18 +85,19 @@ The rest of the workspace composes around that core:
 - app-level repos like `defifa`, `croptop-core-v6`, `revnet-core-v6`, and `banny-retail-v6` turn shared primitives into higher-level products
 
 The main audit mindset here is composition:
+
 - one repo often treats another repo's preview, registry lookup, or hook output as authoritative
 - deployment-time wiring creates runtime trust assumptions
-- many high-severity bugs only appear when correct local logic is connected to an unsafe external assumption
+- many high-severity bugs appear only when correct local logic is connected to a bad outside assumption
 
 ## Roles And Privileges
 
 | Role | Powers | How constrained |
 |------|--------|-----------------|
-| Project owner or operator | Configure project rulesets, hooks, terminals, and permissions | Must remain bounded by core permission checks and repo-local invariants |
+| Project owner or operator | Configure project rulesets, hooks, terminals, and permissions | Must stay inside core permission checks and repo-local invariants |
 | Shared singleton or registry controller | Influence many projects through one contract or deployment surface | Must not retain broader authority than the ecosystem expects |
-| Deployer or owner helper | Launch projects, transfer ownership, or stand in for runtime authority | Must fully converge to the intended post-launch trust model |
-| Hook or router | Alter accounting, routing, or settlement decisions at runtime | Must not create value or invalidate core accounting assumptions |
+| Deployer or owner helper | Launch projects, transfer ownership, or stand in for runtime authority | Must converge to the intended post-launch trust model |
+| Hook or router | Alter accounting, routing, or settlement decisions at runtime | Must not create value or break core accounting assumptions |
 | Bridge peer or messenger | Install remote roots or move cross-chain value | Must be authenticated and replay-resistant per transport |
 
 ## Integration Assumptions
@@ -90,36 +108,36 @@ The main audit mindset here is composition:
 | Shared registries | Buyback, router, sucker, address, and owner registries identify the intended contracts only | Privileged paths widen across unrelated projects |
 | Deployment scripts | Constructor args, ownership transfers, and registry writes match runtime expectations | Safe code is deployed into an unsafe topology |
 | Cross-chain transports | Only authentic peers can update remote state | Bridged value can be spoofed, replayed, or stranded |
-| External pricing and market surfaces | Price feeds and AMM callbacks remain coherent enough for routing and settlement | Cross-currency and swap-aware logic misprices or misroutes funds |
+| External pricing and market surfaces | Price feeds and AMM callbacks stay coherent enough for routing and settlement | Cross-currency and swap-aware logic misprices or misroutes funds |
 
 ## Critical Invariants
 
 1. Terminal solvency
-Aggregate internal accounting for a terminal and token must remain reconcilable with actual redeemable balances.
+   Aggregate internal accounting for a terminal and token must stay reconcilable with actual redeemable balances.
 
 2. Project isolation
-One project must not consume another project's balance, allowance, bridgeable value, NFT state, or privileges.
+   One project must not consume another project's balance, allowance, bridgeable value, NFT state, or privileges.
 
 3. Ruleset and phase correctness
-The active ruleset, lifecycle phase, and time-bound permissions must be the ones the protocol intends at execution time.
+   The active ruleset, lifecycle phase, and time-bound permissions must be the ones the protocol intends at execution time.
 
 4. Hook boundedness
-Hooks may alter accounting inputs or fulfillment order only within the documented model. They must not create value or skip fees unexpectedly.
+   Hooks may change accounting inputs or fulfillment order only within the documented model. They must not create value or skip fees unexpectedly.
 
 5. Fee correctness
-Protocol and repo-local fees must be paid, held, or intentionally redirected by documented fallback behavior. They must not silently disappear.
+   Protocol and repo-local fees must be paid, held, or redirected only by documented fallback behavior. They must not silently disappear.
 
 6. Token accounting consistency
-ERC-20, ERC-721, reserve, routing, and bridged representations must preserve intended supply and reclaim relationships.
+   ERC-20, ERC-721, reserve, routing, and bridged representations must preserve intended supply and reclaim relationships.
 
 7. Cross-chain conservation
-Prepare, root-send, root-receive, and claim flows must not allow replay, double claim, or unbacked destination value.
+   Prepare, root-send, root-receive, and claim flows must not allow replay, double claim, or unbacked destination value.
 
 8. Privilege containment
-Wildcard permissions, registries, owner helpers, and deployers must not let one compromised component escalate across unrelated projects.
+   Wildcard permissions, registries, owner helpers, and deployers must not let one compromised component escalate across unrelated projects.
 
 9. Preview and execution coherence
-Any repo that consumes a preview, estimate, or hook-produced spec as execution truth must remain safe when execution actually occurs.
+   Any repo that consumes a preview, estimate, or hook-produced spec as execution truth must remain safe when execution actually happens.
 
 ## Attack Surfaces
 
@@ -131,6 +149,7 @@ Any repo that consumes a preview, estimate, or hook-produced spec as execution t
 - chain-specific constants and singleton wiring in deployment orchestration
 
 Replay these ecosystem sequences:
+
 1. pay -> data hook override -> downstream hook callback -> immediate cash-out
 2. payout -> split hook -> downstream pay or terminal re-entry
 3. cross-currency pay or cash-out with stale or missing price context
@@ -140,11 +159,11 @@ Replay these ecosystem sequences:
 
 ## Accepted Risks Or Behaviors
 
-- Some repos intentionally preserve liveness through conservative fallback behavior rather than failing closed on every external integration problem.
-- Composition is a first-class design goal, so bugs that only arise in multi-repo flows are the default audit target, not an edge case.
+- Some repos intentionally preserve liveness through conservative fallback behavior instead of failing closed on every external integration problem.
+- Composition is a first-class design goal, so bugs that appear only in multi-repo flows are the default audit target, not an edge case.
 
 ## Verification
 
-- read repo-local `AUDIT_INSTRUCTIONS.md` files for the precise scope and invariants of each component
+- read repo-local `AUDIT_INSTRUCTIONS.md` files for each component's exact scope and invariants
 - use `ARCHITECTURE.md`, `RISKS.md`, and `USER_JOURNEYS.md` as the cross-repo map
-- run the repo-local verification commands from each in-scope repo when validating a concrete finding
+- run the repo-local verification commands when validating a concrete finding
