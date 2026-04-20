@@ -20,17 +20,21 @@ Use this file when you need the fastest path from a user-facing flow or debuggin
 | Held fee return | `JBMultiTerminal.processHeldFeesOf()` | Sequential from `_nextHeldFeeIndexOf` |
 | Preview payment | `JBTerminalStore.previewPayFrom()` | Simulates payment (view). Returns token count + hook specs |
 | Preview cash out | `JBTerminalStore.previewCashOutFrom()` | Simulates cash out (view). Returns reclaim amount, tax rate, hook specs |
+| Router preview | `JBRouterTerminal._previewBestPayRoute()` | Normalizes candidate routes, buyback-hook hints, and fallback routing before execution |
 | Data hook (pay) | `JBTerminalStore.recordPaymentFrom()` | Hook overrides weight + specifies pay hooks |
 | Data hook (cashout) | `JBTerminalStore.recordCashOutFor()` | Hook overrides tax rate, count, supply |
 | Custom hook | Implement `IJBPayHook` or `IJBCashOutHook` | For economics override, implement `IJBRulesetDataHook`. See `JB721TiersHook` (pay+cashout) or `JBBuybackHook` (data hook). Set per-ruleset in metadata. |
 | Deploy a project | `JBController.launchProjectFor()` | For revnets: `REVDeployer.deployFor()`. For Croptop: `CTDeployer`. For Defifa: `DefifaDeployer.launchGameWith()`. |
 | NFT tier mint | `JB721TiersHookStore.recordMint()` | Tier selection by price, supply cap check |
 | Buyback decision | `JBBuybackHook._getQuote()` | TWAP oracle query, mint vs swap |
+| Router cash-out recursion | `JBRouterTerminal._previewCashOutLoop()` / `_cashOutLoopOf()` | Iterates project-token cashouts until a terminal-accepted asset is found or routing continues |
+| V4 hook routing | `JBUniswapV4Hook._beforeSwap()` | Chooses JB vs V4 path, subject to preview availability and signed-delta limits |
 | Loan creation | `REVLoans.borrowFrom()` | Collateral lock, bonding curve valuation. Supports operator delegation via `holder` param (OPEN_LOAN permission). |
 | Hide tokens | `REVHiddenTokens.hideTokensOf()` | Burns tokens, tracks hidden balance. Reduces totalSupply, increases cash-out value for remaining holders. |
 | Reveal tokens | `REVHiddenTokens.revealTokensOf()` | Re-mints previously hidden tokens to beneficiary. |
 | Cross-chain prepare | `JBSucker.prepare()` | Cash out + insert into outbox merkle tree |
 | Cross-chain claim | `JBSucker.claim()` | Verify merkle proof + mint/transfer |
+| Cross-chain snapshot/root send | `JBSucker.toRemote()` / `_sendRoot()` | Drains outbox into a snapshot message and advances claim safety boundaries |
 | LP pool deploy | `JBUniswapV4LPSplitHook.deployPool()` | Concentrated liquidity from accumulated tokens |
 | Defifa game launch | `DefifaDeployer.launchGameWith()` | Creates project + queues phase rulesets |
 | Defifa scorecard | `DefifaGovernor.submitScorecardFor()` | Allocates `TOTAL_CASHOUT_WEIGHT` (1e18) across tiers |
@@ -71,6 +75,7 @@ All paths in `nana-core-v6/src/` unless noted otherwise.
 | `RulesetsAlreadyLaunched` | JBController | Can't launch twice |
 | `WeightCacheRequired` | JBRulesets | >20k cycles without cache update |
 | `NoopHookSpecHasAmount` | JBTerminalStore | Noop hook spec has non-zero amount (noop specs are informational-only) |
+| `Oracle_TargetPredatesOldestObservation` | UniV4 Oracle | Requested TWAP window predates retained oracle history |
 | `LeafAlreadyExecuted` | JBSucker | Cross-chain claim already processed |
 | `NothingToClaim` | DefifaHook | Cash out yields no ETH and no fee tokens (e.g., 0-weight tier during COMPLETE phase) |
 

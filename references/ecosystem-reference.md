@@ -118,6 +118,12 @@ Use this file after the workspace-level `SKILLS.md` has already routed you to th
 20. **Revnet loans beat cash-outs above ~39% `cashOutTaxRate`** — below ~39%, cash-out is more capital-efficient (CryptoEconLab finding)
 21. **`NATIVE_TOKEN` represents a different token on each chain.** `NATIVE_TOKEN` (`0x000000000000000000000000000000000000EEEe`) is the token received via `msg.value` — ETH on Ethereum/Base/Optimism/Arbitrum, CELO on Celo, etc. Its currency is `uint32(uint160(NATIVE_TOKEN))` = 61166. A `JBMatchingPriceFeed` (returns 1:1) is deployed for `ETH:NATIVE_TOKEN` on ETH-native chains so that `baseCurrency=ETH` resolves correctly to the native token. On non-ETH-native chains, a different price feed would be needed.
 22. **Noop hook specifications** are informational-only — `noop = true` + `amount != 0` reverts with `JBTerminalStore_NoopHookSpecHasAmount`. Data hooks (like the buyback hook) use noop specs to return routing diagnostics to preview clients without triggering a hook callback.
+23. **721 pending reserves affect live economics before mint.** They are part of cash-out denominators and supply protection, not deferred mint bookkeeping.
+24. **721 discounted mints can still carry full cash-out weight.** Discounted entry price and redemption weight are intentionally decoupled.
+25. **Router-terminal refunds and receipt checks are protocol behavior.** Partial-fill leftovers, baseline snapshots, and final terminal-facing receipt enforcement are not implementation garnish.
+26. **UniV4 routing has a signed-delta ceiling.** Even when Juicebox would return more output, V4 settlement cannot exceed its `int128` delta domain.
+27. **Sucker token mappings are economically one-way after activity starts.** They can be disabled, but not safely remapped to a new remote asset.
+28. **Hidden revnet tokens reduce visible supply.** They are a supply-management primitive that changes redemption and loan-relative economics until revealed.
 
 ## Permission IDs
 
