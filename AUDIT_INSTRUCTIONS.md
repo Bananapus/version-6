@@ -4,11 +4,21 @@
 
 ## Getting Started
 
-Clone this repo recursively, pick a depth level, copy the corresponding prompt into your AI, and submit the report it produces.
+Paste this into any AI with code execution (Claude Code, Cursor, Codex, etc.):
+
+```
+Clone https://github.com/Bananapus/version-6 recursively, read AUDIT_INSTRUCTIONS.md, then walk me through my options for auditing this codebase. Ask me how deep I want to go, which subsystem interests me, and whether I have any specialization to add — then start.
+```
+
+That's it. The AI will clone the repo, read this file, and guide you from there.
+
+If your AI doesn't have code execution, clone manually and point it at the repo:
 
 ```bash
 git clone --recursive https://github.com/Bananapus/version-6
 ```
+
+Then pick a depth level below and copy the corresponding prompt.
 
 ### Quick scan (~30 min AI time)
 
