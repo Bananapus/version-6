@@ -84,7 +84,7 @@ If the goal is fast orientation, use this order:
 2. [`nana-permission-ids-v6`](./nana-permission-ids-v6), [`nana-ownable-v6`](./nana-ownable-v6), [`nana-address-registry-v6`](./nana-address-registry-v6)
 3. [`nana-721-hook-v6`](./nana-721-hook-v6), [`nana-buyback-hook-v6`](./nana-buyback-hook-v6), [`nana-router-terminal-v6`](./nana-router-terminal-v6), [`univ4-router-v6`](./univ4-router-v6), [`univ4-lp-split-hook-v6`](./univ4-lp-split-hook-v6)
 4. [`nana-suckers-v6`](./nana-suckers-v6), [`nana-omnichain-deployers-v6`](./nana-omnichain-deployers-v6)
-5. [`nana-distributor-v6`](./nana-distributor-v6), [`project-handles-v6`](./project-handles-v6), [`nana-fee-project-deployer-v6`](./nana-fee-project-deployer-v6), [`deploy-all-v6`](./deploy-all-v6)
+5. [`nana-distributor-v6`](./nana-distributor-v6), [`nana-project-handles-v6`](./nana-project-handles-v6), [`nana-fee-project-deployer-v6`](./nana-fee-project-deployer-v6), [`deploy-all-v6`](./deploy-all-v6)
 6. [`revnet-core-v6`](./revnet-core-v6), [`croptop-core-v6`](./croptop-core-v6), [`banny-retail-v6`](./banny-retail-v6), [`defifa`](./defifa)
 
 If the goal is a live-path audit, start here instead:
@@ -105,7 +105,7 @@ Start from the question you are trying to answer:
 - terminal token conversion before payment: `nana-router-terminal-v6`
 - cross-chain token movement: `nana-suckers-v6`
 - omnichain launch wiring: `nana-omnichain-deployers-v6`
-- handles and naming: `project-handles-v6`
+- handles and naming: `nana-project-handles-v6`
 - reward distribution outside the main terminal path: `nana-distributor-v6`
 - deployment sequencing: `deploy-all-v6`
 

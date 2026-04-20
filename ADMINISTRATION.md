@@ -33,7 +33,7 @@ Read the stack in this order:
 4. Project-local extension repos for per-project or per-hook authority:
    `nana-721-hook-v6`, `nana-omnichain-deployers-v6`, `univ4-lp-split-hook-v6`, `croptop-core-v6`, `revnet-core-v6`, `banny-retail-v6`, `defifa`.
 5. Adminless or primitive repos for boundaries and source-level assumptions:
-   `nana-address-registry-v6`, `project-handles-v6`, `univ4-router-v6`, `nana-permission-ids-v6`, `nana-ownable-v6`, `nana-distributor-v6`.
+   `nana-address-registry-v6`, `nana-project-handles-v6`, `univ4-router-v6`, `nana-permission-ids-v6`, `nana-ownable-v6`, `nana-distributor-v6`.
 
 ## Repo Index
 
@@ -55,7 +55,7 @@ Read the stack in this order:
 | `nana-ownable-v6` | Ownership-resolution primitive used elsewhere | Primitive only; authority depends on inheritor | [nana-ownable-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-ownable-v6/ADMINISTRATION.md) |
 | `nana-permission-ids-v6` | Shared permission namespace | Source-level coordination only | [nana-permission-ids-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-permission-ids-v6/ADMINISTRATION.md) |
 | `nana-address-registry-v6` | Provenance registry | Adminless and permissionless | [nana-address-registry-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-address-registry-v6/ADMINISTRATION.md) |
-| `project-handles-v6` | Offchain trust-bound handle registry | Adminless and permissionless | [project-handles-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/project-handles-v6/ADMINISTRATION.md) |
+| `nana-project-handles-v6` | Offchain trust-bound handle registry | Adminless and permissionless | [nana-project-handles-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-project-handles-v6/ADMINISTRATION.md) |
 | `nana-distributor-v6` | Permissionless vesting and distribution primitive | Adminless except caller validation on some paths | [nana-distributor-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-distributor-v6/ADMINISTRATION.md) |
 | `univ4-router-v6` | Uniswap V4 hook with fixed post-deploy behavior | Adminless after deployment | [univ4-router-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/ADMINISTRATION.md) |
 

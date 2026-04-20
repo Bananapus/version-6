@@ -33,7 +33,7 @@ Primary in-workspace protocol scope:
 - `nana-distributor-v6`
 - `nana-fee-project-deployer-v6`
 - `nana-permission-ids-v6`
-- `project-handles-v6`
+- `nana-project-handles-v6`
 - `deploy-all-v6`
 
 Also in scope:

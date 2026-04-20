@@ -22,7 +22,7 @@
 | V4 LP accumulation, burn-and-manage lifecycle, fee claims, or rebalancing | [`univ4-lp-split-hook-v6/SKILLS.md`](./univ4-lp-split-hook-v6/SKILLS.md) |
 | V4 swap routing, observation history, or router-hook deployment flags | [`univ4-router-v6/SKILLS.md`](./univ4-router-v6/SKILLS.md) |
 | App-layer publishing, game, resolver, or NFT presentation behavior | [`croptop-core-v6/SKILLS.md`](./croptop-core-v6/SKILLS.md), [`defifa/SKILLS.md`](./defifa/SKILLS.md), [`banny-retail-v6/SKILLS.md`](./banny-retail-v6/SKILLS.md) |
-| Ownership helpers, address provenance, ENS handles, or canonical permission constants | [`nana-ownable-v6/SKILLS.md`](./nana-ownable-v6/SKILLS.md), [`nana-address-registry-v6/SKILLS.md`](./nana-address-registry-v6/SKILLS.md), [`project-handles-v6/SKILLS.md`](./project-handles-v6/SKILLS.md), [`nana-permission-ids-v6/SKILLS.md`](./nana-permission-ids-v6/SKILLS.md) |
+| Ownership helpers, address provenance, ENS handles, or canonical permission constants | [`nana-ownable-v6/SKILLS.md`](./nana-ownable-v6/SKILLS.md), [`nana-address-registry-v6/SKILLS.md`](./nana-address-registry-v6/SKILLS.md), [`nana-project-handles-v6/SKILLS.md`](./nana-project-handles-v6/SKILLS.md), [`nana-permission-ids-v6/SKILLS.md`](./nana-permission-ids-v6/SKILLS.md) |
 
 ## How To Triage
 
@@ -71,7 +71,7 @@ Useful defaults:
 | Core extensions | `nana-721-hook-v6`, `nana-buyback-hook-v6`, `nana-router-terminal-v6`, `nana-distributor-v6`, `nana-suckers-v6` | Specialized runtime behavior built on core entrypoints |
 | Protocol products | `revnet-core-v6`, `croptop-core-v6`, `defifa`, `banny-retail-v6` | Opinionated systems built from the core and extension stack |
 | Deployment wrappers | `nana-omnichain-deployers-v6`, `nana-fee-project-deployer-v6`, `deploy-all-v6` | Launch-time composition, orchestration, resume flows, and deployment shape |
-| Shared utilities | `nana-ownable-v6`, `nana-address-registry-v6`, `project-handles-v6`, `nana-permission-ids-v6` | Ownership, provenance, handles, and canonical constants |
+| Shared utilities | `nana-ownable-v6`, `nana-address-registry-v6`, `nana-project-handles-v6`, `nana-permission-ids-v6` | Ownership, provenance, handles, and canonical constants |
 | Uniswap V4 integration | `univ4-lp-split-hook-v6`, `univ4-router-v6` | V4 LP management, hook-aware swap routing, and oracle state |
 
 ## Repo Boundaries

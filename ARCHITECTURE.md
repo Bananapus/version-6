@@ -20,7 +20,7 @@ This document covers the active EVM repos in `/v6/evm`:
 - `nana-suckers-v6`
 - `nana-omnichain-deployers-v6`
 - `nana-distributor-v6`
-- `project-handles-v6`
+- `nana-project-handles-v6`
 - `univ4-router-v6`
 - `univ4-lp-split-hook-v6`
 - `revnet-core-v6`
@@ -43,7 +43,7 @@ Foundation primitives
   -> nana-permission-ids-v6
   -> nana-ownable-v6
   -> nana-address-registry-v6
-  -> project-handles-v6
+  -> nana-project-handles-v6
 
 Extension / routing / interoperability layer
   -> nana-721-hook-v6
@@ -147,13 +147,13 @@ Key point:
 - `nana-router-terminal-v6` is terminal-shaped glue, not a ledger.
 - `nana-buyback-hook-v6` is a route selector and settlement wrapper, not treasury truth.
 - `nana-omnichain-deployers-v6` and some product deployers are both launch wrappers and live runtime hooks.
-- `nana-address-registry-v6`, `project-handles-v6`, and `nana-ownable-v6` are infrastructure pieces, not product policy layers.
+- `nana-address-registry-v6`, `nana-project-handles-v6`, and `nana-ownable-v6` are infrastructure pieces, not product policy layers.
 
 ### External Dependencies
 
 - Uniswap V4 state and hook entrypoints come from `univ4-router-v6` and Uniswap.
 - Cross-chain delivery assumptions come from `nana-suckers-v6` plus bridge infrastructure.
-- ENS data and resolvers are upstream dependencies for `project-handles-v6`.
+- ENS data and resolvers are upstream dependencies for `nana-project-handles-v6`.
 - Some ingress and accounting paths tolerate nonstandard ERC-20 behavior, but not all paths do.
 
 ## Ecosystem Invariants
@@ -190,7 +190,7 @@ If a bug crosses one of these seams, assume the blast radius may be larger than 
 | `nana-permission-ids-v6` | Shared permission constants |
 | `nana-ownable-v6` | Ownership adapter that can follow project NFTs and JB permissions |
 | `nana-address-registry-v6` | On-chain deployer provenance registry |
-| `project-handles-v6` | Permissionless ENS handle verification |
+| `nana-project-handles-v6` | Permissionless ENS handle verification |
 | `nana-721-hook-v6` | Tiered NFT issuance, reserves, credits, and NFT-aware cash-out shaping |
 | `nana-buyback-hook-v6` | Best-execution mint-or-swap and cash-out-or-sell routing |
 | `nana-router-terminal-v6` | Accept-any-token payment router into downstream terminals |

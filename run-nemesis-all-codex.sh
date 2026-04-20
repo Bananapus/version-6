@@ -1,6 +1,6 @@
 #!/bin/bash
 # Nemesis Audit (Codex) — Automated overnight run across all JB V6 repos
-# Usage: ./run-nemesis-all-codex.sh
+# Usage: ./run-nemesis-all-codex.sh [repo-name ...]
 # Logs: .audit-logs/<repo>-codex-nemesis-<timestamp>.log
 # Monitor: tail -f .audit-logs/codex-summary-*.log
 #
@@ -12,6 +12,7 @@ set -euo pipefail
 
 BASE="/Users/jango/Documents/jb/v6/evm"
 LOG_DIR="$BASE/.audit-logs"
+PER_REPO_TIMEOUT_SECONDS="${PER_REPO_TIMEOUT_SECONDS:-2700}"
 mkdir -p "$LOG_DIR"
 
 # All repos in priority order (from NEMESIS_SCOPE.md)
@@ -24,16 +25,42 @@ REPOS=(
   "univ4-router-v6"
   "nana-buyback-hook-v6"
   "nana-suckers-v6"
-  "defifa-collection-deployer-v6"
+  "defifa"
   "croptop-core-v6"
   "banny-retail-v6"
   "nana-omnichain-deployers-v6"
   "nana-ownable-v6"
   "nana-address-registry-v6"
+  "nana-project-handles-v6"
   "nana-permission-ids-v6"
   "nana-fee-project-deployer-v6"
+  "nana-distributor-v6"
   "deploy-all-v6"
 )
+
+if [ "$#" -gt 0 ]; then
+  REQUESTED_REPOS=("$@")
+  FILTERED_REPOS=()
+
+  for requested_repo in "${REQUESTED_REPOS[@]}"; do
+    found=false
+    for repo in "${REPOS[@]}"; do
+      if [ "$repo" = "$requested_repo" ]; then
+        FILTERED_REPOS+=("$requested_repo")
+        found=true
+        break
+      fi
+    done
+
+    if [ "$found" = false ]; then
+      echo "Unknown repo: $requested_repo" >&2
+      echo "Allowed repos: ${REPOS[*]}" >&2
+      exit 1
+    fi
+  done
+
+  REPOS=("${FILTERED_REPOS[@]}")
+fi
 
 # ──────────────────────────────────────────────────────────────────────
 # npm package name → repo directory mapping (bash 3.2 compatible)
@@ -54,8 +81,10 @@ pkg_to_repo() {
     "@rev-net/core-v6")                  echo "revnet-core-v6" ;;
     "@croptop/core-v6")                  echo "croptop-core-v6" ;;
     "@bannynet/core-v6")                 echo "banny-retail-v6" ;;
-    "@ballkidz/defifa")                  echo "defifa-collection-deployer-v6" ;;
+    "@ballkidz/defifa")                  echo "defifa" ;;
     "@bananapus/fee-project-deployer-v6") echo "nana-fee-project-deployer-v6" ;;
+    "@bananapus/project-handles-v6") echo "nana-project-handles-v6" ;;
+    "@bananapus/distributor-v6") echo "nana-distributor-v6" ;;
     *) ;;
   esac
 }
@@ -273,17 +302,58 @@ Begin the audit now. Start with Phase 0 (Recon) then proceed through all passes 
 
 $COMBINED_SKILLS"
 
+  PROMPT_FILE="$(mktemp "/tmp/${REPO}-codex-prompt.XXXXXX")"
+  TIMEOUT_FLAG="$(mktemp "/tmp/${REPO}-codex-timeout.XXXXXX")"
+  rm -f "$TIMEOUT_FLAG"
+  printf '%s' "$CODEX_PROMPT" > "$PROMPT_FILE"
+
+  RUN_STATUS=0
   (
     cd "$REPO_DIR"
-    echo "$CODEX_PROMPT" | codex exec \
+    codex exec \
       -C "$REPO_DIR" \
       --dangerously-bypass-approvals-and-sandbox \
       --json \
       - \
-      2>&1
-  ) > "$LOG_FILE" 2>&1 || true
+      < "$PROMPT_FILE" \
+      2>&1 &
+    CHILD_PID=$!
+
+    (
+      sleep "$PER_REPO_TIMEOUT_SECONDS"
+      if kill -0 "$CHILD_PID" 2>/dev/null; then
+        echo "{\"type\":\"audit.timeout\",\"message\":\"codex exec exceeded ${PER_REPO_TIMEOUT_SECONDS} seconds; terminating child process tree\"}" >&2
+        : > "$TIMEOUT_FLAG"
+        pkill -TERM -P "$CHILD_PID" 2>/dev/null || true
+        kill -TERM "$CHILD_PID" 2>/dev/null || true
+        sleep 5
+        pkill -KILL -P "$CHILD_PID" 2>/dev/null || true
+        kill -KILL "$CHILD_PID" 2>/dev/null || true
+      fi
+    ) &
+    WATCHER_PID=$!
+
+    wait "$CHILD_PID"
+    STATUS=$?
+
+    kill "$WATCHER_PID" 2>/dev/null || true
+    wait "$WATCHER_PID" 2>/dev/null || true
+    exit "$STATUS"
+  ) > "$LOG_FILE" 2>&1 || RUN_STATUS=$?
+
+  if [ -f "$TIMEOUT_FLAG" ]; then
+    RUN_STATUS=124
+  fi
+
+  rm -f "$PROMPT_FILE" "$TIMEOUT_FLAG"
 
   echo "  Finished: $(date)" | tee -a "$SUMMARY"
+
+  if [ "$RUN_STATUS" -eq 124 ]; then
+    echo "  Status: TIMED OUT after ${PER_REPO_TIMEOUT_SECONDS}s" | tee -a "$SUMMARY"
+  elif [ "$RUN_STATUS" -ne 0 ]; then
+    echo "  Status: FAILED with exit code $RUN_STATUS" | tee -a "$SUMMARY"
+  fi
 
   # Check if .audit/findings/ has codex output
   if [ -d "$REPO_DIR/.audit/findings" ]; then
