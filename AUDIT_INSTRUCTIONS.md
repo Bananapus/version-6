@@ -2,6 +2,250 @@
 
 `v6/evm` is a modular Ethereum protocol workspace. Audit it as one composed system, not as isolated repos.
 
+## Getting Started
+
+Paste this into any AI with code execution (Claude Code, Cursor, Codex, etc.):
+
+```
+Clone https://github.com/Bananapus/version-6 recursively, read AUDIT_INSTRUCTIONS.md, then walk me through my options for auditing this codebase. Ask me how deep I want to go, which subsystem interests me, and whether I have any specialization to add — then start.
+```
+
+That's it. The AI will clone the repo, read this file, and guide you from there.
+
+If your AI doesn't have code execution, clone manually and point it at the repo:
+
+```bash
+git clone --recursive https://github.com/Bananapus/version-6
+```
+
+Then pick a depth level below and copy the corresponding prompt.
+
+### Quick scan (~30 min AI time)
+
+Covers one repo at a time. Finds surface-level issues — access control gaps, obvious reentrancy, missing checks. Won't catch cross-repo composition bugs or subtle economic exploits.
+
+```
+I want you to audit the Solidity smart contracts in this repository as a security researcher.
+
+Repository: [PASTE REPO PATH OR GITHUB URL]
+
+Focus on:
+- Access control and permission checks
+- Reentrancy and external call safety
+- Integer overflow/underflow (even with Solidity 0.8+, check casting and unchecked blocks)
+- Value handling (ETH/token transfers, fee calculations)
+- State consistency after reverts
+
+Skip: test/, lib/, interfaces/, mocks/, *.t.sol
+
+For each finding, provide:
+- Severity (Critical / High / Medium / Low / Gas)
+- Title (one line)
+- Description (what's wrong)
+- Impact (what an attacker gains)
+- Proof of concept (code or step sequence)
+- Recommended fix
+
+Start with the main contract files (src/), reading each one fully before making judgments.
+```
+
+### Focused audit (~2-4 hours AI time)
+
+Covers one subsystem. Catches more subtle bugs by understanding how contracts compose within an area.
+
+Pick a subsystem:
+
+| Subsystem | Repos | What to look for |
+|-----------|-------|------------------|
+| Core treasury | `nana-core-v6` | Settlement flows, bonding curve math, fee accounting, ruleset lifecycle |
+| NFT hooks | `nana-721-hook-v6`, `croptop-core-v6`, `banny-retail-v6` | Tier manipulation, credit vs cash interactions, metadata handling |
+| Routing & swaps | `nana-buyback-hook-v6`, `univ4-router-v6`, `univ4-lp-split-hook-v6`, `nana-router-terminal-v6` | Swap-vs-mint routing under adversarial liquidity, LP positioning, price coherence |
+| Cross-chain | `nana-suckers-v6`, `nana-omnichain-deployers-v6` | Bridge replay, double-claim, configuration drift, peer authentication |
+| Revnets | `revnet-core-v6` | Loan math, stage transitions, hidden tokens, cross-chain surplus |
+| Games & apps | `defifa`, `croptop-core-v6`, `banny-retail-v6` | Game lifecycle, scoring, NFT minting rules |
+| Deployment | `deploy-all-v6`, `nana-fee-project-deployer-v6` | Privilege retention, ownership convergence, wiring correctness |
+
+```
+I want you to perform a focused security audit of a Solidity subsystem within the Juicebox V6 ecosystem.
+
+Subsystem: [SUBSYSTEM NAME]
+Repos to review: [LIST REPOS]
+Repository root: [PATH TO version-6 CLONE]
+
+Context documents to read first:
+1. ARCHITECTURE.md (in the root — ecosystem map)
+2. RISKS.md (in the root — known risk areas)
+3. AUDIT_INSTRUCTIONS.md (in the root — scope, invariants, attack surfaces)
+4. Each repo's own AUDIT_INSTRUCTIONS.md, ARCHITECTURE.md, and RISKS.md if they exist
+
+Critical invariants to test:
+1. Terminal solvency — accounting must match actual balances
+2. Project isolation — one project can't touch another's state
+3. Hook boundedness — hooks can't create value or skip fees
+4. Fee correctness — fees must not silently disappear
+5. Token accounting — supply relationships must be preserved
+
+Attack sequences to trace:
+1. pay -> data hook -> callback -> immediate cash-out
+2. payout -> split hook -> downstream pay or re-entry
+3. cross-currency operation with stale pricing
+4. deployer launch -> ownership transfer -> registry write -> runtime callback
+
+For each finding, provide:
+- Severity (Critical / High / Medium / Low / Gas)
+- Title
+- Root cause analysis
+- Impact
+- Proof of concept with concrete values
+- Recommended fix
+
+Read all source files in the target repos fully. Skip test/, lib/, interfaces/, mocks/.
+Merge findings that share the same root cause.
+Only report issues you can demonstrate with a concrete scenario.
+```
+
+### Deep dive (~8-24 hours AI time)
+
+Full 19-repo ecosystem audit. This is the level that finds composition bugs across repo boundaries — the most valuable findings.
+
+```
+I want you to perform a comprehensive security audit of the entire Juicebox V6 EVM ecosystem.
+
+Repository root: [PATH TO version-6 CLONE]
+
+## Setup
+
+Read these documents first, in order:
+1. ARCHITECTURE.md — ecosystem map and trust boundaries
+2. RISKS.md — known risk register and priority areas
+3. AUDIT_INSTRUCTIONS.md — scope, security model, invariants, attack surfaces
+4. USER_JOURNEYS.md — how the system is actually used
+
+Then read each repo's local AUDIT_INSTRUCTIONS.md, ARCHITECTURE.md, and RISKS.md.
+
+## Scope (19 repos)
+
+Primary:
+- nana-core-v6, nana-721-hook-v6, nana-suckers-v6, nana-buyback-hook-v6
+- nana-router-terminal-v6, nana-omnichain-deployers-v6, revnet-core-v6
+- univ4-router-v6, univ4-lp-split-hook-v6, croptop-core-v6, defifa, banny-retail-v6
+
+Supporting:
+- nana-ownable-v6, nana-address-registry-v6, nana-distributor-v6
+- nana-fee-project-deployer-v6, nana-permission-ids-v6, nana-project-handles-v6, deploy-all-v6
+
+## Methodology
+
+Pass 1 — Architecture review:
+Map trust boundaries, shared singletons, and privilege flows across repos.
+
+Pass 2 — Cross-boundary data flows:
+Trace how one repo's output becomes another's security assumption.
+Focus: price feeds -> surplus -> loans -> LP, hook outputs -> settlement, bridge messages -> state updates.
+
+Pass 3 — Economic analysis:
+Test bonding curve math, fee calculations, swap routing, and loan collateralization under adversarial conditions.
+
+Pass 4 — Access control:
+Verify permission checks at every entry point. Test privilege escalation via wildcards, registries, and deployer-retained authority.
+
+Pass 5 — Cross-chain:
+Trace prepare -> root -> claim flows. Test replay, double-claim, configuration drift, and emergency exits.
+
+Pass 6 — Deployment and configuration:
+Verify constructor args, ownership transfers, registry writes, and singleton assumptions match runtime expectations.
+
+Pass 7 — Integration testing:
+Replay the attack sequences from AUDIT_INSTRUCTIONS.md with concrete values.
+
+Pass 8 — Gas and optimization:
+Flag redundant storage reads, avoidable loops, and packing opportunities.
+
+## Critical invariants
+
+1. Terminal solvency: aggregate accounting <= actual balances
+2. Project isolation: no cross-project state leakage
+3. Ruleset correctness: active ruleset matches protocol intent at execution time
+4. Hook boundedness: hooks can't create value or skip fees
+5. Fee correctness: fees never silently disappear
+6. Token consistency: ERC-20 + ERC-721 + reserve + bridge representations preserve supply
+7. Cross-chain conservation: no replay, double-claim, or unbacked destination value
+8. Privilege containment: no escalation across unrelated projects
+9. Preview-execution coherence: preview consumers remain safe at execution time
+
+## Output format
+
+Produce one consolidated report:
+
+### Summary
+- Total findings by severity
+- Most critical composition risks identified
+
+### Findings (grouped by severity)
+For each:
+- **[SEVERITY-ID] Title**
+- **Repos involved**
+- **Root cause**
+- **Impact** (with concrete values where possible)
+- **Proof of concept** (step-by-step exploitation)
+- **Recommended fix**
+
+### Ecosystem observations
+- Trust assumptions that seem fragile
+- Missing checks at repo boundaries
+- Areas needing additional testing
+
+Merge findings sharing root causes. Only report issues with demonstrated impact.
+Skip: test/, lib/, interfaces/, mocks/, *.t.sol, *Test*.sol, *Mock*.sol
+```
+
+### Add your own specialization
+
+Append to any prompt above:
+
+```
+Additional context from my expertise:
+
+[YOUR SPECIALIZATION]
+
+Examples:
+- "I specialize in MEV. Pay extra attention to swap routing and pool interactions."
+- "I focus on cross-chain bridge security. Trace all message authentication and replay protection."
+- "I know Uniswap V4 hooks well. Check the hook callback safety and pool state assumptions."
+- "I'm experienced with bonding curve economics. Verify the cashout math under edge conditions."
+```
+
+### Script-based auditing
+
+To audit the full ecosystem programmatically (breaking it into contextual chunks for your AI):
+
+1. Each repo has its own `AUDIT_INSTRUCTIONS.md` with scoped invariants
+2. The root `ARCHITECTURE.md` maps cross-repo dependencies
+3. Repos list dependencies in `package.json` — build context bundles that include a repo plus its dependency docs
+
+```bash
+# For each repo, bundle:
+# - Root AUDIT_INSTRUCTIONS.md, ARCHITECTURE.md, RISKS.md
+# - The repo's own docs
+# - Dependency docs from package.json
+# Then send each bundle + source to your AI as a scoped audit
+```
+
+This lets you parallelize across repos while still catching cross-boundary issues through the shared context docs.
+
+---
+
+## Submitting findings
+
+Open an issue at https://github.com/Bananapus/version-6/issues with:
+- Title: `[Audit] <your-focus-area>`
+- Body: your full report
+- Which depth level you used
+
+Even partial reports are valuable. A quick scan of one repo that finds nothing still tells us that surface is clean.
+
+---
+
 ## Audit Objective
 
 Find issues that:
