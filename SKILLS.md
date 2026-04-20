@@ -93,6 +93,99 @@ Useful defaults:
 | Flow routing from user symptom to owning contracts, common errors, or test commands | [`references/ecosystem-flows.md`](./references/ecosystem-flows.md) |
 | Shared structs, gotchas, permission constants, and library reminders across repos | [`references/ecosystem-reference.md`](./references/ecosystem-reference.md) |
 
+## Common Gotchas
+
+These are nuanced V6 behaviors that are easier to address upfront than debug later. Each is verified against current source.
+
+### 1. Split beneficiary `address(0)` defaults to `msg.sender`
+
+When a `JBSplit` has `beneficiary: address(0)` and a non-zero `projectId`, the terminal pays into that project but mints the resulting tokens to whoever called the payout function — not to a hook or intended recipient. This is especially surprising when split processing happens indirectly (e.g., via a keeper or governance multisig).
+
+**Fix:** Always set an explicit beneficiary on splits that target other projects.
+
+```solidity
+// Wrong — tokens go to whoever calls sendPayoutsOf
+JBSplit({ beneficiary: payable(address(0)), projectId: uint64(targetId), ... })
+
+// Right — tokens go to the intended recipient
+JBSplit({ beneficiary: payable(intendedRecipient), projectId: uint64(targetId), ... })
+```
+
+*Source: `nana-core-v6/src/JBMultiTerminal.sol` lines 404-405, 427-428*
+
+### 2. `groupId` (uint256) vs `currency` (uint32) are different bit widths
+
+Split groups use `uint256 groupId = uint256(uint160(tokenAddress))` while accounting contexts and payout limits use `uint32 currency = uint32(uint160(tokenAddress))`. These only match for `NATIVE_TOKEN` (0x...EEEe = 61166, which fits in 32 bits). For all real ERC-20 tokens, the values are completely different.
+
+```
+NATIVE_TOKEN: groupId = 61166,  currency = 61166  (same!)
+USDC:         groupId = 918893084697899778867...,  currency = 909516616  (different!)
+```
+
+When configuring payout splits for an ERC-20 token, the `groupId` on the split group must use the full `uint256(uint160(token))` encoding, while the `currency` on accounting contexts and payout limits uses `uint32(uint160(token))`.
+
+*Source: `nana-core-v6/src/structs/JBSplitGroup.sol` line 10, `JBCurrencyAmount.sol` lines 7-10*
+
+### 3. `baseCurrency` vs `JBAccountingContext.currency`
+
+`baseCurrency` uses abstract conceptual values (1 = ETH, 2 = USD) so rulesets are portable across chains. `JBAccountingContext.currency` uses `uint32(uint160(tokenAddress))` because terminals track specific tokens at specific addresses. `JBPrices` mediates between the two: it converts token-derived currencies to/from abstract currencies so that payout limits denominated in USD work correctly regardless of which ERC-20 the terminal holds.
+
+Do not pass a `baseCurrency` value where a token-derived `currency` is expected, or vice versa.
+
+*Source: `nana-core-v6/src/libraries/JBRulesetMetadataResolver.sol`, `nana-core-v6/src/JBPrices.sol`*
+
+### 4. Empty `fundAccessLimitGroups` means zero payouts, not unlimited
+
+If `fundAccessLimitGroups` is empty when launching or queuing rulesets, the project cannot pay out anything. There is no "unlimited by default" behavior. To allow unlimited payouts, explicitly set `amount: type(uint224).max` for the relevant currency.
+
+*Source: `nana-core-v6/src/JBFundAccessLimits.sol`*
+
+### 5. Payout limits are per-terminal, not aggregated across chains
+
+Payout limits are keyed by `(projectId, rulesetId, terminal, token)`. Each terminal on each chain has independent limits. A project deployed to 5 chains with 10 ETH payout limit each can pay out up to 50 ETH total across all chains, not 10 ETH globally. There is no cross-chain payout limit aggregation.
+
+*Source: `nana-core-v6/src/JBFundAccessLimits.sol` lines 24-36*
+
+### 6. Rulesets auto-cycle when duration expires
+
+A ruleset with non-zero `duration` automatically rolls over into a new cycle with the same rules (but decayed weight if `weightCutPercent > 0`). You do not need to queue a new ruleset for each period. Only queue multiple rulesets when the configuration actually changes between periods.
+
+Conversely, a ruleset with `duration = 0` never expires and must be explicitly replaced by queuing a new ruleset.
+
+*Source: `nana-core-v6/src/JBRulesets.sol` lines 517-540*
+
+### 7. NFT tiers must be sorted by category, not price
+
+When adding tiers via `adjustTiers()` or launching with the 721 deployer, tiers must be in ascending `category` order. The store validates this and reverts with `InvalidCategorySortOrder` if violated. Sorting by price (a common assumption) will fail.
+
+```javascript
+// Wrong — sorted by price
+tiers.sort((a, b) => a.price - b.price);
+
+// Right — sorted by category
+tiers.sort((a, b) => a.category - b.category);
+```
+
+*Source: `nana-721-hook-v6/src/JB721TiersHookStore.sol` lines 922-929*
+
+### 8. Always use the 721 deployer even with empty tiers
+
+Projects launched without the 721 hook cannot add NFT tiers later without migration. Using `JB721TiersHookProjectDeployer.launchProjectFor` with empty tiers (`tiers: []`) is safe and enables future tier additions. Every project is a potential storefront.
+
+*Source: `nana-721-hook-v6/src/JB721TiersHook.sol` line 293, `JB721TiersHookProjectDeployer.sol` lines 74-102*
+
+### 9. Reserved tokens accumulate silently and dilute cash-outs
+
+Reserved tokens accumulate in `pendingReservedTokenBalanceOf` but are NOT auto-distributed. Until `sendReservedTokensToSplitsOf` is called, they inflate `totalSupply` for cash-out calculations, reducing the per-token reclaim value. In extreme cases this can reduce cash-out values by 50%+.
+
+*Source: `nana-core-v6/src/JBController.sol`, `nana-core-v6/src/JBTerminalStore.sol`*
+
+### 10. `sendPayoutsOf()` reverts on over-limit — no auto-cap
+
+`sendPayoutsOf()` reverts when the requested amount exceeds the payout limit for the current ruleset. It does not silently cap the amount. Callers must check the available payout limit before calling.
+
+*Source: `nana-core-v6/src/JBMultiTerminal.sol`, `nana-core-v6/src/JBTerminalStore.sol`*
+
 ## Purpose
 
 This is the workspace router for the Juicebox V6 EVM repos. Use it to find the right repo fast, avoid cross-repo misdiagnosis, and move into repo-local docs as soon as ownership is clear.
