@@ -19,7 +19,6 @@ Workspace navigation: [SKILLS.md](./SKILLS.md)
 Risks: [RISKS.md](./RISKS.md)  
 Administration: [ADMINISTRATION.md](./ADMINISTRATION.md)  
 Audit instructions: [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md)
-RISKS maintenance: [docs/RISKS_MAINTENANCE.md](./docs/RISKS_MAINTENANCE.md)
 
 ## Workspace Scope
 
