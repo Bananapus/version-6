@@ -43,6 +43,18 @@ Also in scope:
 - constructor and initializer parameters
 - cross-repo assumptions about project IDs, singletons, registries, and privileged helpers
 
+## Gas Efficiency
+
+If you notice gas optimizations while reviewing, please flag them. Common areas of interest:
+
+- redundant storage reads that could be cached in memory
+- loops with avoidable external calls or storage writes per iteration
+- struct packing or storage layout improvements
+- calldata vs memory for read-only parameters
+- unchecked arithmetic where overflow is already bounded
+
+Gas findings are welcome alongside security findings — they don't need a separate pass.
+
 ## Out Of Scope
 
 - re-auditing third-party dependency internals in `node_modules` or `lib/` unless Juicebox composition makes them unsafe
