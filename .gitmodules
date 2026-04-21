@@ -52,3 +52,9 @@
 [submodule "defifa"]
 	path = defifa
 	url = https://github.com/BallKidz/defifa.git
+[submodule "nana-distributor-v6"]
+	path = nana-distributor-v6
+	url = https://github.com/Bananapus/nana-distributor-v6.git
+[submodule "nana-project-handles-v6"]
+	path = nana-project-handles-v6
+	url = https://github.com/Bananapus/nana-project-handles-v6
