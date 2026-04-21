@@ -58,3 +58,6 @@
 [submodule "nana-project-handles-v6"]
 	path = nana-project-handles-v6
 	url = https://github.com/Bananapus/nana-project-handles-v6
+[submodule "nana-project-payer-v6"]
+	path = nana-project-payer-v6
+	url = https://github.com/Bananapus/nana-project-payer-v6
