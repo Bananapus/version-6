@@ -60,16 +60,70 @@ The user can pick one, several, or all. For deep dive, all subsystems are covere
 
 **Adversarial persona — what kind of attacker should you think like?**
 
-| # | Persona | Mindset |
-|---|---------|---------|
-| 1 | MEV bot | Sandwich swaps, frontrun mints, extract value from routing decisions |
-| 2 | Malicious project owner | Abuse operator privileges, rug pull via ruleset manipulation |
-| 3 | Rogue bridge operator | Spoof cross-chain messages, replay proofs, strand bridged value |
-| 4 | Grief attacker | DoS critical paths, block payouts, force bad state without profit motive |
-| 5 | Fee evader | Bypass or minimize protocol fees, exploit fee-holding mechanics |
-| 6 | Flash loan attacker | Manipulate bonding curves, inflate supply, drain surplus in one tx |
-| 7 | Permission escalator | Exploit wildcard grants, registry trust, deployer-retained authority |
-| 8 | Oracle manipulator | Feed stale prices, manipulate AMM state, corrupt cross-currency math |
+Each persona targets specific contracts and attack patterns in this codebase. When a persona is selected, the audit must trace these specific paths.
+
+**1. MEV bot**
+Target `JBBuybackHook.beforePayRecordedWith` and `JBUniswapV4Hook` — these decide whether to mint tokens or swap on an AMM. Trace:
+- Can you sandwich a large pay() by manipulating pool price before the buyback hook's `try pool.swap()` executes?
+- Does `JBRouterTerminal` expose swap routing that can be frontrun?
+- Can you manipulate `twapSlippageTolerance` or `twapWindow` to force the hook into a bad swap?
+- In `JBUniswapV4LPSplitHook`, can you manipulate tick state before liquidity is deployed?
+
+**2. Malicious project owner**
+Target `JBController.launchRulesetsFor` / `queueRulesetsFor` and `JBMultiTerminal.sendPayoutsOf`. Trace:
+- Can a project owner queue a new ruleset that drains the treasury via payouts before token holders can cash out?
+- Can they manipulate `reservedPercent` to dilute holders, then cash out?
+- In `REVDeployer`, can they abuse stage transitions to change rules mid-stage?
+- Can they set `dataHook` to a malicious contract that alters accounting inputs?
+- Can they abuse `migrateBalanceOf` to move funds to a terminal they control?
+
+**3. Rogue bridge operator**
+Target `JBSucker.fromRemote`, `JBSucker._sendRoot`, and the sucker registry. Trace:
+- Can a compromised peer send a root that mints unbacked tokens on the destination chain?
+- Can you replay a merkle proof after it's been claimed?
+- Can you exploit the `DEPRECATION_PENDING` -> `SENDING_DISABLED` transition to strand tokens?
+- In `JBOmnichainDeployer`, can you deploy suckers that point to malicious peers?
+- Can emergency hatch be abused to extract more value than was bridged?
+
+**4. Grief attacker**
+Target any path where a revert blocks other users. Trace:
+- Can you make `sendPayoutsOf` revert by causing a split recipient to revert, blocking all payouts?
+- Can you exhaust gas in `processHeldFeesOf` by creating many small held fees?
+- Can you block `distributeReservedTokensOf` by making a split hook revert?
+- In `DefifaDeployer`, can you prevent game resolution by manipulating scorecard submission?
+- Can you DoS `cashOutTokensOf` by making the data hook revert?
+
+**5. Fee evader**
+Target `JBMultiTerminal._takeFeeFrom`, `JBFeelessAddresses`, and fee-holding mechanics. Trace:
+- Can you route payments through a feeless address to avoid the 2.5% fee?
+- Can you time `processHeldFeesOf` to return held fees before the 28-day lock expires?
+- In `REVDeployer`, does the fee project deployer correctly route fees or can they be intercepted?
+- Can you exploit `addToBalanceOf` (which is fee-exempt) instead of `pay` to receive tokens without paying fees?
+- Do any hook paths skip the fee that should be taken on cash-outs?
+
+**6. Flash loan attacker**
+Target `JBTerminalStore.recordPaymentFrom` and `recordCashOutFor` — the bonding curve. Trace:
+- Can you flash-loan ETH, pay into a project to inflate `totalSupply`, then cash out at a profit in the same tx?
+- Does `cashOutTokensOf` with `totalSupply == 0` and surplus > 0 return the entire surplus?
+- Can you manipulate `pendingReservedTokenBalanceOf` to inflate supply before a cash-out?
+- In `REVLoans`, can you borrow against inflated collateral and default profitably?
+- Can you flash-mint via a data hook that returns inflated `weight`?
+
+**7. Permission escalator**
+Target `JBPermissions`, `JBOwnableOverrides`, and registry surfaces. Trace:
+- Does `ROOT` permission (ID 1) correctly gate all operations, or can you bypass it?
+- Can wildcard permissions (`projectId=0`) leak across unrelated projects?
+- In `JBOwnableOverrides`, can a trusted forwarder spoof `msg.sender` to gain owner access?
+- Does `REVDeployer` retain permissions after deployment that it shouldn't?
+- Can you register a malicious contract in `JBAddressRegistry` or the buyback registry to hijack hooks?
+
+**8. Oracle manipulator**
+Target `JBPrices`, `JBChainlinkV3PriceFeed`, and any cross-currency operation. Trace:
+- Can you exploit the staleness threshold in price feeds to use outdated prices for cross-currency payouts?
+- If a price feed reverts (sequencer down, stale), which operations DoS and which fail open?
+- Can you manipulate the Uniswap V4 TWAP oracle to corrupt `JBBuybackHook`'s swap-vs-mint decision?
+- In `REVLoans`, does `_borrowableAmountFrom` use the correct price precision?
+- Can you exploit the inverse price auto-calculation in `JBPrices.pricePerUnitOf`?
 
 The user can pick one to focus on, several to combine, or let the AI pick randomly for maximum diversity across community runs. If the user has their own attacker model or specialization (e.g. "I know Uniswap V4 hooks well"), they should say so — it gets woven into the audit.
 
