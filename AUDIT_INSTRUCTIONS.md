@@ -152,26 +152,21 @@ Use parallel subagents where your platform supports them. Run these passes simul
 - **Hypothesis tester** — invent 3 novel "what if this assumption is wrong" hypotheses about the target code, then try to prove each one. These should be non-obvious — not things the structured passes would catch.
 - **Random walker** — pick a random internal function in the target scope, trace all callers and callees across repo boundaries, and look for assumption mismatches at each boundary. Repeat 3-5 times with different starting points.
 
-**Cross-pollination** (after parallel passes complete):
+**Cross-pollination and submission** (after parallel passes complete):
 - Gather all findings from all passes
 - For each finding, check whether it composes with findings from other passes to create a larger issue
 - Test each finding against the 9 critical invariants listed below
-- Try to disprove each finding — construct the strongest argument for why it's NOT a bug. Only findings that survive this self-review make the report.
+- Try to disprove each finding — construct the strongest argument for why it's NOT a bug
+- **As each finding survives self-review, submit it immediately** as a GitHub issue (see format below) — don't hold findings until the end
 
-### Step 5: Report
+### Step 5: Submit findings as you go
 
-Produce one consolidated report:
+**Submit each verified finding immediately** to https://github.com/Bananapus/version-6/issues. Don't wait until the audit is complete — findings are most valuable when they arrive early. If your AI has access to `gh` CLI or the GitHub API, it should create issues directly. Otherwise, present each finding to the user for submission as soon as it's verified.
 
-**Header:**
-- Audit seed (so coverage can be tracked across community runs)
-- Subsystems covered
-- Personas used
-- Total findings by severity
+Each finding issue should include:
 
-**Findings** (grouped by severity — Critical, High, Medium, Low, Gas):
-
-For each finding:
-- **[SEVERITY-ID] Title**
+- **Title:** `[Audit] [SEVERITY] <one-line description>`
+- **Audit seed** (so we can track coverage)
 - **Repos involved**
 - **Root cause** — the fundamental issue, not the symptom
 - **Impact** — what an attacker gains, with concrete values
@@ -179,24 +174,17 @@ For each finding:
 - **Why this survived self-review** — the strongest counter-argument and why it failed
 - **Recommended fix**
 
-**Ecosystem observations:**
-- Trust assumptions that seem fragile
-- Missing checks at repo boundaries
-- Areas that need more coverage from future auditors
+After all passes complete, submit one final summary issue:
 
-Merge findings that share root causes. Only include findings with demonstrated, concrete impact.
+- **Title:** `[Audit] Summary — <seed description>`
+- Audit seed, subsystems covered, personas used
+- Total findings submitted (with links to each issue)
+- Ecosystem observations: fragile trust assumptions, missing boundary checks, areas needing more coverage
+- Whether any subsystems had zero findings (confirms that surface is clean)
+
+Merge findings that share root causes. Only submit findings with demonstrated, concrete impact.
 
 Skip: test/, lib/, interfaces/, mocks/, *.t.sol, *Test*.sol, *Mock*.sol
-
----
-
-## Submitting findings
-
-Open an issue at https://github.com/Bananapus/version-6/issues with:
-- Title: `[Audit] <your-focus-area>`
-- Body: your full report (include the audit seed)
-
-Every report helps — even a quick scan that finds nothing confirms that surface is clean. Including your seed helps us track which areas have been covered and where we need more eyes.
 
 ---
 
