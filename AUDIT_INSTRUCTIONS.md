@@ -125,6 +125,24 @@ Target `JBPrices`, `JBChainlinkV3PriceFeed`, and any cross-currency operation. T
 - In `REVLoans`, does `_borrowableAmountFrom` use the correct price precision?
 - Can you exploit the inverse price auto-calculation in `JBPrices.pricePerUnitOf`?
 
+**9. Decimals/currency/token arbitrageur**
+Target every boundary where decimal precision, currency identity, or token address is converted, compared, or assumed. Trace:
+- `JBFixedPointNumber.adjustDecimals` — does truncation during decimal conversion create exploitable rounding that accumulates over many operations?
+- `baseCurrency` (1=ETH, 2=USD) vs `JBAccountingContext.currency` (uint32 of token address) — are these ever confused or compared directly?
+- `groupId` (uint256) vs `currency` (uint32) — both derive from token addresses but have different bit widths. Can you exploit the truncation?
+- In `JBTerminalStore`, do cross-currency surplus calculations via `JBPrices` lose precision when converting between tokens with different decimals (e.g. 18-decimal ETH vs 6-decimal USDC)?
+- Can you exploit `mulDiv` rounding direction in fee calculations, bonding curve math, or LP positioning to extract dust across many transactions?
+
+**10. Ruthless thief**
+No constraints, no persona — just steal money by any means. Start from the highest-value targets and work down. Trace:
+- `JBMultiTerminal`: call `pay()` then immediately `cashOutTokensOf()` — can you extract more than you put in through any combination of hooks, rulesets, or timing?
+- Can you drain a project's terminal balance by exploiting the interaction between `sendPayoutsOf`, `useAllowanceOf`, and `cashOutTokensOf` in the same block?
+- Read every `transfer`, `transferFrom`, `safeTransfer`, and low-level `call{value:}` in the codebase — for each one, can you make it send funds to an address you control?
+- Trace all paths where `msg.sender` or `tx.origin` determines who receives funds — can any be spoofed via ERC-2771, callback, or delegatecall?
+- Look for any state where `balanceOf[project]` in the terminal store can diverge from actual token balances — then exploit the gap
+- Check every `unchecked` block — can any overflow or underflow be triggered to wrap a balance, amount, or index?
+- Look at every `try/catch` — if the try fails and funds are returned to the project balance instead of the intended recipient, can you trigger the failure deliberately and then claim those funds?
+
 The user can pick one to focus on, several to combine, or let the AI pick randomly for maximum diversity across community runs. If the user has their own attacker model or specialization (e.g. "I know Uniswap V4 hooks well"), they should say so — it gets woven into the audit.
 
 ### Step 3: Generate audit seed
