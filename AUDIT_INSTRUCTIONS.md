@@ -60,16 +60,88 @@ The user can pick one, several, or all. For deep dive, all subsystems are covere
 
 **Adversarial persona — what kind of attacker should you think like?**
 
-| # | Persona | Mindset |
-|---|---------|---------|
-| 1 | MEV bot | Sandwich swaps, frontrun mints, extract value from routing decisions |
-| 2 | Malicious project owner | Abuse operator privileges, rug pull via ruleset manipulation |
-| 3 | Rogue bridge operator | Spoof cross-chain messages, replay proofs, strand bridged value |
-| 4 | Grief attacker | DoS critical paths, block payouts, force bad state without profit motive |
-| 5 | Fee evader | Bypass or minimize protocol fees, exploit fee-holding mechanics |
-| 6 | Flash loan attacker | Manipulate bonding curves, inflate supply, drain surplus in one tx |
-| 7 | Permission escalator | Exploit wildcard grants, registry trust, deployer-retained authority |
-| 8 | Oracle manipulator | Feed stale prices, manipulate AMM state, corrupt cross-currency math |
+Each persona targets specific contracts and attack patterns in this codebase. When a persona is selected, the audit must trace these specific paths.
+
+**1. MEV bot**
+Target `JBBuybackHook.beforePayRecordedWith` and `JBUniswapV4Hook` — these decide whether to mint tokens or swap on an AMM. Trace:
+- Can you sandwich a large pay() by manipulating pool price before the buyback hook's `try pool.swap()` executes?
+- Does `JBRouterTerminal` expose swap routing that can be frontrun?
+- Can you manipulate `twapSlippageTolerance` or `twapWindow` to force the hook into a bad swap?
+- In `JBUniswapV4LPSplitHook`, can you manipulate tick state before liquidity is deployed?
+
+**2. Malicious project owner**
+Target `JBController.launchRulesetsFor` / `queueRulesetsFor` and `JBMultiTerminal.sendPayoutsOf`. Trace:
+- Can a project owner queue a new ruleset that drains the treasury via payouts before token holders can cash out?
+- Can they manipulate `reservedPercent` to dilute holders, then cash out?
+- In `REVDeployer`, can they abuse stage transitions to change rules mid-stage?
+- Can they set `dataHook` to a malicious contract that alters accounting inputs?
+- Can they abuse `migrateBalanceOf` to move funds to a terminal they control?
+
+**3. Rogue bridge operator**
+Target `JBSucker.fromRemote`, `JBSucker._sendRoot`, and the sucker registry. Trace:
+- Can a compromised peer send a root that mints unbacked tokens on the destination chain?
+- Can you replay a merkle proof after it's been claimed?
+- Can you exploit the `DEPRECATION_PENDING` -> `SENDING_DISABLED` transition to strand tokens?
+- In `JBOmnichainDeployer`, can you deploy suckers that point to malicious peers?
+- Can emergency hatch be abused to extract more value than was bridged?
+
+**4. Grief attacker**
+Target any path where a revert blocks other users. Trace:
+- Can you make `sendPayoutsOf` revert by causing a split recipient to revert, blocking all payouts?
+- Can you exhaust gas in `processHeldFeesOf` by creating many small held fees?
+- Can you block `distributeReservedTokensOf` by making a split hook revert?
+- In `DefifaDeployer`, can you prevent game resolution by manipulating scorecard submission?
+- Can you DoS `cashOutTokensOf` by making the data hook revert?
+
+**5. Fee evader**
+Target `JBMultiTerminal._takeFeeFrom`, `JBFeelessAddresses`, and fee-holding mechanics. Trace:
+- Can you route payments through a feeless address to avoid the 2.5% fee?
+- Can you time `processHeldFeesOf` to return held fees before the 28-day lock expires?
+- In `REVDeployer`, does the fee project deployer correctly route fees or can they be intercepted?
+- Can you exploit `addToBalanceOf` (which is fee-exempt) instead of `pay` to receive tokens without paying fees?
+- Do any hook paths skip the fee that should be taken on cash-outs?
+
+**6. Flash loan attacker**
+Target `JBTerminalStore.recordPaymentFrom` and `recordCashOutFor` — the bonding curve. Trace:
+- Can you flash-loan ETH, pay into a project to inflate `totalSupply`, then cash out at a profit in the same tx?
+- Does `cashOutTokensOf` with `totalSupply == 0` and surplus > 0 return the entire surplus?
+- Can you manipulate `pendingReservedTokenBalanceOf` to inflate supply before a cash-out?
+- In `REVLoans`, can you borrow against inflated collateral and default profitably?
+- Can you flash-mint via a data hook that returns inflated `weight`?
+
+**7. Permission escalator**
+Target `JBPermissions`, `JBOwnableOverrides`, and registry surfaces. Trace:
+- Does `ROOT` permission (ID 1) correctly gate all operations, or can you bypass it?
+- Can wildcard permissions (`projectId=0`) leak across unrelated projects?
+- In `JBOwnableOverrides`, can a trusted forwarder spoof `msg.sender` to gain owner access?
+- Does `REVDeployer` retain permissions after deployment that it shouldn't?
+- Can you register a malicious contract in `JBAddressRegistry` or the buyback registry to hijack hooks?
+
+**8. Oracle manipulator**
+Target `JBPrices`, `JBChainlinkV3PriceFeed`, and any cross-currency operation. Trace:
+- Can you exploit the staleness threshold in price feeds to use outdated prices for cross-currency payouts?
+- If a price feed reverts (sequencer down, stale), which operations DoS and which fail open?
+- Can you manipulate the Uniswap V4 TWAP oracle to corrupt `JBBuybackHook`'s swap-vs-mint decision?
+- In `REVLoans`, does `_borrowableAmountFrom` use the correct price precision?
+- Can you exploit the inverse price auto-calculation in `JBPrices.pricePerUnitOf`?
+
+**9. Decimals/currency/token arbitrageur**
+Target every boundary where decimal precision, currency identity, or token address is converted, compared, or assumed. Trace:
+- `JBFixedPointNumber.adjustDecimals` — does truncation during decimal conversion create exploitable rounding that accumulates over many operations?
+- `baseCurrency` (1=ETH, 2=USD) vs `JBAccountingContext.currency` (uint32 of token address) — are these ever confused or compared directly?
+- `groupId` (uint256) vs `currency` (uint32) — both derive from token addresses but have different bit widths. Can you exploit the truncation?
+- In `JBTerminalStore`, do cross-currency surplus calculations via `JBPrices` lose precision when converting between tokens with different decimals (e.g. 18-decimal ETH vs 6-decimal USDC)?
+- Can you exploit `mulDiv` rounding direction in fee calculations, bonding curve math, or LP positioning to extract dust across many transactions?
+
+**10. Ruthless thief**
+No constraints, no persona — just steal money by any means. Start from the highest-value targets and work down. Trace:
+- `JBMultiTerminal`: call `pay()` then immediately `cashOutTokensOf()` — can you extract more than you put in through any combination of hooks, rulesets, or timing?
+- Can you drain a project's terminal balance by exploiting the interaction between `sendPayoutsOf`, `useAllowanceOf`, and `cashOutTokensOf` in the same block?
+- Read every `transfer`, `transferFrom`, `safeTransfer`, and low-level `call{value:}` in the codebase — for each one, can you make it send funds to an address you control?
+- Trace all paths where `msg.sender` or `tx.origin` determines who receives funds — can any be spoofed via ERC-2771, callback, or delegatecall?
+- Look for any state where `balanceOf[project]` in the terminal store can diverge from actual token balances — then exploit the gap
+- Check every `unchecked` block — can any overflow or underflow be triggered to wrap a balance, amount, or index?
+- Look at every `try/catch` — if the try fails and funds are returned to the project balance instead of the intended recipient, can you trigger the failure deliberately and then claim those funds?
 
 The user can pick one to focus on, several to combine, or let the AI pick randomly for maximum diversity across community runs. If the user has their own attacker model or specialization (e.g. "I know Uniswap V4 hooks well"), they should say so — it gets woven into the audit.
 
@@ -98,26 +170,21 @@ Use parallel subagents where your platform supports them. Run these passes simul
 - **Hypothesis tester** — invent 3 novel "what if this assumption is wrong" hypotheses about the target code, then try to prove each one. These should be non-obvious — not things the structured passes would catch.
 - **Random walker** — pick a random internal function in the target scope, trace all callers and callees across repo boundaries, and look for assumption mismatches at each boundary. Repeat 3-5 times with different starting points.
 
-**Cross-pollination** (after parallel passes complete):
+**Cross-pollination and submission** (after parallel passes complete):
 - Gather all findings from all passes
 - For each finding, check whether it composes with findings from other passes to create a larger issue
 - Test each finding against the 9 critical invariants listed below
-- Try to disprove each finding — construct the strongest argument for why it's NOT a bug. Only findings that survive this self-review make the report.
+- Try to disprove each finding — construct the strongest argument for why it's NOT a bug
+- **As each finding survives self-review, submit it immediately** as a GitHub issue (see format below) — don't hold findings until the end
 
-### Step 5: Report
+### Step 5: Submit findings as you go
 
-Produce one consolidated report:
+**Submit each verified finding immediately** to https://github.com/Bananapus/version-6/issues. Don't wait until the audit is complete — findings are most valuable when they arrive early. If your AI has access to `gh` CLI or the GitHub API, it should create issues directly. Otherwise, present each finding to the user for submission as soon as it's verified.
 
-**Header:**
-- Audit seed (so coverage can be tracked across community runs)
-- Subsystems covered
-- Personas used
-- Total findings by severity
+Each finding issue should include:
 
-**Findings** (grouped by severity — Critical, High, Medium, Low, Gas):
-
-For each finding:
-- **[SEVERITY-ID] Title**
+- **Title:** `[Audit] [SEVERITY] <one-line description>`
+- **Audit seed** (so we can track coverage)
 - **Repos involved**
 - **Root cause** — the fundamental issue, not the symptom
 - **Impact** — what an attacker gains, with concrete values
@@ -125,24 +192,17 @@ For each finding:
 - **Why this survived self-review** — the strongest counter-argument and why it failed
 - **Recommended fix**
 
-**Ecosystem observations:**
-- Trust assumptions that seem fragile
-- Missing checks at repo boundaries
-- Areas that need more coverage from future auditors
+After all passes complete, submit one final summary issue:
 
-Merge findings that share root causes. Only include findings with demonstrated, concrete impact.
+- **Title:** `[Audit] Summary — <seed description>`
+- Audit seed, subsystems covered, personas used
+- Total findings submitted (with links to each issue)
+- Ecosystem observations: fragile trust assumptions, missing boundary checks, areas needing more coverage
+- Whether any subsystems had zero findings (confirms that surface is clean)
+
+Merge findings that share root causes. Only submit findings with demonstrated, concrete impact.
 
 Skip: test/, lib/, interfaces/, mocks/, *.t.sol, *Test*.sol, *Mock*.sol
-
----
-
-## Submitting findings
-
-Open an issue at https://github.com/Bananapus/version-6/issues with:
-- Title: `[Audit] <your-focus-area>`
-- Body: your full report (include the audit seed)
-
-Every report helps — even a quick scan that finds nothing confirms that surface is clean. Including your seed helps us track which areas have been covered and where we need more eyes.
 
 ---
 
