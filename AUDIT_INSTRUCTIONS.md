@@ -155,29 +155,68 @@ Seed: {depth} / {subsystems} / {personas} / {user specialization if any}
 
 If the user left any choice as "random" or "surprise me", pick randomly. The seed ensures each community run covers different ground. Include the seed in the final report.
 
-### Step 4: Run the audit
+### Step 4: Decompose into components
 
-Use parallel subagents where your platform supports them. Run these passes simultaneously where possible:
+**Smaller context produces better results.** Rather than auditing an entire subsystem in one pass, break it into scoped components and audit each one with a dedicated subagent. This is the single most effective way to improve finding quality.
 
-**Structured passes** (run in parallel):
-- **Value flow tracer** — follow every wei/token from entry to exit in the target scope. Where does value enter, where is it recorded, where does it leave?
-- **Access control scanner** — verify permission checks at every external/public entry point. Test what happens if the caller has unexpected permissions.
-- **Cross-boundary tracer** — find where the target subsystem trusts another repo's output as fact. What if that output is wrong, stale, or manipulated?
-- **State consistency checker** — trace all state transitions. What happens on revert? On reentrancy? Are storage updates ordered safely?
+**How to decompose:**
 
-**Adversarial passes** (run in parallel, using the selected personas):
-- **Persona attacker** — play the chosen adversarial persona(s). Construct concrete attack sequences with specific function calls and values.
-- **Hypothesis tester** — invent 3 novel "what if this assumption is wrong" hypotheses about the target code, then try to prove each one. These should be non-obvious — not things the structured passes would catch.
-- **Random walker** — pick a random internal function in the target scope, trace all callers and callees across repo boundaries, and look for assumption mismatches at each boundary. Repeat 3-5 times with different starting points.
+1. Look at the target scope from the user's subsystem and depth choices.
+2. Group the code into components — tightly-coupled units that share state or call each other directly. A component is typically:
+   - A single large contract (e.g. `JBMultiTerminal` alone is ~2000 lines — that's one component)
+   - A pair of contracts that form a unit (e.g. `JBTerminalStore` + its library dependencies)
+   - A small repo with 1-3 contracts (e.g. `nana-ownable-v6`)
+3. For each component, identify which other components it trusts or calls — these become the "boundary context" that the subagent needs to understand but not audit line-by-line.
 
-**Cross-pollination and submission** (after parallel passes complete):
-- Gather all findings from all passes
-- For each finding, check whether it composes with findings from other passes to create a larger issue
+**Example decomposition for "Core treasury" subsystem:**
+
+| Component | Files | Boundary context |
+|-----------|-------|------------------|
+| Terminal settlement | `JBMultiTerminal.sol` | JBTerminalStore interface, hook interfaces |
+| Store accounting | `JBTerminalStore.sol`, `JBCashOuts.sol`, `JBFees.sol` | JBMultiTerminal call patterns, JBPrices interface |
+| Ruleset lifecycle | `JBRulesets.sol`, `JBRulesetMetadataResolver.sol` | JBController call patterns, approval hook interface |
+| Token system | `JBTokens.sol`, `JBERC20.sol` | JBController mint/burn calls |
+| Access control | `JBPermissions.sol`, `JBDirectory.sol` | All callers that check permissions |
+| Price system | `JBPrices.sol`, price feed contracts | JBTerminalStore consumers |
+| Splits & limits | `JBSplits.sol`, `JBFundAccessLimits.sol` | JBMultiTerminal payout flow |
+
+For a **quick scan**, pick 1-2 components. For a **focused audit**, cover all components in the subsystem. For a **deep dive**, decompose every subsystem.
+
+**Component subagent instructions:**
+
+Each component subagent should receive:
+- The full source of contracts in that component
+- Interface signatures and key behaviors of boundary contracts (not their full source — keep context small)
+- The relevant invariants from this file
+- The selected adversarial persona(s)
+- The repo-local `AUDIT_INSTRUCTIONS.md` for that component's repo
+
+The subagent should NOT receive the full source of every contract in the subsystem. The goal is focused attention on a small surface area.
+
+### Step 5: Run the audit
+
+For each component from Step 4, launch a subagent (or run sequentially if your platform doesn't support parallel agents). Each component gets these passes:
+
+**Per-component passes** (run in parallel within each component):
+- **Value flow tracer** — follow every wei/token from entry to exit within this component. Where does value enter, where is it recorded, where does it leave?
+- **Access control scanner** — verify permission checks at every external/public entry point in this component. Test what happens if the caller has unexpected permissions.
+- **State consistency checker** — trace all state transitions within this component. What happens on revert? On reentrancy? Are storage updates ordered safely?
+- **Persona attacker** — play the chosen adversarial persona(s) against this component specifically. Construct concrete attack sequences.
+
+After all component subagents complete, run a **composition pass** across components:
+
+**Cross-component passes** (these require findings from the component passes):
+- **Cross-boundary tracer** — for each trust boundary identified in the decomposition, check: does the calling component's assumption match the called component's actual behavior? Focus on cases where component passes found surprising behavior.
+- **Hypothesis tester** — invent 3 novel "what if this assumption is wrong" hypotheses that span multiple components, then try to prove each one.
+- **Random walker** — pick a random internal function, trace all callers and callees across component and repo boundaries, and look for assumption mismatches at each boundary. Repeat 3-5 times.
+- **Finding composer** — take every finding from the component passes and check whether it composes with findings from other components to create a larger issue.
+
+**Final review:**
 - Test each finding against the 9 critical invariants listed below
 - Try to disprove each finding — construct the strongest argument for why it's NOT a bug
 - **As each finding survives self-review, submit it immediately** as a GitHub issue (see format below) — don't hold findings until the end
 
-### Step 5: Submit findings as you go
+### Step 6: Submit findings as you go
 
 **Submit each verified finding immediately** to https://github.com/Bananapus/version-6/issues. Don't wait until the audit is complete — findings are most valuable when they arrive early. If your AI has access to `gh` CLI or the GitHub API, it should create issues directly. Otherwise, present each finding to the user for submission as soon as it's verified.
 
