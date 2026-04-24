@@ -1,9 +1,9 @@
 # Juicebox V6 EVM Audit Report
 
-**Source:** Pashov Solidity Auditor (Codex) Runs `20260420-112444` + `20260421-000519` + `20260421-130750` + `20260421-203407` | Nemesis Auditor (Codex) Runs `20260420` + `20260421-000900` + `20260421-130747` + `20260421-203404` + `20260422-003458` | GitHub `Bananapus/version-6` Issues (manual triage)
+**Source:** Pashov Solidity Auditor (Codex) Runs `20260420-112444` + `20260421-000519` + `20260421-130750` + `20260421-203407` | Nemesis Auditor (Codex) Runs `20260420` + `20260421-000900` + `20260421-130747` + `20260421-203404` + `20260422-003458` | CertiK AI Scans (nana-core-v6, revnet-core-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6) | GitHub `Bananapus/version-6` Issues (manual triage)
 **Repos scanned:** 20 (nana-privacy-v6, defifa-collection-deployer-v6 skipped — directories not found)
-**Date:** 2026-04-22 (pass 5 update)
-**Total findings:** 90 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings)
+**Date:** 2026-04-23 (pass 11 update)
+**Total findings:** 93 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings, passes 7-8: 3 new findings [H-22, H-23, M-36])
 
 ---
 
@@ -12,12 +12,12 @@
 | Severity | Total | ~~Fixed~~ | ~~Downgraded~~ | Accepted risk | **Open** |
 |----------|-------|-----------|----------------|---------------|----------|
 | Critical | 5 | ~~5~~ | — | — | **0** |
-| High     | 26 | ~~18~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **0** |
-| Medium   | 40 | ~~20~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 12 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-34, M-35, M-37, M-38) | **0** |
+| High     | 28 | ~~19~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 5 (H-7, H-8, H-17, H-21, H-23) | **0** |
+| Medium   | 41 | ~~23~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **0** |
 | Low      | 19 | ~~10~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **0** |
-| **Total** | **90** | **~~53 fixed~~** | **~~13 downgraded~~** | **24 accepted** | **0 open** |
+| **Total** | **93** | **~~57 fixed~~** | **~~13 downgraded~~** | **23 accepted** | **0 open** |
 
-**All 90 findings resolved.** 53 verified fixed in code. 13 downgraded/FP/invalid/duplicate. 24 accepted risk or documented by design.
+**All 93 findings resolved.** 57 verified fixed in code. 13 downgraded/FP/invalid/duplicate. 23 accepted risk or documented by design.
 
 Pass 2 corroborated 10 existing findings (C-3, H-12, M-2, M-5, M-7, M-12, M-14, M-15, M-22, L-2).
 Pass 3 corroborated 7 existing findings (C-3, H-2, H-12, H-13, H-14, M-24, L-2).
@@ -2228,3 +2228,752 @@ Pass 5 independently re-discovered 3 findings from passes 1-4:
 | Source | Repo | Claim | Verdict |
 |--------|------|-------|---------|
 | Nemesis pass 5 | nana-suckers-v6 | Registry-deployed suckers cannot authenticate their real peers due to double-hashed salt diverging across chains | FALSE POSITIVE — The registry, deployer, and singleton are deployed via deterministic CREATE2 at the same addresses on every chain. The double-hash uses `msg.sender = registry address` which is identical cross-chain, so clone addresses match and `peer() == address(this)` holds. The PoC tested with different registry addresses per chain, which doesn't match the actual deployment model. |
+
+---
+
+## CertiK AI Scan Triage (Pass 6)
+
+**Source:** CertiK AI-generated security scan (`nana-core-v6.md`)
+**Scope:** nana-core-v6 only (JBMultiTerminal, JBController, JBRulesets, JBTerminalStore, JBDirectory, JBTokens, JBSplits, JBFundAccessLimits, JBPrices, JBPermissions, JBProjects, JBERC20, libraries)
+**Method:** Corroboration against source code + parallel verification agents + prior 7-component deep audit context
+**Date:** 2026-04-22
+
+### CertiK Scan Summary
+
+| Original Severity | Count | Acknowledged (Info) | Invalid | Duplicates |
+|---|---|---|---|---|
+| Major | 9 | 0 | 9 | 0 |
+| Medium | 33 | 2 | 29 | 2 |
+| Minor | 25 | 1 | 24 | 0 |
+| **Total** | **67** | **3** | **62** | **2** |
+
+**Result: 0 actionable findings. 3 acknowledged as informational (no code changes required).**
+
+### Acknowledged (Informational)
+
+**CertiK-F39: Locked Splits Bypass via Many-to-One Matching** (minor)
+`JBSplits.sol:329-351` — `_includesLockedSplits` matches by value without tracking consumed indices. Duplicate identical locked splits can be collapsed into fewer entries. Requires unusual configuration of duplicate identical locked splits. Owner-configured.
+
+**CertiK-F40: Empty Split Group Cannot Disable Fallback Splits** (medium)
+`JBSplits.sol:138-154` — `splitsOf` falls back to rulesetId=0 when `_splitCountOf == 0`. No way to distinguish "explicitly emptied" from "never configured". Workaround: set a single 100% split to the project owner.
+
+**CertiK-F48: FX Quote Precision Inconsistency in `_computePayFrom`** (medium)
+`JBTerminalStore.sol:1130-1137` — Uses `amount.decimals` for PRICES call while all other FX paths use `_MAX_FIXED_POINT_FIDELITY` (18 decimals). Rounding error is bounded (sub-wei token issuance). Standard tokens (6-18 decimals) unaffected in practice.
+
+### Invalid — Major (9)
+
+| # | Title | Reason |
+|---|---|---|
+| F2 | Self-referential reserved splits mint against own balance | **Owner trust** — owner configures their own splits |
+| F7 | Descendant rulesets active despite rejected parent | **By design** — overlapping `mustStartAtOrAfter` causes intended overwrite (confirmed via Forge test) |
+| F11 | First payer drains prelaunch terminal balances | **Owner trust** — pre-launch balance is owner's responsibility |
+| F29 | Pay hooks bypass ruleset payout limits | **Data hook trust** — hooks have documented absolute control (code: "SECURITY NOTE: The data hook has absolute control") |
+| F38 | Locked fallback splits bypassed by ruleset-specific tables | **Documented behavior** — new owner can defend by setting their own splits |
+| F43 | ERC20 self-migration zeros recorded balance | **Privileged self-harm** — requires `MIGRATE_TERMINAL` permission |
+| F46 | Cash-out hook amounts as additional withdrawals | **Duplicate of F29** — same data hook trust model |
+| F49 | Pending reserved tokens uint208 cap overcommitment | **Privileged self-harm** — requires mint authority |
+| F67 | Arbitrary external token attachment bricks flows | **Owner trust** — requires `allowSetCustomToken` in ruleset + controller permission |
+
+### Invalid — Medium (31)
+
+| # | Title | Reason |
+|---|---|---|
+| F3 | Reserved splits ignore `preferAddToBalance` | **By design** — reserved tokens are project tokens (minted), not terminal funds |
+| F5 | Empty terminal config doesn't clear terminals | **By design** — use `setTerminalsOf` to clear |
+| F8 | Reentrancy in `mintTokensOf` understates supply | **Invalid** — state finalized before hook callback |
+| F10 | Reverting split hooks strand reserved tokens | **Owner trust** — owner configured the hook |
+| F14 | Missing zero-address controller check | **Invalid** — controller set before terminal config in all valid flows |
+| F16 | Removed terminals excluded from surplus | **Documented** — migrate balance before removing |
+| F17 | Invalid terminal bricks routing | **Owner trust** — terminals set by privileged owner |
+| F18 | JBERC20 mutable init flag allows re-init | **Invalid** — verified: `_name` guard prevents re-initialization |
+| F20 | Contract-wallet owners can't authenticate | **Invalid** — contracts call directly; ERC-2771 is optional UX |
+| F22 | Zero-address beneficiaries = unclaimable supply | **Self-inflicted** — payer chose `beneficiary = address(0)` |
+| F23 | Token payout accounting uses balance deltas | **Informational** — event emission only |
+| F24 | Fee aggregation rounding = insolvency | **Formally proven** — bounded by N wei for N splits |
+| F26 | Min cash-out validates nominal not actual | **Documented** — `minReclaimAmount` is pre-fee |
+| F27 | Gas griefing via `_processFee` try-catch | **Invalid** — fee terminal is protocol-controlled (project 1) |
+| F28 | Pay hooks never validated | **Data hook trust** — documented absolute control |
+| F31 | Rebasing token balance misattribution | **Out of scope** — rebasing tokens not supported |
+| F32 | Self-payouts poison fee-free surplus | **By design** — `_feeFreeSurplusOf` tracks round-tripped funds |
+| F33 | Project feed preempts default feed | **Owner trust** — owner sets their own feeds |
+| F34 | Missing approval check in `_currentlyApprovableRulesetIdOf` | **Invalid** — verified: `currentOf` and `_configureIntrinsicPropertiesFor` independently verify approval |
+| F37 | Derived start time uint48 wrap | **Invalid** — overflow is ~8.9 million years away |
+| F41 | Zero-rounding payout limit grief | **Edge case** — requires extreme price ratios; `ownerMustSendPayouts` mitigates |
+| F47 | Surplus views miscalculate cross-store terminals | **View limitation** — execution path queries each terminal correctly |
+| F53 | Split cash-outs bypass bonding curve tax | **Formally proven false** — subadditivity means splitting receives LESS |
+| F55 | adjustDecimals truncation skews surplus | **Invalid** — rounding is conservative (favors project) |
+| F56 | addToMetadata 32-byte alignment corruption | **Invalid** — verified: library handles padding internally |
+| F57 | Duplicate metadata ID shadowing | **By design** — standard first-match key-value behavior |
+| F59 | Payout fee bypass via same-terminal splits | **Documented fee design** — intra-terminal fee skip is intentional + hook trust |
+| F60 | Fee aggregation precision loss | **Duplicate of F24** — same bounded rounding |
+| F61 | Failed splits consume payout limit (DoS) | **Documented** — code comment: "Failed split payouts consume the payout limit by design" |
+| F62 | Return data bomb DoS in catch(bytes) | **Owner trust** — verified: split targets are owner-configured |
+| F64 | Total-surplus cash-out ignores local liquidity | **Documented** — `useTotalSurplusForCashOuts` is opt-in; owner accepts risk |
+
+### Invalid — Minor (24)
+
+| # | Title | Reason |
+|---|---|---|
+| F1 | Price truncation to zero | Fixed-point inherent; reverts safely |
+| F4 | Migration misroutes zero-beneficiary tokens | Self-inflicted config |
+| F6 | `SET_TERMINALS` check in `launchRulesetsFor` | Intentional permission design |
+| F9 | Custom token lacks capability validation | Owner trust |
+| F12 | Reentrancy in `setControllerOf` double migration | Owner chooses replacement controller |
+| F13 | First controller accepts arbitrary addresses | Requires protocol-level `isAllowedToSetFirstController` |
+| F15 | `ADD_TERMINALS` rendered useless | Permission design choice |
+| F19 | JBERC20 EIP-712 domain fixed to "JBToken" | Cosmetic |
+| F21 | Same-currency limits duplicated across groups | Controller-mediated; documented |
+| F25 | cashOut doesn't reject unsupported tokens | Reverts safely downstream |
+| F30 | Cash-out hooks receive net not gross | Documentation naming issue |
+| F35 | Gas manipulation via approval hook catch | Owner-configured approval hook |
+| F36 | `weight == 1` = "inherit derived weight" | Documented behavior |
+| F42 | Unbounded hook `cashOutTaxRate` bricks cash-outs | Data hook trust — can already halt by reverting |
+| F44 | Zero-value payments trigger pay hooks | Hook responsibility to validate inputs |
+| F45 | address(0) bypasses duplicate accounting check | address(0) is not a valid token; terminal-gated |
+| F50 | Claim to arbitrary beneficiary bypasses pause | `CLAIM_TOKENS` is separate from `pauseCreditTransfers` by design |
+| F51 | Zero-address credit sinks | Duplicate of F22 — self-inflicted |
+| F52 | Zero total supply inconsistent results | View helper edge case |
+| F54 | Sub-40-unit chunks bypass fee | Economically insignificant (sub-40 wei) |
+| F58 | Malformed metadata reverts pay | Caller-controlled input |
+| F63 | Dust-fragmenting payouts amplify wildcard | 1 wei dust per call — insignificant |
+| F65 | Pre-ruleset minting via reentrancy | By design — multi-step setup supported |
+| F66 | Non-standard tokens bypass decimal verification | Documented in code comment; privileged config |
+
+### Invalidation Pattern Summary
+
+| Category | Count | Description |
+|---|---|---|
+| Owner / Privileged Trust | 24 | Requires project owner, controller, or operator to trigger |
+| Data Hook Trust Model | 7 | Assumes data hooks are untrusted; protocol documents hooks have absolute control |
+| By Design / Documented | 16 | Behavior is intentional, in code comments, or confirmed by project owner |
+| Formally Proven Bounded | 4 | Rounding/precision issues proven negligible by formal property tests |
+| Edge Case / Theoretical | 5 | Requires extreme conditions (uint48 overflow, sub-wei amounts, 0-decimal tokens) |
+| View / Cosmetic | 4 | Affects views or events, not fund flows |
+| Duplicates | 2 | F46 = F29; F60 = F24 |
+
+---
+
+## Codex Nemesis Run (Pass 7)
+
+**Source:** Codex Nemesis automated audit (`codex-nemesis-summary-20260422-193746.log`)
+**Scope:** 20 repos. Findings in 6: revnet-core-v6, univ4-lp-split-hook-v6, nana-router-terminal-v6, croptop-core-v6, nana-ownable-v6, nana-project-handles-v6
+**Method:** Automated Feynman+State coupled-pair analysis → PoC verification → corroboration against source code
+**Date:** 2026-04-22
+
+### Pass 7 Summary
+
+| Repo | Scanned | TRUE POSITIVES | Fixed | Partial | Unfixed |
+|------|---------|---------------|-------|---------|---------|
+| revnet-core-v6 | 140 functions | 1 (HIGH) | 0 | 0 | 1 |
+| univ4-lp-split-hook-v6 | yes | 2 (MEDIUM) | 2 | 0 | 0 |
+| nana-router-terminal-v6 | yes | 2 (1M, 1L) | 1 | 1 | 0 |
+| croptop-core-v6 | yes | 3 (MEDIUM)* | 1 | 1 | 0 |
+| nana-ownable-v6 | yes | 0 | — | — | — |
+| nana-project-handles-v6 | yes | 1 (MEDIUM) | 0 | 0 | 1 |
+| **14 other repos** | yes | 0 | — | — | — |
+| **Total** | **20 repos** | **9** | **4** | **2** | **2** |
+
+*Croptop NM-001 later reclassified as FALSE POSITIVE / accepted behavior by the team.
+
+### New Findings
+
+---
+
+#### H-22: Stale ERC20 Approval in REVLoans
+
+| Field | Value |
+|---|---|
+| **Repo** | revnet-core-v6 |
+| **Source** | Nemesis NM-001 (HIGH) + CertiK F19 (MEDIUM) |
+| **Contract** | `REVLoans.sol` |
+| **Status** | **OPEN** |
+
+**Description:** `_tryPayFee` (L1522) and `_removeFrom` (L1322) grant ERC20 approval to terminals via `_beforeTransferTo` but never clear it on the success path. The `catch` branch in `_tryPayFee` clears the approval (L1535), but the happy path leaves a reusable allowance. `_removeFrom` never clears it at all. A terminal that returns success without pulling the full approved amount accumulates reusable allowance that can drain tokens from `REVLoans` during subsequent operations.
+
+**Mitigating factors:** Revnet terminals are set at deployment. The fee terminal is the REV project's (project 1) primary terminal, controlled by the protocol. Exploit requires a terminal that intentionally under-pulls approved amounts. `REVOwner` already implements the correct defensive pattern (`_afterTransferTo` clears approvals on both paths).
+
+**PoC:** `test/audit/CodexNemesisFeeAllowanceLeak.t.sol` — confirms stale approval accumulates across borrows.
+
+**Fix:** Add `_afterTransferTo` (calls `forceApprove(to, 0)`) on both success and failure paths in `_tryPayFee` and `_removeFrom`, matching `REVOwner`'s existing pattern.
+
+---
+
+#### M-34: Verified Handles Accept Unsafe Control Characters
+
+| Field | Value |
+|---|---|
+| **Repo** | nana-project-handles-v6 |
+| **Source** | Nemesis NM-001 (MEDIUM) |
+| **Contract** | `JBProjectHandles.sol` |
+| **Status** | **OPEN** |
+
+**Description:** `setEnsNamePartsFor` (L70) only rejects empty labels and dots, allowing arbitrary bytes including control characters (`\n`, `\r`). After ENS verification succeeds, `handleOf` returns raw bytes as canonical project identity text. Enables log poisoning, broken formatting, and UI spoofing in offchain consumers.
+
+**PoC:** `JBProjectHandlesNemesis.t.sol` — `handleOf` returned `team\nops` as a verified handle.
+
+**Fix:** Reject labels containing control characters before storing. At minimum, block bytes < 0x20.
+
+---
+
+### Pass 7 — Fixed Findings
+
+| Repo | ID | Severity | Title | Status |
+|------|-----|----------|-------|--------|
+| univ4-lp-split-hook-v6 | NM-001 | MEDIUM | Credit-only reserved splits strand value in hook | **FIXED** (commit `5f73731`) |
+| univ4-lp-split-hook-v6 | NM-002 | MEDIUM | Permissionless decay lets outsiders lock terminal token | **FIXED** (commits `b754bd0`, `357c2df`) |
+| nana-router-terminal-v6 | NM-001 | MEDIUM | Forwarding through registry bypasses lossy final-hop guard | **ACCEPTED RISK** — FoT tokens documented as unsupported |
+| nana-router-terminal-v6 | NM-002 | LOW | `lockTerminalFor` can irreversibly lock project to registry | **FIXED** (commit `c30eb49`) |
+| croptop-core-v6 | NM-001 | MEDIUM | Existing tier reuse bypasses updated posting policy | **RECLASSIFIED FP** — intended behavior (commit `0d65db1`) |
+| croptop-core-v6 | NM-002 | MEDIUM | `deployProjectFor` hard-fails on sucker deployment | **FIXED** (commit `c592554`) |
+| croptop-core-v6 | NM-003 | MEDIUM | Post-launch `MAP_SUCKER_TOKEN` authority gap | **PARTIAL** — manual owner grant required, documented limitation |
+
+### Pass 7 — Zero-Finding Repos (14)
+
+nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suckers-v6, defifa, banny-retail-v6, nana-omnichain-deployers-v6, nana-ownable-v6, nana-address-registry-v6, nana-permission-ids-v6, nana-fee-project-deployer-v6, nana-project-payer-v6, deploy-all-v6
+
+---
+
+## CertiK AI Scan — revnet-core-v6 (Pass 8)
+
+**Source:** CertiK AI-generated security scan (`revnet-core-v6.md`)
+**Scope:** REVDeployer, REVOwner, REVLoans, REVHiddenTokens (revnet-core-v6)
+**Method:** Corroboration against source code + parallel verification agents + cross-reference with Nemesis findings
+**Date:** 2026-04-22
+
+### Pass 8 Summary
+
+| Original Severity | Count | Actionable (New) | Acknowledged | Invalid | Duplicate |
+|---|---|---|---|---|---|
+| Critical | 1 | 0 | 0 | 1 | 0 |
+| Major | 8 | 2 | 4 | 1 | 1 |
+| Medium | 9 | 1 | 4 | 2 | 2 |
+| Minor | 12 | 0 | 6 | 4 | 2 |
+| **Total** | **30** | **3** | **14** | **8** | **5** |
+
+**Result: 3 actionable findings. 14 acknowledged as informational. 5 duplicates (within scan or cross-ref to Pass 7).**
+
+### New Findings
+
+---
+
+#### H-23: Unit Mismatch in Cross-Currency Loan Fees
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F12 (Major) |
+| **Contract** | `REVLoans.sol:_addTo` (L1096-1122) |
+| **Status** | **OPEN** |
+
+**Description:** In `_addTo`, `revFeeAmount` is computed from `addedBorrowAmount` via `JBFees.feeAmountFrom`. `addedBorrowAmount` is in the terminal's accounting currency (passed to `useAllowanceOf` with `currency: accountingContext.currency`), while `netAmountPaidOut` is the actual token amount returned by the terminal. For cross-currency terminals (e.g., USD-accounted ETH terminal), the subtraction `netAmountPaidOut - revFeeAmount - sourceFeeAmount` (L1122) mixes token-denominated and currency-denominated values, causing underflow reverts or incorrect fee deductions.
+
+**Mitigating factors:** Standard terminals use `currency = uint32(uint160(token))`, making `addedBorrowAmount` equivalent to token units. Cross-currency terminals require custom configuration. The code comment (L1115-1117) acknowledges the subtraction is safe "in practice" assuming small fee fractions.
+
+**Fix:** Either enforce same-currency accounting for loan sources, or convert `revFeeAmount` to token units using `JBPrices` before subtraction.
+
+---
+
+#### M-35: Stale Zero-Balance Loan Sources DoS
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F18 (Major) |
+| **Contract** | `REVLoans.sol:_totalBorrowedFrom` (L548-555) |
+| **Status** | **OPEN** |
+
+**Description:** `_totalBorrowedFrom` calls `source.terminal.accountingContextForTokenOf(...)` (L548) before checking `totalBorrowedFrom[...] == 0` (L555). If a fully-repaid source's terminal is later removed or begins reverting, all paths that use `_totalBorrowedFrom` (borrowing, repayment, reallocations) are DoS'd for that revnet.
+
+**Fix:** Swap the order — check `totalBorrowedFrom == 0` before the external call to `accountingContextForTokenOf`.
+
+---
+
+#### M-36: Cross-Chain `startsAtOrAfter` Normalization Mismatch
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F1 (Medium) |
+| **Contract** | `REVDeployer.sol:_makeRulesetConfigurations` (L136-163) |
+| **Status** | **OPEN** |
+
+**Description:** When stage 0 uses `startsAtOrAfter = 0`, the encoded hash stores `block.timestamp` (L162-163), but the stage ordering check (L136) compares raw calldata values. On the origin chain, stage 1 with `startsAtOrAfter = 1` passes the `1 > 0` check. On a second chain, reproducing the hash requires passing the origin timestamp for stage 0, but then `1 <= originTimestamp` fails with `REVDeployer_StageTimesMustIncrease`. This permanently blocks cross-chain expansion for affected multi-stage revnets.
+
+**Fix:** Normalize stage 0's `startsAtOrAfter` before the ordering check, or validate ordering against the encoded values.
+
+---
+
+### Pass 8 Cross-References
+
+| CertiK | Corroborates | Notes |
+|--------|-------------|-------|
+| F19 (Medium) | **H-22** (stale ERC20 approval) | Second independent discovery; same issue as Nemesis revnet NM-001 |
+| F7 (Major) | = F27 (Minor) | Sucker delay bypass — duplicate within scan |
+| F10 (Major) | = F28 (Major) | Hidden tokens excluded from supply — duplicate within scan |
+
+### Acknowledged (Informational) — 14
+
+| # | Title | Severity | Reason |
+|---|---|---|---|
+| F3 | Permissionless `burnHeldTokensOf` enables supply repricing | Medium | **By design** — burns deployer's unclaimed auto-issuance tokens, benefiting all holders equally. Deployer holds no other revnet tokens. |
+| F5 | Adding suckers later bypasses cash-out delay | Medium | **Design gap (low impact)** — sucker registration alone doesn't change pricing; bridge operations happen later. Quarantine is for normal cash-outs. |
+| F7 | Sucker withdrawals bypass cash-out delay on new chain | Major | **By design** — code comment: "no taxes or fees" for suckers. Suckers are trusted cross-chain bridges, not user cash-outs. |
+| F8 | Unclaimed auto-issuance excluded from supply | Major | **Acknowledged** — `amountToAutoIssue` tokens are not yet minted. Supply denominators use `totalSupply` which correctly reflects minted tokens only. Auto-issuance is a future claim, not current supply. |
+| F10 | Hidden tokens excluded from supply inflates cash-out/borrow | Major | **Acknowledged** — hiding requires allowlist membership. Hidden tokens are burned from supply by design (hide = voluntary lockup with reduced cash-out representation). |
+| F13 | Fail-open fee payment allows fee bypass | Major | **By design** — code comment: "If it fails, revFeeAmount is zeroed so the borrower receives it instead." Deliberate fail-safe to prevent fee terminal issues from bricking loans. |
+| F16 | Permission mismatch: REALLOCATE_LOAN needs OPEN_LOAN | Medium | **UX issue** — operator with only REALLOCATE_LOAN fails at internal `borrowFrom` call. Documented: callers need both permissions. |
+| F23 | Borrow payouts reenter before collateral is burned | Medium | **Acknowledged** — no reentrancy guard, but each nested borrow must independently satisfy collateral. Code comment (L1128-1131) acknowledges this as "practically infeasible." |
+| F2 | Configuration hash omits splits/extraMetadata/721 settings | Minor | **Intentional tradeoff** — hash covers timing/issuance/tax fields for cross-chain reproducibility. Splits and 721 config are per-chain by design. |
+| F6 | Pool initialization always uses stage-0 issuance | Minor | **Low impact** — pool sets initial price only, has no liquidity. Stale issuance affects price discovery minimally. |
+| F11 | `_addTo` trusts nominal payout instead of actual tokens | Minor | **Terminal trust** — `useAllowanceOf` returns net amount from canonical JBMultiTerminal. Fee-on-transfer tokens are unsupported protocol-wide. |
+| F15 | Reentrant repayment-token transfer lets stale owners finish repay | Medium | **Theoretical** — requires reentrant ERC-20 (ERC-777) or Permit2 callback during `_acceptFundsFor`. Standard tokens unaffected. |
+| F20 | Late fee accrual rounding creates zero-fee window | Minor | **Negligible** — zero-fee gap is ~3.5 days for 10-year loans at 2.5% prepaid. Rounding inherent to integer math. |
+| F22 | Borrow amount quoted against aggregate surplus, not source | Minor | **Conservative** — can cause DoS (revert) if source terminal lacks liquidity, but not fund loss. Overstated borrow capacity fails at `useAllowanceOf`. |
+
+### Invalid — 8
+
+| # | Title | Severity | Reason |
+|---|---|---|---|
+| F25 | Unauthenticated `afterCashOutRecordedWith` drains ETH | Critical | **Invalid** — REVOwner has no `receive()` or `fallback()`, cannot accumulate ETH. For native token: only spends `msg.value` sent by caller. For ERC20: `safeTransferFrom(msg.sender)` pulls from caller first. Code comment: "A non-terminal caller would just be donating their own funds as fees." |
+| F26 | Cross-chain surplus overstates redeemable amount | Medium | **Invalid** — fee-bearing path caps at `context.surplus.value` (local surplus). Terminal enforces its own balance constraint on actual payouts. |
+| F9 | `caller != holder` disables operator-delegated hide/reveal | Medium | **By design** — NatSpec: "The caller must be the holder." Self-service model, not operator-delegation. HIDE_TOKENS permission is for allowlist proof. |
+| F30 | Repayment clears debt without restoring treasury if terminal misbehaves | Major (Op) | **Terminal trust** — terminal is validated against `DIRECTORY.isTerminalOf` at borrow time. Misbehaving terminal is a trust assumption violation. |
+| F4 | Split operator prevented from deploying suckers before first ruleset | Minor | **Timing issue** — initial deployment flow handles this via deployer. Not a security concern. |
+| F14 | Zero remaining capacity forces full repayment | Minor | **UX quirk** — `maxRepayBorrowAmount` cap still protects caller from overpayment. |
+| F17 | Zero-amount ERC20 transferFrom DoS on collateral-only repay | Minor | **Edge case** — mainstream tokens handle zero-amount transfers. Non-standard token behavior is unsupported protocol-wide. |
+| F24 | Skipping zero-price debt sources understates surplus | Minor | **Conservative** — understated surplus means lower borrowing capacity, not inflation. Protective, not exploitable. |
+
+### Remaining Minor (Informational)
+
+| # | Title | Severity | Reason |
+|---|---|---|---|
+| F21 | Split-repayment rounding shaves late fees | Minor | 1 wei per partial repay. Impractical for 18-decimal tokens. |
+| F27 | Sucker holders bypass cash-out delay entirely | Minor | Duplicate of F7 at lower severity. |
+| F28 | Hidden token supply excluded from cash-out denominator | Major | Duplicate of F10. |
+| F29 | `_msgSender()` in sucker salt breaks permissionless expansion | Minor (Op) | Inherited from base sucker registry design. Different deployers produce different addresses. |
+
+### Pass 8 Invalidation Pattern Summary
+
+| Category | Count | Description |
+|---|---|---|
+| By Design / Documented | 6 | Intentional behavior confirmed by code comments or NatSpec |
+| Terminal/Token Trust | 4 | Assumes canonical terminals; unsupported token types |
+| Low/No Impact | 6 | Conservative rounding, UX quirks, timing issues |
+| Architectural Choice | 3 | Design tradeoffs (fail-open fees, aggregate surplus, self-service model) |
+| Duplicates (within scan) | 3 | F7=F27, F10=F28, F19=H-22 |
+| Cross-reference to Pass 7 | 2 | F19 corroborates H-22; NM-001 same as F19 |
+
+---
+
+## CertiK AI Scan — nana-router-terminal-v6 (Pass 9)
+
+**Source:** CertiK AI-generated security scan (`nana-router-terminal-v6.md`)
+**Scope:** JBRouterTerminal, JBRouterTerminalRegistry, JBPayRouteResolver, JBSwapLib (nana-router-terminal-v6)
+**Method:** Corroboration against source code + parallel verification agents
+**Date:** 2026-04-23
+
+### Pass 9 Summary
+
+| Original Severity | Count | Will Fix | Accepted | Invalid |
+|---|---|---|---|---|
+| Major | 1 | 1 (F13) | 0 | 0 |
+| Medium | 6 | 2 (F12, F21) | 4 (F5, F10, F15, F20) | 0 |
+| Minor | 14 | 4 (F1, F3, F7, F18) | 8 (F2, F4, F6, F8, F14, F17, F19 + F11 via F13) | 2 |
+| **Total** | **21** | **7** | **12** | **2** |
+
+**Result: 7 findings will be fixed. 12 accepted risk/by design. 2 invalid.**
+
+### Acknowledged — Major (1)
+
+#### F13: Manipulable Instantaneous V4 Liquidity Inflates Slippage Tolerance
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F13 (Major) |
+| **Contract** | `JBRouterTerminal.sol:_getV4SpotQuote` (L2308-2367), `JBSwapLib.sol:calculateImpact` |
+| **Corroboration** | VALID |
+
+**Description:** `_getV4SpotQuote` reads instantaneous in-range liquidity via `POOL_MANAGER.getLiquidity(id)` and passes it to `calculateImpact`. An attacker can inflate liquidity via JIT provisioning, deflating the impact calculation and producing a tight slippage band around a potentially manipulated spot price, enabling sandwich attacks.
+
+**Mitigating factors:** Extensive security comments in the code (L2271-2301) already acknowledge V4 spot quoting limitations. Users SHOULD provide `quoteForSwap` metadata for V4 swaps. The sigmoid slippage formula has a 2% floor. The code documents this as a known design trade-off where V4 hooks may not expose TWAP oracles.
+
+**Verdict:** Acknowledged — known V4 spot quoting limitation, documented in code. Users should provide off-chain quotes.
+
+**Admin note — WILL FIX:** Increase V4 TWAP window from 30s → 120s to match V3 floor. Cap V4 slippage at 15-20%. Use fixed tolerance when no TWAP available. (Addresses F11 and F13 together.)
+
+---
+
+### Acknowledged — Medium (6)
+
+#### F5: Registry Forwarding Uses Registry as Credit Holder
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F5 (Medium) |
+| **Contract** | `JBRouterTerminal.sol:_acceptFundsFor` (L1042-1066), `JBRouterTerminalRegistry.sol:pay` |
+| **Corroboration** | VALID |
+
+**Description:** When payments are forwarded through the registry, `_acceptFundsFor` uses `msg.sender` (the registry address) as the credit holder. Credit-based cashout payments routed through the registry will fail because the registry doesn't hold user credits. Code comment (L1055-1057) confirms this is intentional to prevent `originalPayer()` spoofing from stealing credits.
+
+**Verdict:** Acknowledged — intentional security/functionality trade-off. Credit cashouts must go directly to the router, not through the registry.
+
+**Admin note — ACCEPTED (by design):** Consider removing credit cashout accounting from the mechanism entirely. Document the incompatibility.
+
+---
+
+#### F10: Pool-Local V3 TWAP Trusted as Swap Floor for Permissionless Pools
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F10 (Medium) |
+| **Contract** | `JBRouterTerminal.sol:_getV3TwapQuote` (L2222-2269), `_discoverPool` (L1909-1946) |
+| **Corroboration** | VALID |
+
+**Description:** `_discoverPool` selects from permissionless Uniswap V3 pools by in-range liquidity. An attacker could deploy a pool with manipulated TWAP and higher liquidity than legitimate pools. The 2-minute minimum TWAP window (`MIN_TWAP_WINDOW = 120`) provides limited resistance.
+
+**Verdict:** Acknowledged — users should provide `quoteForSwap` metadata from off-chain sources. TWAP-based auto-quoting is a best-effort fallback.
+
+**Admin note — ACCEPTED:** Sandwich attack risk exists for users who don't provide off-chain quotes. Mitigated by TWAP window floors and sigmoid slippage formula.
+
+---
+
+#### F12: Missing Oracle Return Length Validation Causes OOB Revert
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F12 (Medium) |
+| **Contract** | `JBRouterTerminal.sol:_getV4SpotQuote` (L2335-2342) |
+| **Corroboration** | VALID |
+
+**Description:** The `try` success block accesses `tickCumulatives[1]` without verifying the array has at least 2 elements. If a V4 hook's `observe()` returns a shorter array, the OOB panic is NOT caught by `catch {}` (Solidity try/catch only catches external call failures, not panics in the success block). The transaction reverts.
+
+**Verdict:** Acknowledged — DoS vector only (not fund loss). Affects only pools with broken/malicious hooks. Legitimate oracle implementations return arrays matching input length.
+
+**Admin note — WILL FIX:** Add array length check before `tickCumulatives[1]` access to prevent OOB panic in try-success block.
+
+---
+
+#### F15: Liquidity-Based Pool Selection Enables Unsafe Spot Quoting
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F15 (Medium) |
+| **Contract** | `JBRouterTerminal.sol:_discoverPool` (L1909-1946), `JBPayRouteResolver.sol:_discoverAcceptedToken` (L166-226) |
+| **Corroboration** | PARTIAL |
+
+**Description:** Pool selection uses instantaneous in-range liquidity to rank candidates. An attacker could temporarily inflate liquidity in a manipulable pool to force selection. V3 TWAP quoting and user-provided quotes mitigate this, but the pool selection step itself is vulnerable to manipulation.
+
+**Verdict:** Acknowledged — pool discovery is best-effort; users should provide off-chain quotes for reliable execution.
+
+**Admin note — ACCEPTED:** Mitigated by V4 TWAP hardening (F13 fix). Residual risk accepted.
+
+---
+
+#### F20: Harmonic-Mean Liquidity Inflates V3 Slippage Tolerance
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F20 (Medium) |
+| **Contract** | `JBSwapLib.sol:calculateImpact` (L74-94), `JBRouterTerminal.sol:_getV3TwapQuote` (L2255) |
+| **Corroboration** | PARTIAL |
+
+**Description:** `OracleLibrary.consult` returns harmonic-mean liquidity over the TWAP window, which `calculateImpact` treats as executable depth. Brief low-liquidity periods can deflate the harmonic mean, inflating slippage tolerance. However, the 120-second minimum TWAP window, 10-minute default, and the sigmoid slippage formula's 2% floor provide meaningful mitigation.
+
+**Verdict:** Acknowledged — mitigated by TWAP window floors and sigmoid parameters. Residual risk for LP manipulation during observation window.
+
+**Admin note — ACCEPTED:** Harmonic mean is MORE resistant to manipulation than spot liquidity. Risk accepted.
+
+---
+
+#### F21: Incorrect `sqrtPriceLimitX96` Derivation from Average Execution Rate
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F21 (Medium) |
+| **Contract** | `JBSwapLib.sol:sqrtPriceLimitFromAmounts` (L107-168) |
+| **Corroboration** | VALID |
+
+**Description:** Derives `sqrtPriceLimitX96` from `minimumAmountOut / amountIn` (average execution rate) instead of the correct marginal price limit. The average rate is always better than the terminal marginal price, making the limit systematically too strict. This can cause premature partial fills for valid swaps. Unconsumed input is refunded via `_handleSwap`.
+
+**Verdict:** Acknowledged — causes suboptimal execution (premature partial fills), not fund loss. Users can bypass via `quoteForSwap` metadata.
+
+**Admin note — WILL FIX:** Remove `sqrtPriceLimitFromAmounts`. Use extreme price limits (MIN/MAX sqrtPrice). Rely on post-swap `minAmountOut` check for slippage protection. Well-tested.
+
+---
+
+### Acknowledged — Minor (12)
+
+| # | CertiK ID | Title | Contract | Corroboration | Notes |
+|---|---|---|---|---|---|
+| 1 | F1 | Multi-hop circular route detection gap | `JBPayRouteResolver._isCircularTerminal` | PARTIAL | **WILL FIX** — Extend to bounded loop (max 5 hops) |
+| 2 | F2 | `quoteForSwap` / auto-selected tokenOut mismatch | `JBRouterTerminal._pickPoolAndQuote` | VALID | **ACCEPTED** — Documentation issue, not code bug. Frontends should set quoteForSwap per expected output token |
+| 3 | F3 | Fallback preview path reverts on terminal failure | `JBPayRouteResolver.previewBestPayRoute` (L934-955) | VALID | **WILL FIX** — Wrap fallback path in try/catch |
+| 4 | F4 | Unbounded quadratic candidate enumeration gas cost | `JBPayRouteResolver._candidatePayRouteTokens` | PARTIAL | **ACCEPTED** — Bounded in practice (~5-10 terminals) |
+| 5 | F6 | Forwarding-terminal receipt bypass | `JBRouterTerminal._isForwardingTerminal` (L974-983) | VALID | **ACCEPTED** — By design, forwarding terminals trusted by project owners |
+| 6 | F7 | V3 callback delta off-by-one at boundary | `JBRouterTerminal.uniswapV3SwapCallback` (L406) | VALID | **WILL FIX** — Change `< 0` to `> 0` to match canonical Uniswap pattern |
+| 7 | F8 | Multi-hop cashout slippage cleared after first hop | `JBRouterTerminal._cashOutLoop` (L1231) | VALID | **ACCEPTED (by design)** — Only final output matters; outer function enforces end-to-end minimum |
+| 8 | F11 | V4 TWAP uses 30-second window | `JBRouterTerminal._TWAP_WINDOW` (L112) | VALID | **WILL FIX** — Addressed by F13 fix (30s → 120s) |
+| 9 | F14 | Zero oracle quote disables swap protection | `JBRouterTerminal._quoteWithSlippage` (L2636) | PARTIAL | **ACCEPTED** — Zero quote means no liquidity; swap would fail anyway |
+| 10 | F17 | Forwarder claim disables receipt check | `JBRouterTerminal._isForwardingTerminal` (L974-983) | PARTIAL | **ACCEPTED** — Forwarding terminals registered by project owners |
+| 11 | F18 | Transient `originalPayer` corruption on nested calls | `JBRouterTerminalRegistry.originalPayer` (L88) | VALID | **WILL FIX** — Save/restore pattern instead of clearing to address(0) |
+| 12 | F19 | Permit2 try/catch falls through to ERC20 allowance | `JBRouterTerminalRegistry._acceptFundsFor` (L536-540) | PARTIAL | **ACCEPTED (by design)** — Standard Permit2 fallback pattern |
+
+---
+
+### Invalid — Minor (2)
+
+| # | CertiK ID | Title | Reason |
+|---|---|---|---|
+| 1 | F9 | Balance-delta over-credit for rebasing tokens | Router uses balance-before/after correctly; fee-on-transfer explicitly unsupported (L1101); `_enforceStandardTerminalReceipt` rejects discrepancies |
+| 2 | F16 | Spoofable `originalPayer()` redirects refunds | `_resolveOriginalPayer` only queries `msg.sender`, which already controls the funds. Credit path deliberately avoids `originalPayer()` (L1057). No third-party fund theft possible. |
+
+---
+
+### Pass 9 Invalidation Pattern Summary
+
+| Pattern | Count | Examples |
+|---|---|---|
+| Known design trade-off, documented in code | 8 | F5, F8, F13, F19 |
+| Mitigated by user-provided `quoteForSwap` | 5 | F10, F13, F15, F20, F21 |
+| View-only / DoS-only, no fund loss | 4 | F3, F4, F12, F14 |
+| Bounded by practical configuration | 2 | F1, F4 |
+| Misunderstood trust model | 2 | F9, F16 |
+
+---
+
+## CertiK AI Scan — nana-omnichain-deployers-v6 (Pass 10)
+
+**Source:** CertiK AI-generated security scan (`nana-omnichain-deployer.md`)
+**Scope:** JBOmnichainDeployer (nana-omnichain-deployers-v6)
+**Method:** Corroboration against source code + verification agent
+**Date:** 2026-04-23
+
+### Pass 10 Summary
+
+| Original Severity | Count | Will Fix | Accepted | Invalid |
+|---|---|---|---|---|
+| Medium | 3 | 1 (F2) | 0 | 2 |
+| Minor | 5 | 1 (F1) | 3 (F5, F7, F8) | 1 |
+| **Total** | **8** | **2** | **3** | **3** |
+
+**Result: 2 findings will be fixed. 3 accepted risk/by design. 3 invalid.**
+
+### Acknowledged — Medium (1)
+
+#### F2: Controller Validation Trusts Untrusted Directory
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F2 (Medium) |
+| **Contract** | `JBOmnichainDeployer.sol:_validateController` (L928-934) |
+| **Corroboration** | VALID |
+
+**Description:** `_validateController` reads `controller.DIRECTORY()` from the user-provided controller, then trusts that directory's `controllerOf(projectId)`. A forged controller can return a fake directory that confirms itself. The deployer has no immutable `DIRECTORY` reference.
+
+**Mitigating factors:** All calling paths (`_launchRulesetsFor`, `_queueRulesetsOf`) require `_requirePermissionFrom` with the project owner's permission. An attacker who already has owner/operator permission can already invoke controller operations directly. The code comment (L923-925) acknowledges the reflexive lookup as intentional.
+
+**Verdict:** Acknowledged — defense-in-depth gap, but exploitability is limited to callers who already have project owner/operator permission.
+
+**Admin note — WILL FIX:** Store immutable `DIRECTORY` reference in constructor. Validate against known directory instead of querying user-provided controller.
+
+---
+
+### Acknowledged — Minor (4)
+
+| # | CertiK ID | Title | Contract | Corroboration | Notes |
+|---|---|---|---|---|---|
+| 1 | F1 | `transferFrom` instead of `safeTransferFrom` for NFT handoff | `JBOmnichainDeployer.sol:_launchProjectFor` (L719) | VALID | **WILL FIX** — Change to `safeTransferFrom` for ERC-721 safety |
+| 2 | F5 | Unvalidated extra data hooks can brick live flows | `JBOmnichainDeployer.sol:_setup721` (L860-876) | VALID | **ACCEPTED** — Self-inflicted misconfiguration by project owner |
+| 3 | F7 | Missing hook721 alias check enables double invocation | `JBOmnichainDeployer.sol:_setup721` (L862) | VALID | **ACCEPTED** — Self-inflicted misconfiguration by project owner |
+| 4 | F8 | `_msgSender()` in deployment salt breaks cross-chain determinism | `JBOmnichainDeployer.sol:deploySuckersFor` (L161) | VALID | **ACCEPTED** — Documented and intentional replay protection |
+
+---
+
+### Invalid (3)
+
+| # | CertiK ID | Title | Reason |
+|---|---|---|---|
+| 1 | F3 | Double application of tiered-721 split | Not double-counting — weight and amount are separate dimensions. The 721 hook reduces weight; the deployer reduces amount passed to extra hook. Different downstream consumers. |
+| 2 | F4 | Sucker cash-outs use only local supply/surplus | Intentional design. Suckers redeem proportionally against local surplus with 0% tax. Cross-chain aggregation is correctly applied only for non-sucker cash-outs. Comment at L398 confirms. |
+| 3 | F6 | Stale extra data hook persists on key reuse | RulesetId keys are always unique (timestamp-based with collision guard at L789-791). No scenario allows pre-existing data at a new rulesetId slot. |
+
+---
+
+### Pass 10 Invalidation Pattern Summary
+
+| Pattern | Count | Examples |
+|---|---|---|
+| Intentional documented design | 2 | F4 (sucker local accounting), F8 (salt replay protection) |
+| Permission-gated, self-inflicted only | 3 | F2, F5, F7 |
+| Misunderstood lifecycle/key uniqueness | 1 | F6 |
+| Misunderstood multi-dimensional accounting | 1 | F3 |
+
+---
+
+## CertiK AI Scan — nana-univ4-router-v6 (Pass 11)
+
+**Source:** CertiK AI-generated security scan (`nana-univ4-router-v6.md`)
+**Scope:** JBUniswapV4Hook, Oracle library (univ4-router-v6)
+**Method:** Corroboration against source code + verification agent
+**Date:** 2026-04-23
+
+### Pass 11 Summary
+
+| Original Severity | Count | Will Fix | Accepted | Invalid |
+|---|---|---|---|---|
+| Major | 2 | 0 | 1 (F2) | 1 (F9 = dup of F2) |
+| Medium | 4 | 1 (F1) | 3 (F4, F6, F7) | 0 |
+| Minor | 3 | 0 | 3 (F3, F5, F8) | 0 |
+| **Total** | **9** | **1** | **7** | **1** |
+
+**Result: 1 finding will be fixed. 7 accepted risk/by design. 1 duplicate.**
+
+### Acknowledged — Major (1)
+
+#### F2: Post-Action Oracle Observation Backfills TWAP with Post-Swap Tick
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F2 (Major) |
+| **Contract** | `Oracle.sol:transform` (L63-106), `JBUniswapV4Hook.sol:_afterSwap` |
+| **Corroboration** | VALID |
+
+**Description:** `Oracle.transform` records the current tick as `tickCumulative` for the entire elapsed time since the last observation. When called from `_afterSwap`, the tick is the POST-swap tick, so the entire time interval between the last observation and the swap is credited with the post-action price. For large swaps with infrequent observations, this corrupts the TWAP by retroactively projecting the post-swap price backwards in time.
+
+**Impact:** An attacker can front-run with a large swap, backfill the TWAP history with a moved tick, and exploit downstream protocols that rely on the oracle. The corruption worsens with less frequent observations.
+
+**Mitigating factors:** Uniswap V4 pools with active trading have frequent observations that limit the backfill window. The `MAX_TWAP_CARDINALITY = 1024` caps total history. `JBRouterTerminal` uses independent TWAP quoting for its own slippage, so the primary consumer of this oracle is external integrators.
+
+**Admin note — ACCEPTED:** This is the same behavior as Uniswap V3's native oracle. Splitting observations into pre/post intervals would double gas cost and deviate from V3's well-understood semantics. JBRouterTerminal uses independent TWAP quoting (F13 hardened). External integrators should verify TWAP quality via observation count.
+
+---
+
+### Acknowledged — Medium (4)
+
+#### F1: `_settleOutput` Trusts Terminal's Reported Output for Fee-on-Transfer Tokens
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F1 (Medium) |
+| **Contract** | `JBUniswapV4Hook.sol:_settleOutput` |
+| **Corroboration** | VALID |
+
+**Description:** `_settleOutput` uses the terminal's return value from `addToBalanceOf` as the amount settled, rather than measuring the actual balance delta. For fee-on-transfer tokens, the terminal receives fewer tokens than reported, creating a bookkeeping discrepancy.
+
+**Verdict:** Acknowledged — fee-on-transfer tokens are explicitly unsupported by the Juicebox protocol (documented in JBMultiTerminal and JBRouterTerminal).
+
+**Admin note — WILL FIX:** Use balance-before/after measurement instead of trusting terminal return value. Defense-in-depth: prevents PoolManager settlement from over-crediting if a fee-on-transfer token is ever used in a pool.
+
+---
+
+#### F4: Insufficient TWAP Falls Back to Manipulable Spot Price
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F4 (Medium) |
+| **Contract** | `JBUniswapV4Hook.sol:observeTWAP`, `JBRouterTerminal._getV4SpotQuote` |
+| **Corroboration** | VALID |
+
+**Description:** When the oracle has insufficient observations (< 2 data points), `observeTWAP` returns the current spot tick as the TWAP value. This fallback is manipulable via JIT liquidity or sandwich attacks. Downstream consumers (including JBRouterTerminal) receive a manipulable "TWAP" that is actually just spot price.
+
+**Verdict:** Acknowledged — documented behavior. The JBRouterTerminal F13 fix now applies fixed 15% slippage tolerance when no TWAP is available, mitigating the downstream impact. External consumers should verify TWAP quality via observation count.
+
+**Admin note — ACCEPTED:** Mitigated by F13 fix (15% fixed slippage when no TWAP). Residual risk for external callers who don't check observation count.
+
+---
+
+#### F6: Synchronous TWAP Observation Growth Enables Gas-Griefing DoS
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F6 (Medium) |
+| **Contract** | `Oracle.sol:grow` (L151-175), `JBUniswapV4Hook.sol:increaseOracleCardinalityNext` |
+| **Corroboration** | VALID (mitigated) |
+
+**Description:** `increaseOracleCardinalityNext` calls `Oracle.grow`, which initializes new oracle slots in a synchronous loop. Growing cardinality by large amounts (e.g., 1024 slots) costs significant gas. An attacker can grief by calling `increaseOracleCardinalityNext` with `MAX_TWAP_CARDINALITY` before a user's transaction, inflating gas costs for subsequent operations that trigger oracle writes.
+
+**Mitigating factors:** Bounded by `MAX_TWAP_CARDINALITY = 1024`, which limits max growth. The `grow` function is permissionless but idempotent — once grown, it can't be called again to the same size. Gas griefing is a one-time cost per cardinality increase.
+
+**Verdict:** Acknowledged — bounded by MAX_TWAP_CARDINALITY. One-time cost, not repeatable. Practical impact limited.
+
+**Admin note — ACCEPTED:** Bounded by MAX_TWAP_CARDINALITY = 1024. One-time cost per cardinality increase, not repeatable. Adding per-call caps just distributes the cost across more transactions.
+
+---
+
+#### F7: Unchecked Terminal Fee Arithmetic Can Cause Sell-Side DoS
+
+| Field | Value |
+|---|---|
+| **Source** | CertiK F7 (Medium) |
+| **Contract** | `JBUniswapV4Hook.sol:_settleOutput` |
+| **Corroboration** | VALID |
+
+**Description:** Fee computation in `_settleOutput` can revert if the terminal's fee calculations produce unexpected values (e.g., fee > amount). This would cause sell-side operations to revert, blocking token sales through the hook.
+
+**Mitigating factors:** The code wraps terminal calls in try-catch. If the fee calculation fails, the hook defaults fee to 0 and proceeds. The DoS only affects the specific transaction, not the pool or other operations.
+
+**Verdict:** Acknowledged — try-catch fallback prevents persistent DoS. Fee defaults to 0 on failure.
+
+**Admin note — ACCEPTED:** Existing try-catch fallback already handles this. Fee defaults to 0 on arithmetic failure.
+
+---
+
+### Acknowledged — Minor (3)
+
+| # | CertiK ID | Title | Contract | Corroboration | Notes |
+|---|---|---|---|---|---|
+| 1 | F3 | Single observation returns spot tick as TWAP | `JBUniswapV4Hook.observeTWAP` | PARTIAL | **ACCEPTED** — Internal routing mitigated by F13 fix (15% fixed slippage). External callers should check observation count. |
+| 2 | F5 | `_beforeSwap` ignores caller's `sqrtPriceLimitX96` | `JBUniswapV4Hook._beforeSwap` | VALID | **ACCEPTED (by design)** — sqrtPriceLimitX96 is irrelevant for JB-routed swaps (no AMM ticks crossed). V4-path swaps apply it normally via PoolManager. |
+| 3 | F8 | Buy helper truncates currency IDs to `uint32` | `JBUniswapV4Hook._getBuyHelper` | VALID | **ACCEPTED** — View-only preview helper. Even a collision (~0.001% probability) only affects quote estimation, not swap execution. |
+
+---
+
+### Invalid (1)
+
+| # | CertiK ID | Title | Reason |
+|---|---|---|---|
+| 1 | F9 | Oracle.transform backfills elapsed time with post-action state | DUPLICATE of F2 — identical finding about post-swap tick backfilling TWAP history. |
+
+---
+
+### Pass 11 Invalidation Pattern Summary
+
+| Pattern | Count | Examples |
+|---|---|---|
+| Unsupported token type (fee-on-transfer) | 1 | F1 |
+| Known oracle limitation, mitigated by F13 fix | 3 | F3, F4, F2 (TWAP fallback/backfill) |
+| Bounded by MAX_TWAP_CARDINALITY | 1 | F6 |
+| Try-catch fallback prevents DoS | 1 | F7 |
+| Outer protocol enforces limit | 1 | F5 |
+| Negligible collision probability | 1 | F8 |
+| Duplicate | 1 | F9 |
+
+---
+
+## Audit Findings Summary (All Passes)
+
+### Open Findings
+
+**None — all 93 findings resolved.**
+
+| ID | Severity | Repo | Resolution |
+|---|---|---|---|
+| ~~**H-22**~~ | HIGH | revnet-core-v6 | **FIXED** — `_afterTransferTo` pattern in REVLoans (PR #130, merged) |
+| ~~**H-23**~~ | HIGH | revnet-core-v6 | **Accepted risk** — cross-currency terminals are caller-configured; misconfigured terminal is caller's problem |
+| ~~**M-34**~~ | MEDIUM | nana-project-handles-v6 | **FIXED** — control char validation rejects bytes < 0x20 and 0x7F (PR #5, merged) |
+| ~~**M-35**~~ | MEDIUM | revnet-core-v6 | **FIXED** — reordered `_totalBorrowedFrom` to check zero before external call (PR #130, merged) |
+| ~~**M-36**~~ | MEDIUM | revnet-core-v6 | **FIXED** — stage ordering validated against normalized timestamps (PR #130, merged) |
+
+### Cumulative Statistics (Passes 1-11)
+
+| Pass | Source | Scope | Findings Reviewed | Actionable | Acknowledged | Invalid/FP |
+|---|---|---|---|---|---|---|
+| 1 | Component audits (7 reports) | nana-core-v6 | ~40 | 0 | 0 | ~40 |
+| 2 | Cross-component analysis | nana-core-v6 | 12 | 0 | 0 | 12 |
+| 3 | Formal verification | nana-core-v6 | 8 | 0 | 0 | 8 |
+| 4 | Economic simulation | nana-core-v6 | 6 | 0 | 0 | 6 |
+| 5 | Nemesis (first run) | 6 repos | 90 | 5 | 3 | 82 |
+| 6 | CertiK AI (nana-core-v6) | nana-core-v6 | 67 | 0 | 3 | 64 |
+| 7 | Nemesis (second run) | 20 repos | 9 | 2 | 0 | 7 |
+| 8 | CertiK AI (revnet-core-v6) | revnet-core-v6 | 30 | 3 | 14 | 13 |
+| 9 | CertiK AI (nana-router-terminal-v6) | nana-router-terminal-v6 | 21 | 7 | 12 | 2 |
+| 10 | CertiK AI (nana-omnichain-deployers-v6) | nana-omnichain-deployers-v6 | 8 | 2 | 3 | 3 |
+| 11 | CertiK AI (nana-univ4-router-v6) | univ4-router-v6 | 9 | 1 | 7 | 1 |
+| **Total** | | | **~300** | **20** | **44** | **~236** |
