@@ -1,9 +1,9 @@
 # Juicebox V6 EVM Audit Report
 
-**Source:** Pashov Solidity Auditor (Codex) Runs `20260420-112444` + `20260421-000519` + `20260421-130750` + `20260421-203407` | Nemesis Auditor (Codex) Runs `20260420` + `20260421-000900` + `20260421-130747` + `20260421-203404` + `20260422-003458` | CertiK AI Scans (nana-core-v6, revnet-core-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6) | GitHub `Bananapus/version-6` Issues (manual triage)
+**Source:** Pashov Solidity Auditor (Codex) Runs `20260420-112444` + `20260421-000519` + `20260421-130750` + `20260421-203407` + `20260426-101552` | Nemesis Auditor (Codex) Runs `20260420` + `20260421-000900` + `20260421-130747` + `20260421-203404` + `20260422-003458` + `20260426-101548` | CertiK AI Scans (nana-core-v6, revnet-core-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6) | GitHub `Bananapus/version-6` Issues (manual triage)
 **Repos scanned:** 20 (nana-privacy-v6, defifa-collection-deployer-v6 skipped — directories not found)
-**Date:** 2026-04-23 (pass 11 update)
-**Total findings:** 93 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings, passes 7-8: 3 new findings [H-22, H-23, M-36])
+**Date:** 2026-04-26 (pass 12 update)
+**Total findings:** 105 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings, passes 7-8: 3 new findings [H-22, H-23, M-36], pass 12: 12 new findings [C-6, H-24–H-26, M-39–M-44, L-17, L-18])
 
 ---
 
@@ -11,18 +11,19 @@
 
 | Severity | Total | ~~Fixed~~ | ~~Downgraded~~ | Accepted risk | **Open** |
 |----------|-------|-----------|----------------|---------------|----------|
-| Critical | 5 | ~~5~~ | — | — | **0** |
-| High     | 28 | ~~20~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **0** |
-| Medium   | 41 | ~~23~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **0** |
-| Low      | 19 | ~~10~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **0** |
-| **Total** | **93** | **~~58 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **0 open** |
+| Critical | 6 | ~~6~~ | — | — | — |
+| High     | 31 | ~~23~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | — |
+| Medium   | 47 | ~~29~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | — |
+| Low      | 21 | ~~12~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | — |
+| **Total** | **105** | **~~70 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **0 open** |
 
-**All 93 findings resolved.** 58 verified fixed in code. 13 downgraded/FP/invalid/duplicate. 22 accepted risk or documented by design.
+**All 105 findings resolved.** 12 findings from Pass 12 now fixed (1 Critical, 3 High, 6 Medium, 2 Low).
 
 Pass 2 corroborated 10 existing findings (C-3, H-12, M-2, M-5, M-7, M-12, M-14, M-15, M-22, L-2).
 Pass 3 corroborated 7 existing findings (C-3, H-2, H-12, H-13, H-14, M-24, L-2).
 Pass 4 corroborated 6 existing findings (C-3, H-2, H-12, M-33, Lead 12, Lead 35/43).
 Pass 5 corroborated 3 existing findings (H-21, M-33, L-2).
+Pass 12 corroborated 4 existing findings (C-3, H-7, M-33, M-5).
 GitHub issues corroborated 2 existing findings: #73 → C-3 (FIXED), #62 → M-11 (downgraded).
 
 ---
@@ -2951,7 +2952,9 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 
 ### Open Findings
 
-**None — all 93 findings resolved.**
+**0 findings open.** All 105 findings resolved.
+
+#### Previously Open (Now Resolved)
 
 | ID | Severity | Repo | Resolution |
 |---|---|---|---|
@@ -2960,8 +2963,20 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 | ~~**M-34**~~ | MEDIUM | nana-project-handles-v6 | **FIXED** — control char validation rejects bytes < 0x20 and 0x7F (PR #5, merged) |
 | ~~**M-35**~~ | MEDIUM | revnet-core-v6 | **FIXED** — reordered `_totalBorrowedFrom` to check zero before external call (PR #130, merged) |
 | ~~**M-36**~~ | MEDIUM | revnet-core-v6 | **FIXED** — stage ordering validated against normalized timestamps (PR #130, merged) |
+| ~~**C-6**~~ | CRITICAL | nana-distributor-v6 | **FIXED** — balance-delta check replaces blind controller-prepaid credit (`85cca11`, PR #10) |
+| ~~**H-24**~~ | HIGH | nana-distributor-v6 | **FIXED** — persistent `_consumedVotesOf` storage caps voting power across calls (`85cca11`, PR #10) |
+| ~~**H-25**~~ | HIGH | nana-buyback-hook-v6 | **FIXED** — no-pool/no-hook fallback returns `context.surplus.value` (`5be7dd4`, PR #107) |
+| ~~**H-26**~~ | HIGH | croptop-core-v6 | **FIXED** — revert on duplicate pay metadata ID in `additionalPayMetadata` (`c43d88c`, PR #117) |
+| ~~**M-39**~~ | MEDIUM | nana-router-terminal-v6 | **FIXED** — removed receipt enforcement from `pay()`, kept in `addToBalanceOf` (`c1b95c1`, PR #94) |
+| ~~**M-40**~~ | MEDIUM | univ4-lp-split-hook-v6 | **FIXED** — out-of-range returns respect `terminalIsToken0` ordering (`d345cd6`, PR #109) |
+| ~~**M-41**~~ | MEDIUM | univ4-lp-split-hook-v6 | **FIXED** — `projectToken == address(0)` check moved before `_accumulateTokens` (`d345cd6`, PR #109) |
+| ~~**M-42**~~ | MEDIUM | croptop-core-v6 | **FIXED** — tier reuse validates `encodedIPFSUri` match, clears stale cache (`c43d88c`, PR #117) |
+| ~~**M-43**~~ | MEDIUM | defifa | **FIXED** — normalize grace period to `effectiveGrace` before timeout validation (`62c9adc`, PR #95) |
+| ~~**M-44**~~ | MEDIUM | defifa | **FIXED** — `tokensClaimableFor` includes `_pendingReserveMintCost()` in denominator (`62c9adc`, PR #95) |
+| ~~**L-17**~~ | LOW | nana-distributor-v6 | **FIXED** — `fund()` reverts on `msg.value` with ERC-20 token (`85cca11`, PR #10) |
+| ~~**L-18**~~ | LOW | nana-721-hook-v6 | **FIXED** — `recordRemoveTierIds` rejects tier IDs > `maxTierIdOf` (`80f8af1b`, PR #119) |
 
-### Cumulative Statistics (Passes 1-11)
+### Cumulative Statistics (Passes 1-12)
 
 | Pass | Source | Scope | Findings Reviewed | Actionable | Acknowledged | Invalid/FP |
 |---|---|---|---|---|---|---|
@@ -2976,4 +2991,436 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 | 9 | CertiK AI (nana-router-terminal-v6) | nana-router-terminal-v6 | 21 | 7 | 12 | 2 |
 | 10 | CertiK AI (nana-omnichain-deployers-v6) | nana-omnichain-deployers-v6 | 8 | 2 | 3 | 3 |
 | 11 | CertiK AI (nana-univ4-router-v6) | univ4-router-v6 | 9 | 1 | 7 | 1 |
-| **Total** | | | **~300** | **20** | **44** | **~236** |
+| 12 | Nemesis + Pashov (Codex `20260426`) | 20 repos | 68 | 12 | 0 | 56 |
+| **Total** | | | **~368** | **32** | **44** | **~292** |
+
+---
+
+## Pass 12 — Nemesis + Pashov Auditor (Codex `20260426`)
+
+**Source:** Nemesis Auditor (Codex gpt-5.5, run `20260426-101548`, 20 repos, 54 raw findings) + Pashov Solidity Auditor (Codex gpt-5.5, run `20260426-101552`, 21 repos, 14 findings + 13 leads)
+**Date:** 2026-04-26
+**Findings after triage:** 12 actionable (1 Critical, 3 High, 6 Medium, 2 Low) — **all 12 FIXED**. 56 invalid/FP/already-documented. 14 corroborated existing findings.
+
+All findings below were verified against source code and cross-referenced against every RISKS.md, inline comment, and prior AUDIT_REPORT.md entry. Only genuinely new, unacknowledged issues are listed.
+
+---
+
+### Critical (1)
+
+#### ~~C-6. Controller-Prepaid Split Path Mints Unbacked Distributor Credits~~ — FIXED (`85cca11`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-distributor-v6 |
+| **File** | `src/JBTokenDistributor.sol:86-98`, `src/JB721Distributor.sol:104-117` |
+| **Auditor confidence** | 95 (Nemesis NM-001) |
+| **My confidence** | **95 — VERIFIED (PoC passed)** |
+| **Known issue?** | No |
+
+**Description:** Both distributors use an allowance check to decide between the terminal path (pull via `transferFrom`) and the controller-prepaid path (trust `context.amount`). The controller-prepaid `else` branch blindly credits `_balanceOf[hook][token] += context.amount` without any balance-delta verification. Any directory-authorized controller or terminal for *any* project can call `processSplitWith` with an arbitrary `context.amount` and zero actual token transfer, fabricating internal credit that drains ERC-20 tokens funded for other hooks in the shared singleton distributor.
+
+**PoC:** An attacker-controlled project controller calls `processSplitWith` with `amount = 1000 ether` and no allowance/transfer. The distributor credits the attacker hook, then the attacker vests/collects against the fake credit, draining tokens funded by a legitimate hook.
+
+**Mitigation options:**
+
+1. **Track global accounted balance** (recommended): Add `mapping(IERC20 => uint256) _accountedBalanceOf` that increments on every credit and decrements on every withdrawal. The controller-prepaid path verifies `token.balanceOf(this) - _accountedBalanceOf[token] >= amount` before crediting.
+2. **Require allowance for all ERC-20 paths**: Remove the controller-prepaid trust path entirely and always require `transferFrom`.
+3. **Balance-delta check**: Snapshot `balanceOf` before and after the outer `processSplitWith` call and only credit the delta.
+
+**Tradeoffs:** Option 1 adds ~5k gas per credit/debit from the extra storage slot but preserves the controller-prepaid pattern. Option 2 is simplest but forces controllers to grant allowance (breaking the current JBController integration that transfers first). Option 3 is fragile with reentrancy.
+
+**Admin note — FIX REQUIRED (Critical):** Option 1 is recommended. Also add `require(msg.value == 0)` on ERC-20 paths and validate `context.split.hook == IJBSplitHook(address(this))`. This is a fund-draining vector if any project has a malicious or compromised controller.
+
+**Required tests:**
+- **Vulnerability test:** Reproduce the PoC — attacker-controlled controller calls `processSplitWith` with fabricated `context.amount` and zero transfer, then vests/collects to drain tokens funded for another hook. Assert attacker receives victim's tokens and victim's accounting is stale.
+- **Fix test:** After applying the accounted-balance guard, repeat the same attack and assert it reverts (e.g., `UnfundedSplitCredit`). Also test the happy path: legitimate controller-prepaid split (tokens transferred before call) still credits correctly.
+
+---
+
+### High (3)
+
+#### ~~H-24. 721 Voting-Power Cap Resets Across Same-Round Vesting Calls~~ — FIXED (`85cca11`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-distributor-v6 |
+| **File** | `src/JB721Distributor.sol:174-196` |
+| **Auditor confidence** | 90 (Nemesis NM-002) |
+| **My confidence** | **90 — VERIFIED (PoC passed)** |
+| **Known issue?** | No |
+
+**Description:** `_vestTokenIds` allocates memory-only scratch arrays (`owners[]`, `consumed[]`) per call to track how much voting power each owner has consumed. These arrays reset on each `beginVesting` invocation. An owner with 100 snapshot votes and three NFTs of 50 voting units each can call `beginVesting` three times (one token per call), receiving 150 units of allocation despite only 100 snapshot votes. The cap is only enforced within a single call, not across the round.
+
+**PoC:** Split calls create `1500 ether` of claims where the intended cap is `1000 ether`.
+
+**Mitigation options:**
+
+1. **Persist consumed votes in storage** (recommended): `mapping(hook => mapping(token => mapping(releaseRound => mapping(owner => uint256)))) _consumedVotesOf`. Read from storage at start of each call, write back at end.
+2. **Require all tokens in single call**: Enforce that `beginVesting` for a given hook/token/round can only be called once per owner (via storage flag). Simpler but less flexible for partial batching.
+
+**Tradeoffs:** Option 1 adds ~5k gas per owner per vesting call from the extra storage read/write. Option 2 is zero-overhead but prevents partial batching.
+
+**Admin note — FIX REQUIRED (High):** Option 1 is recommended. The memory-only cap was likely a gas optimization, but it creates a real over-allocation attack. Keep the per-call memory array as a gas optimization for within-call dedup, but reconcile into persistent consumed state.
+
+**Required tests:**
+- **Vulnerability test:** Owner with N snapshot votes and >N total voting units across multiple NFTs calls `beginVesting` in separate transactions (one token per call). Assert total vested amount exceeds snapshot votes.
+- **Fix test:** Same scenario with persistent consumed state. Assert total vested amount is capped at snapshot votes regardless of how many separate `beginVesting` calls are made. Also test single-call batching still works correctly.
+
+---
+
+#### ~~H-25. No-Pool/No-Hook Cash-Out Fallback Returns Zero Surplus~~ — FIXED (`5be7dd4`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-buyback-hook-v6 |
+| **File** | `src/JBBuybackHook.sol:703-704`, `src/JBBuybackHookRegistry.sol:301-304` |
+| **Auditor confidence** | 90 (Nemesis NM-001, Pashov corroboration) |
+| **My confidence** | **92 — VERIFIED (PoC passed)** |
+| **Known issue?** | Partial — C-3 fixed the noop path (line 766-773) but not this early-return path |
+
+**Description:** When no pool is configured for the terminal token (or the registry has no resolved hook), `beforeCashOutRecordedWith` returns `effectiveSurplusValue = 0` while passing through `cashOutTaxRate`, `cashOutCount`, and `totalSupply` unchanged. Core's `JBTerminalStore._cashOutWithDataHook` uses the returned surplus to compute reclaim. Zero surplus means zero reclaim, so the holder burns tokens for nothing.
+
+This is the same class of bug as C-3 (which was fixed at commit `11f232d` for the noop/swap paths) but in a different code path — the early-return when no pool exists at all.
+
+**Mitigation:** Return `context.surplus.value` instead of `0` in both early-return paths:
+
+```solidity
+return (context.cashOutTaxRate, context.cashOutCount, context.totalSupply, context.surplus.value, hookSpecifications);
+```
+
+**Tradeoffs:** None — this is a one-line fix in each location. The noop path already does this correctly after C-3.
+
+**Admin note — FIX REQUIRED (High):** Same pattern as C-3. Fix both `JBBuybackHook.sol:704` and `JBBuybackHookRegistry.sol:303`. The registry path is particularly important since it's the more common deployment pattern. Two-line fix.
+
+**Required tests:**
+- **Vulnerability test:** Project uses buyback hook as data hook but has no pool configured for the terminal token. Holder cashes out with `minTokensReclaimed = 0`. Assert tokens are burned but reclaim is zero (loss of funds).
+- **Fix test:** Same scenario after fix. Assert reclaim equals the bonding-curve amount computed from the actual surplus. Test both the direct hook path and the registry no-hook-configured path.
+
+---
+
+#### ~~H-26. Caller Metadata Can Shadow Croptop's Mint Payload~~ — FIXED (`c43d88c`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | croptop-core-v6 |
+| **File** | `src/CTPublisher.sol:242-246` |
+| **Auditor confidence** | 92 (Nemesis NM-001, PoC verified) |
+| **My confidence** | **90 — VERIFIED** |
+| **Known issue?** | No |
+
+**Description:** `mintFrom` appends Croptop's pay metadata (tier IDs to mint) *after* the caller-supplied `additionalPayMetadata`. But `JBMetadataResolver.getDataFor` returns the *first* matching ID. An attacker can insert the same metadata ID into `additionalPayMetadata`, and the 721 hook will decode the attacker's tier IDs instead of Croptop's validated ones.
+
+**Attack:** Attacker crafts `additionalPayMetadata` with the same `pay` metadata ID targeting the hook. They call `mintFrom` with a cheap valid post (small `totalPrice`), but the hook mints expensive attacker-chosen tiers. Croptop's allowlist/price checks apply to one set of tiers while the hook mints another.
+
+**Mitigation options:**
+
+1. **Reject duplicate metadata IDs** (recommended): Check `additionalPayMetadata` for the pay ID before appending and revert if found.
+2. **Prepend instead of append**: Build metadata with Croptop's entry first, then append caller data. Since `getDataFor` returns first match, Croptop's entry takes precedence.
+3. **Strip conflicting IDs**: Parse and remove any matching IDs from caller metadata before combining.
+
+**Tradeoffs:** Option 1 is cleanest (5 lines, clear revert). Option 2 changes metadata ordering which could break other consumers. Option 3 is more gas-intensive.
+
+**Admin note — FIX REQUIRED (High):** Option 1 is recommended:
+```solidity
+bytes4 payId = JBMetadataResolver.getId({purpose: "pay", target: metadataIdTarget});
+(bool exists,) = JBMetadataResolver.getDataFor({id: payId, metadata: additionalPayMetadata});
+if (exists) revert CTPublisher_DuplicatePayMetadata();
+```
+
+**Required tests:**
+- **Vulnerability test:** Attacker crafts `additionalPayMetadata` containing the pay metadata ID with forged tier IDs. Call `mintFrom` with a cheap valid post. Assert the hook mints the attacker's tier IDs instead of Croptop's validated ones, and fees are computed from the cheap post price.
+- **Fix test:** Same attack payload after fix. Assert `mintFrom` reverts with `CTPublisher_DuplicatePayMetadata`. Also test that normal `additionalPayMetadata` (without the conflicting pay ID) still works.
+
+---
+
+### Medium (6)
+
+#### ~~M-39. ERC-20 Routed Payments Revert When Destination Terminal Has Pay Hooks~~ — FIXED (`c1b95c1`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-router-terminal-v6 |
+| **File** | `src/JBRouterTerminal.sol:955-970` |
+| **Auditor confidence** | 88 (Nemesis NM-001) |
+| **My confidence** | **88 — VERIFIED (PoC passed)** |
+| **Known issue?** | No |
+
+**Description:** The router's `_enforceStandardTerminalReceipt` snapshots the destination terminal's ERC-20 balance before `pay()`, then checks that the balance grew by exactly `expectedAmount`. But during `pay()`, the core terminal can fulfill pay hooks that transfer part of the just-received ERC-20 out of the terminal before returning. The router then sees a smaller-than-expected delta and reverts `JBRouterTerminal_NonStandardTerminalToken`.
+
+Native-token payments skip this check (line 961), creating inconsistent ERC20/native behavior for the same terminal-side hook configuration.
+
+**Mitigation options:**
+
+1. **Skip receipt check for `pay()`** (recommended): Only enforce the receipt for `addToBalance`-style calls where no hooks can consume funds. For `pay()`, rely on the terminal's own accounting.
+2. **Pre-hook balance signal**: Add a terminal-level `acceptedAmount` signal measured before hooks execute.
+3. **Accept ≥ instead of ==**: Change the check to `>= expectedAmount` — but this could mask other issues.
+
+**Tradeoffs:** Option 1 removes a safety check but the check is actively wrong for hook-enabled projects. Option 2 requires core changes. Option 3 is a weaker invariant.
+
+**Admin note — FIX REQUIRED (Medium):** Option 1 is recommended. The receipt check was designed to catch lossy/fee-on-transfer tokens, but it conflicts with the core terminal's hook execution model. Only enforce for `addToBalance`-style calls where hooks don't execute.
+
+**Required tests:**
+- **Vulnerability test:** Route an ERC-20 payment through `JBRouterTerminal.pay` to a project whose terminal has a non-noop pay hook that forwards part of the received ERC-20. Assert the router reverts with `JBRouterTerminal_NonStandardTerminalToken`.
+- **Fix test:** Same scenario after skipping receipt enforcement for `pay()`. Assert the payment completes successfully and the project records the correct payment. Also test that `addToBalance` receipt enforcement still catches lossy tokens.
+
+---
+
+#### ~~M-40. Out-of-Range Pool Price Cash-Out Ignores Token Ordering~~ — FIXED (`d345cd6`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | univ4-lp-split-hook-v6 |
+| **File** | `src/JBUniswapV4LPSplitHook.sol:1418-1422` |
+| **Auditor confidence** | 88 (Nemesis NM-002) |
+| **My confidence** | **88 — VERIFIED (PoC passed)** |
+| **Known issue?** | No |
+
+**Description:** `_computeOptimalCashOutAmount` handles the in-range case correctly by checking `terminalIsToken0` (lines 1428-1438). But the out-of-range branches don't:
+
+- **Below range** (line 1418-1419): Always returns `totalProjectTokens / 2`, regardless of which token is needed. Below-range LP is token0-only.
+- **Above range** (line 1421-1422): Always returns `0`, regardless of which token is needed. Above-range LP is token1-only.
+
+When the pool is pre-initialized outside the hook's tick range, the wrong cash-out amount means either half the possible liquidity is minted (below range, native as token0) or deployment reverts with zero liquidity (above range, opposite ordering).
+
+**Mitigation:**
+
+```solidity
+if (sqrtPriceInit <= sqrtPriceA) {
+    return terminalIsToken0 ? totalProjectTokens : 0;
+}
+if (sqrtPriceInit >= sqrtPriceB) {
+    return terminalIsToken0 ? 0 : totalProjectTokens;
+}
+```
+
+**Tradeoffs:** None — direct bug fix, same pattern as the in-range branch.
+
+**Admin note — FIX REQUIRED (Medium):** Two-line fix. Below range needs all terminal tokens (token0); above range needs all terminal tokens (token1). The fix mirrors the logic already in the in-range branch.
+
+**Required tests:**
+- **Vulnerability test:** Pre-initialize a pool with a price below the hook's tick range where the terminal token is token0. Deploy pool via hook. Assert the hook only cashes out half the project tokens (instead of all of them for single-sided token0 LP). Repeat with above-range + terminal as token1 and assert zero liquidity / revert.
+- **Fix test:** Same scenarios after fix. Assert below-range with terminal-is-token0 cashes out all project tokens. Assert above-range with terminal-is-token1 cashes out all project tokens. Assert in-range behavior is unchanged.
+
+---
+
+#### ~~M-41. Credit-Only Reserved Splits Strand Project Credits at Hook~~ — FIXED (`d345cd6`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | univ4-lp-split-hook-v6 |
+| **File** | `src/JBUniswapV4LPSplitHook.sol:797-798` |
+| **Auditor confidence** | 85 (Nemesis NM-003) |
+| **My confidence** | **85 — VERIFIED (code trace)** |
+| **Known issue?** | No |
+
+**Description:** When a project has no ERC-20 token yet (credits only), `JBController` transfers credits to the hook before calling `processSplitWith`. The hook then reverts at `if (projectToken == address(0)) revert`. The controller catches this revert via try-catch, but the credits are already transferred and remain stranded at the hook address. The hook has no recovery path for project credits — `_burnReceivedTokens` only reads ERC-20 `balanceOf`.
+
+**Mitigation options:**
+
+1. **Handle credit-only gracefully** (recommended): Instead of reverting, burn the received credits or hold them in a recoverable state.
+2. **Document as prerequisite**: Require ERC-20 token deployment before configuring the LP split hook in reserved token splits.
+3. **Add credit recovery function**: Owner-gated function to transfer/burn stranded credits.
+
+**Tradeoffs:** Option 1 is safest but adds complexity for a rare edge case. Option 2 is simplest but relies on correct configuration. Option 3 adds surface area.
+
+**Admin note — FIX (Medium):** Option 2 (document prerequisite) is likely sufficient since this hook fundamentally needs an ERC-20 for LP. Consider adding a clear revert message or a deployment-time validation that the project has an ERC-20 token. If proceeding with option 1, burn the credits immediately:
+```solidity
+if (projectToken == address(0)) {
+    IJBController(controller).burnTokensOf({holder: address(this), projectId: context.projectId, tokenCount: context.amount, memo: ""});
+    return;
+}
+```
+
+**Required tests:**
+- **Vulnerability test:** Configure the LP split hook as a reserved-token split recipient for a project with no ERC-20 token (credits only). Call `sendReservedTokensToSplitsOf`. Assert credits are transferred to the hook but stranded — hook has no recovery path, credits not tracked in `accumulatedProjectTokens`.
+- **Fix test:** Same scenario after fix. Assert credits are either burned immediately (option 1) or the configuration is rejected at deployment time (option 2). Verify normal ERC-20 flow is unaffected.
+
+---
+
+#### ~~M-42. Hook Metadata Updates Desynchronize Croptop's URI Cache~~ — FIXED (`c43d88c`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | croptop-core-v6 |
+| **File** | `src/CTPublisher.sol:464-479` |
+| **Auditor confidence** | 85 (Nemesis NM-003) |
+| **My confidence** | **85 — VERIFIED (PoC passed)** |
+| **Known issue?** | No |
+
+**Description:** Croptop caches `tierIdForEncodedIPFSUriOf[hook][uri] → tierId` to reuse existing tiers. The reuse path only checks whether the cached tier was removed, not whether its URI was changed via `setMetadata`. After a metadata update:
+- URI A still maps to tier 1 in Croptop's cache, but tier 1 now has URI B in the store.
+- A caller requesting URI A gets routed to tier 1 (wrong content).
+- A caller posting URI B creates tier 2 (duplicate content).
+
+**Mitigation:** On reuse, verify the tier's current URI matches the cached URI:
+
+```solidity
+JB721Tier memory tier = store.tierOf({hook: address(hook), id: tierId, includeResolvedUri: false});
+if (tier.encodedIPFSUri != post.encodedIPFSUri) {
+    delete tierIdForEncodedIPFSUriOf[address(hook)][post.encodedIPFSUri];
+    tierId = 0; // Force new tier creation
+}
+```
+
+**Tradeoffs:** Adds one extra `tierOf` SLOAD on the reuse path (~2k gas). Alternatively, clear the cache when `setMetadata` is called, but that requires the hook to call back to Croptop.
+
+**Admin note — FIX (Medium):** The URI check on reuse is the cleanest approach. Low gas overhead, catches the drift, and self-heals the stale cache entry.
+
+**Required tests:**
+- **Vulnerability test:** Publish URI A through Croptop (creates tier 1, caches `URI_A → tier 1`). Then update tier 1's metadata to URI B via `setMetadata`. Then publish URI A again through Croptop. Assert the cache routes to tier 1 (now URI B) — wrong content served. Then publish URI B and assert a duplicate tier 2 is created.
+- **Fix test:** Same sequence after fix. Assert the stale cache entry is cleared and URI A either reverts or creates a new tier. Assert URI B is recognized as already used by tier 1 and reuses it correctly.
+
+---
+
+#### ~~M-43. Timeout Validation Accepts Games That Time Out Before Scorecard Can Succeed~~ — FIXED (`62c9adc`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | defifa |
+| **File** | `src/DefifaDeployer.sol:413-419` |
+| **Auditor confidence** | 85 (Nemesis NM-002) |
+| **My confidence** | **85 — VERIFIED (code trace)** |
+| **Known issue?** | No |
+
+**Description:** The deployer validates `scorecardTimeout > attestationGracePeriod + timelockDuration`, but `DefifaGovernor.initializeGame` silently raises the effective grace period to at least 1 day: `if (attestationGracePeriod < 1 days) attestationGracePeriod = 1 days`. A launch with `attestationGracePeriod = 1, timelockDuration = 0, scorecardTimeout = 1 hours` passes deployer validation (1 hour > 1 second) but the governor stores 1 day as the effective grace. The scorecard cannot become SUCCEEDED until at least 1 day after attestations begin, but timeout fires after 1 hour, forcing NO_CONTEST.
+
+**Mitigation:**
+
+```solidity
+uint256 effectiveGrace = launchProjectData.attestationGracePeriod < 1 days
+    ? 1 days
+    : launchProjectData.attestationGracePeriod;
+
+if (
+    launchProjectData.scorecardTimeout > 0
+        && launchProjectData.scorecardTimeout <= effectiveGrace + launchProjectData.timelockDuration
+) revert DefifaDeployer_InvalidGameConfiguration();
+```
+
+**Tradeoffs:** None — aligning deployer validation with governor normalization. Could also share a helper between both contracts.
+
+**Admin note — FIX (Medium):** Use the governor's normalization logic in the deployer's validation. Consider extracting a shared helper so both contracts validate identically.
+
+**Required tests:**
+- **Vulnerability test:** Launch a game with `attestationGracePeriod = 1 second`, `timelockDuration = 0`, `scorecardTimeout = 1 hours`. Assert the launch succeeds. Then advance to scoring, submit a valid scorecard, warp 1 hour + 1 second. Assert `currentGamePhaseOf` returns NO_CONTEST before any scorecard could have been ratified (governor needed 1 day effective grace).
+- **Fix test:** Same launch parameters after fix. Assert the deployer reverts with `DefifaDeployer_InvalidGameConfiguration` because the effective grace (1 day) exceeds the timeout (1 hour). Also test that valid timeout configs still pass.
+
+---
+
+#### ~~M-44. `tokensClaimableFor` Overquotes Fee-Token Claims~~ — FIXED (`62c9adc`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | defifa |
+| **File** | `src/DefifaHook.sol:461-468` vs `src/DefifaHook.sol:782-787` |
+| **Auditor confidence** | 85 (Nemesis NM-003) |
+| **My confidence** | **85 — VERIFIED (code trace)** |
+| **Known issue?** | No |
+
+**Description:** The preview function `tokensClaimableFor` uses `_totalMintCost` as the denominator when computing fee-token claims. The execution path in `afterCashOutRecordedWith` uses `_totalMintCost + _pendingReserveMintCost()`. When pending reserves exist, the preview overquotes — e.g., if `_totalMintCost = 1 ether` and `_pendingReserveMintCost() = 1 ether`, preview quotes 100% of fee tokens while execution delivers 50%.
+
+**Mitigation:**
+
+```solidity
+return DefifaHookLib.computeTokensClaim({
+    tokenIds: tokenIds,
+    hookStore: store,
+    hook: address(this),
+    totalMintCost: _totalMintCost + _pendingReserveMintCost(),
+    defifaBalance: DEFIFA_TOKEN.balanceOf(address(this)),
+    baseProtocolBalance: BASE_PROTOCOL_TOKEN.balanceOf(address(this))
+});
+```
+
+**Tradeoffs:** None — preview should match execution.
+
+**Admin note — FIX (Medium):** One-line fix. Include `_pendingReserveMintCost()` in the preview denominator to match execution. This is a view-only issue (no fund loss) but frontends/integrations relying on the preview will show wrong values.
+
+**Required tests:**
+- **Vulnerability test:** In COMPLETE phase with pending reserves, call `tokensClaimableFor` for a paid holder's token IDs. Then execute the actual cash-out. Assert the preview returns more fee tokens than the execution delivers (overquote).
+- **Fix test:** Same scenario after fix. Assert `tokensClaimableFor` returns the same amount (within rounding) as the actual cash-out execution delivers. Test with zero pending reserves to confirm no regression.
+
+---
+
+### Low (2)
+
+#### ~~L-17. `fund()` Traps ETH Sent With ERC-20 Token Argument~~ — FIXED (`85cca11`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-distributor-v6 |
+| **File** | `src/JBDistributor.sol:165-175` |
+| **Auditor confidence** | 80 (Nemesis NM-003) |
+| **My confidence** | **80 — VERIFIED** |
+| **Known issue?** | No |
+
+**Description:** `fund()` is `payable` and branches on whether `token` is the native token sentinel. If a caller passes an ERC-20 token address but also sends `msg.value`, the ERC-20 path executes (crediting the ERC-20 delta) while the native ETH is permanently trapped — no `_balanceOf` entry is created for it and there's no generic recovery path.
+
+**Mitigation:**
+
+```solidity
+if (address(token) != JBConstants.NATIVE_TOKEN && msg.value != 0) revert UnexpectedNativeValue();
+```
+
+**Tradeoffs:** None — pure safety guard.
+
+**Admin note — FIX (Low):** One-line guard. Also add the same check to `processSplitWith` ERC-20 paths.
+
+**Required tests:**
+- **Vulnerability test:** Call `fund(hook, erc20Token, amount)` with `msg.value = 1 ether`. Assert the ERC-20 amount is credited correctly but the 1 ETH is trapped — `_balanceOf[hook][NATIVE_TOKEN]` is zero and the ETH is unrecoverable.
+- **Fix test:** Same call after fix. Assert it reverts with `UnexpectedNativeValue`. Also test that native-token funding (`token = NATIVE_TOKEN`) still works correctly with `msg.value`.
+
+---
+
+#### ~~L-18. Future Tier IDs Can Be Pre-Removed~~ — FIXED (`80f8af1b`)
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-721-hook-v6 |
+| **File** | `src/JB721TiersHookStore.sol:1290-1304` |
+| **Auditor confidence** | 75 (Nemesis NM-004) |
+| **My confidence** | **75 — VERIFIED (PoC passed)** |
+| **Known issue?** | No |
+
+**Description:** `recordRemoveTierIds` marks a tier as removed in the bitmap without validating that the tier exists (`_storedTierOf[msg.sender][tierId].initialSupply > 0`). A tier adjuster can remove future tier IDs (e.g., tier 10 when only tiers 1-5 exist). When tier 10 is later created via `recordAddTiers`, the removed bit persists, making it immediately unmintable. Similarly, `recordSetEncodedIPFSUriOf` can pre-seed URIs for future tiers.
+
+**Mitigation:**
+
+```solidity
+if (tierId == 0 || tierId > maxTierIdOf[msg.sender] || _storedTierOf[msg.sender][tierId].initialSupply == 0) {
+    revert JB721TiersHookStore_UnrecognizedTier(tierId);
+}
+```
+
+**Tradeoffs:** None — pure validation. Requires `ADJUST_721_TIERS` permission to exploit, so this is a self-griefing or social-engineering vector.
+
+**Admin note — FIX (Low):** Add existence validation. Low priority since it requires project-owner-level permissions.
+
+**Required tests:**
+- **Vulnerability test:** With only tiers 1-5 existing, call `adjustTiers` to remove tier ID 10. Then add 5 new tiers (IDs 6-10). Assert tier 10 is born with the removed bit set and minting tier 10 reverts with `TierRemoved`.
+- **Fix test:** Same sequence after fix. Assert the removal of non-existent tier 10 reverts with `JB721TiersHookStore_UnrecognizedTier`. Also test that removing an existing tier still works correctly.
+
+---
+
+### Pass 12 Corroborations
+
+These findings from Pass 12 corroborate or re-confirm existing entries:
+
+| New ID | Existing ID | Title | Notes |
+|---|---|---|---|
+| — | C-3 | Buyback cash-out fallback zeroes surplus | H-25 is a *different code path* from C-3 (early return vs noop path), but same bug class |
+| — | H-7 | 721 gas DoS on large tier sets | NM-005 (nana-721-hook-v6) re-confirms O(maxTierId) scan |
+| — | M-33 | TWAP cardinality/period mismatch | Pashov Finding 4 (univ4-router-v6) re-confirms |
+| — | M-5 | Held-fee dust rounding | Pashov Lead (nana-core-v6) re-confirms |
+
+### Pass 12 Already-Documented Findings (Not Actionable)
+
+56 findings were triaged as already documented in RISKS.md, inline comments, or prior AUDIT_REPORT.md entries. Key categories:
+
+| Pattern | Count | Examples |
+|---|---|---|
+| Documented in RISKS.md | 18 | Aggregate surplus wrong terminal, hidden tokens, constructor pre-binding |
+| Fixed in prior passes | 8 | Oracle backfill, weight decay, held-fee processing |
+| By design / accepted risk | 14 | Deploy script salt mining, permission ID renumbering, fee-on-transfer unsupported |
+| False positive (verified not exploitable) | 16 | V4 routes below minimum (slippage already enforced), same-block snapshots, swap-batch rounding |
