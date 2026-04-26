@@ -12,12 +12,12 @@
 | Severity | Total | ~~Fixed~~ | ~~Downgraded~~ | Accepted risk | **Open** |
 |----------|-------|-----------|----------------|---------------|----------|
 | Critical | 5 | ~~5~~ | — | — | **0** |
-| High     | 28 | ~~19~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 5 (H-7, H-8, H-17, H-21, H-23) | **0** |
+| High     | 28 | ~~20~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **0** |
 | Medium   | 41 | ~~23~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **0** |
 | Low      | 19 | ~~10~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **0** |
-| **Total** | **93** | **~~57 fixed~~** | **~~13 downgraded~~** | **23 accepted** | **0 open** |
+| **Total** | **93** | **~~58 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **0 open** |
 
-**All 93 findings resolved.** 57 verified fixed in code. 13 downgraded/FP/invalid/duplicate. 23 accepted risk or documented by design.
+**All 93 findings resolved.** 58 verified fixed in code. 13 downgraded/FP/invalid/duplicate. 22 accepted risk or documented by design.
 
 Pass 2 corroborated 10 existing findings (C-3, H-12, M-2, M-5, M-7, M-12, M-14, M-15, M-22, L-2).
 Pass 3 corroborated 7 existing findings (C-3, H-2, H-12, H-13, H-14, M-24, L-2).
@@ -2379,14 +2379,14 @@ Pass 5 independently re-discovered 3 findings from passes 1-4:
 
 ---
 
-#### H-22: Stale ERC20 Approval in REVLoans
+#### ~~H-22: Stale ERC20 Approval in REVLoans~~ — FIXED (`965d3f7`)
 
 | Field | Value |
 |---|---|
 | **Repo** | revnet-core-v6 |
 | **Source** | Nemesis NM-001 (HIGH) + CertiK F19 (MEDIUM) |
 | **Contract** | `REVLoans.sol` |
-| **Status** | **OPEN** |
+| **Status** | **FIXED** |
 
 **Description:** `_tryPayFee` (L1522) and `_removeFrom` (L1322) grant ERC20 approval to terminals via `_beforeTransferTo` but never clear it on the success path. The `catch` branch in `_tryPayFee` clears the approval (L1535), but the happy path leaves a reusable allowance. `_removeFrom` never clears it at all. A terminal that returns success without pulling the full approved amount accumulates reusable allowance that can drain tokens from `REVLoans` during subsequent operations.
 
@@ -2398,14 +2398,14 @@ Pass 5 independently re-discovered 3 findings from passes 1-4:
 
 ---
 
-#### M-34: Verified Handles Accept Unsafe Control Characters
+#### ~~M-34: Verified Handles Accept Unsafe Control Characters~~ — FIXED (`30ad40a`)
 
 | Field | Value |
 |---|---|
 | **Repo** | nana-project-handles-v6 |
 | **Source** | Nemesis NM-001 (MEDIUM) |
 | **Contract** | `JBProjectHandles.sol` |
-| **Status** | **OPEN** |
+| **Status** | **FIXED** |
 
 **Description:** `setEnsNamePartsFor` (L70) only rejects empty labels and dots, allowing arbitrary bytes including control characters (`\n`, `\r`). After ENS verification succeeds, `handleOf` returns raw bytes as canonical project identity text. Enables log poisoning, broken formatting, and UI spoofing in offchain consumers.
 
@@ -2456,13 +2456,13 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 
 ---
 
-#### H-23: Unit Mismatch in Cross-Currency Loan Fees
+#### ~~H-23: Unit Mismatch in Cross-Currency Loan Fees~~ — FIXED (`965d3f7`)
 
 | Field | Value |
 |---|---|
 | **Source** | CertiK F12 (Major) |
 | **Contract** | `REVLoans.sol:_addTo` (L1096-1122) |
-| **Status** | **OPEN** |
+| **Status** | **FIXED** |
 
 **Description:** In `_addTo`, `revFeeAmount` is computed from `addedBorrowAmount` via `JBFees.feeAmountFrom`. `addedBorrowAmount` is in the terminal's accounting currency (passed to `useAllowanceOf` with `currency: accountingContext.currency`), while `netAmountPaidOut` is the actual token amount returned by the terminal. For cross-currency terminals (e.g., USD-accounted ETH terminal), the subtraction `netAmountPaidOut - revFeeAmount - sourceFeeAmount` (L1122) mixes token-denominated and currency-denominated values, causing underflow reverts or incorrect fee deductions.
 
@@ -2472,13 +2472,13 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 
 ---
 
-#### M-35: Stale Zero-Balance Loan Sources DoS
+#### ~~M-35: Stale Zero-Balance Loan Sources DoS~~ — FIXED (`965d3f7`)
 
 | Field | Value |
 |---|---|
 | **Source** | CertiK F18 (Major) |
 | **Contract** | `REVLoans.sol:_totalBorrowedFrom` (L548-555) |
-| **Status** | **OPEN** |
+| **Status** | **FIXED** |
 
 **Description:** `_totalBorrowedFrom` calls `source.terminal.accountingContextForTokenOf(...)` (L548) before checking `totalBorrowedFrom[...] == 0` (L555). If a fully-repaid source's terminal is later removed or begins reverting, all paths that use `_totalBorrowedFrom` (borrowing, repayment, reallocations) are DoS'd for that revnet.
 
@@ -2486,13 +2486,13 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 
 ---
 
-#### M-36: Cross-Chain `startsAtOrAfter` Normalization Mismatch
+#### ~~M-36: Cross-Chain `startsAtOrAfter` Normalization Mismatch~~ — FIXED (`965d3f7`)
 
 | Field | Value |
 |---|---|
 | **Source** | CertiK F1 (Medium) |
 | **Contract** | `REVDeployer.sol:_makeRulesetConfigurations` (L136-163) |
-| **Status** | **OPEN** |
+| **Status** | **FIXED** |
 
 **Description:** When stage 0 uses `startsAtOrAfter = 0`, the encoded hash stores `block.timestamp` (L162-163), but the stage ordering check (L136) compares raw calldata values. On the origin chain, stage 1 with `startsAtOrAfter = 1` passes the `1 > 0` check. On a second chain, reproducing the hash requires passing the origin timestamp for stage 0, but then `1 <= originTimestamp` fails with `REVDeployer_StageTimesMustIncrease`. This permanently blocks cross-chain expansion for affected multi-stage revnets.
 
