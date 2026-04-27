@@ -3,7 +3,7 @@
 **Source:** Pashov Solidity Auditor (Codex) Runs `20260420-112444` + `20260421-000519` + `20260421-130750` + `20260421-203407` + `20260426-101552` | Nemesis Auditor (Codex) Runs `20260420` + `20260421-000900` + `20260421-130747` + `20260421-203404` + `20260422-003458` + `20260426-101548` | CertiK AI Scans (nana-core-v6, revnet-core-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6) | GitHub `Bananapus/version-6` Issues (manual triage)
 **Repos scanned:** 20 (nana-privacy-v6, defifa-collection-deployer-v6 skipped — directories not found)
 **Date:** 2026-04-26 (pass 12 update)
-**Total findings:** 105 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings, passes 7-8: 3 new findings [H-22, H-23, M-36], pass 12: 12 new findings [C-6, H-24–H-26, M-39–M-44, L-17, L-18])
+**Total findings:** 114 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings, passes 7-8: 3 new findings [H-22, H-23, M-36], pass 12: 12 new findings [C-6, H-24–H-26, M-39–M-44, L-17, L-18])
 
 ---
 
@@ -12,12 +12,12 @@
 | Severity | Total | ~~Fixed~~ | ~~Downgraded~~ | Accepted risk | **Open** |
 |----------|-------|-----------|----------------|---------------|----------|
 | Critical | 6 | ~~6~~ | — | — | — |
-| High     | 31 | ~~23~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | — |
-| Medium   | 47 | ~~29~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | — |
-| Low      | 21 | ~~12~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | — |
-| **Total** | **105** | **~~70 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **0 open** |
+| High     | 32 | ~~23~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **1** (H-27) |
+| Medium   | 53 | ~~29~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **6** (M-45–M-50) |
+| Low      | 23 | ~~12~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **2** (L-19, L-20) |
+| **Total** | **114** | **~~70 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **9 open** |
 
-**All 105 findings resolved.** 12 findings from Pass 12 now fixed (1 Critical, 3 High, 6 Medium, 2 Low).
+**105 of 114 findings resolved.** 9 new findings open from Pass 13 (1 High, 6 Medium, 2 Low).
 
 Pass 2 corroborated 10 existing findings (C-3, H-12, M-2, M-5, M-7, M-12, M-14, M-15, M-22, L-2).
 Pass 3 corroborated 7 existing findings (C-3, H-2, H-12, H-13, H-14, M-24, L-2).
@@ -2952,7 +2952,19 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 
 ### Open Findings
 
-**0 findings open.** All 105 findings resolved.
+**9 findings open from Pass 13.**
+
+| ID | Severity | Repo | Status |
+|---|---|---|---|
+| **H-27** | HIGH | croptop-core-v6 | **OPEN** — direct terminal payments mint Croptop tiers without 5% fee |
+| **M-45** | MEDIUM | nana-buyback-hook-v6 | **OPEN** — failed sell-side swaps transfer tokens to beneficiary instead of holder |
+| **M-46** | MEDIUM | nana-router-terminal-v6 | **OPEN** — buyback pay-hook metadata decoded with wrong layout |
+| **M-47** | MEDIUM | nana-router-terminal-v6 | **OPEN** — cash-out minimum checked against zero buyback reclaimAmount |
+| **M-48** | MEDIUM | nana-721-hook-v6 | **OPEN** — phantom reserves from sold-out tiers dilute cash-out weight |
+| **M-49** | MEDIUM | nana-omnichain-deployers-v6 | **OPEN** — split token credit erased when extra hook returns weight=0 |
+| **M-50** | MEDIUM | nana-omnichain-deployers-v6 | **OPEN** — ApprovalExpected rulesets carry forward wrong 721 hook |
+| **L-19** | LOW | nana-router-terminal-v6 | **OPEN** — preview/execution forwarding chain divergence |
+| **L-20** | LOW | defifa | **OPEN** — same token as both fee-token streams causes double claims |
 
 #### Previously Open (Now Resolved)
 
@@ -2976,7 +2988,7 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 | ~~**L-17**~~ | LOW | nana-distributor-v6 | **FIXED** — `fund()` reverts on `msg.value` with ERC-20 token (`85cca11`, PR #10) |
 | ~~**L-18**~~ | LOW | nana-721-hook-v6 | **FIXED** — `recordRemoveTierIds` rejects tier IDs > `maxTierIdOf` (`80f8af1b`, PR #119) |
 
-### Cumulative Statistics (Passes 1-12)
+### Cumulative Statistics (Passes 1-13)
 
 | Pass | Source | Scope | Findings Reviewed | Actionable | Acknowledged | Invalid/FP |
 |---|---|---|---|---|---|---|
@@ -2992,7 +3004,8 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 | 10 | CertiK AI (nana-omnichain-deployers-v6) | nana-omnichain-deployers-v6 | 8 | 2 | 3 | 3 |
 | 11 | CertiK AI (nana-univ4-router-v6) | univ4-router-v6 | 9 | 1 | 7 | 1 |
 | 12 | Nemesis + Pashov (Codex `20260426`) | 20 repos | 68 | 12 | 0 | 56 |
-| **Total** | | | **~368** | **32** | **44** | **~292** |
+| 13 | Nemesis + Pashov (Codex `20260426-182939`) | 21 repos | 65 | 9 | 0 | 56 |
+| **Total** | | | **~433** | **41** | **44** | **~348** |
 
 ---
 
@@ -3424,3 +3437,286 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 | Fixed in prior passes | 8 | Oracle backfill, weight decay, held-fee processing |
 | By design / accepted risk | 14 | Deploy script salt mining, permission ID renumbering, fee-on-transfer unsupported |
 | False positive (verified not exploitable) | 16 | V4 routes below minimum (slippage already enforced), same-block snapshots, swap-batch rounding |
+
+---
+
+## Pass 13 — Nemesis + Pashov Auditor (Codex `20260426-182939`)
+
+**Source:** Nemesis Auditor (Codex, run `20260426-182939`, 20 repos, 44 findings) + Pashov Solidity Auditor (Codex, run `20260426-182941`, 21 repos, 21 findings)
+**Date:** 2026-04-27
+**Findings after triage:** 9 actionable (1 High, 6 Medium, 2 Low). 56 corroborations of existing findings (all mapped to prior AUDIT_REPORT.md entries or RISKS.md documentation).
+
+### High (1)
+
+#### H-27. Direct Terminal Payments Mint Croptop Tiers Without 5% Fee
+
+| Field | Value |
+|-------|-------|
+| **Repo** | croptop-core-v6 |
+| **File** | `src/CTDeployer.sol:341-355` (data hook forwarding), `src/CTPublisher.sol:214-226` (fee path) |
+| **Auditor confidence** | 95 (Pashov) |
+| **My confidence** | **95 — VERIFIED** |
+
+**What the bug is:** `CTDeployer.deployProjectFor` sets itself as the ruleset data hook (`metadata.dataHook = address(this)`, line 201). Its `beforePayRecordedWith` simply forwards to the underlying 721 hook — it does no fee enforcement. Anyone can bypass `CTPublisher.mintFrom` entirely by calling `JBMultiTerminal.pay()` directly with pay metadata specifying existing Croptop tier IDs. The 721 hook processes the payment and mints the NFTs. The project treasury receives the full tier price, but the 5% Croptop fee (`FEE_DIVISOR = 20`) is never collected.
+
+**Impact:** Revenue loss for the Croptop fee project. The project itself is not harmed (it receives the full tier price). But every direct-terminal mint steals 5% from Croptop's fee revenue. An attacker minting 100 ETH of tiers saves 5 ETH in fees.
+
+**Options:**
+
+1. **Accept risk — document in RISKS.md.** The fee is a protocol convenience fee, not a security invariant. Projects receive the correct amount either way. Direct terminal payments are a legitimate Juicebox feature. Croptop's fee is opt-in: publishers who go through `mintFrom` pay it, direct payers don't.
+   - *Tradeoff:* Simple, no code change. But fee revenue leaks proportional to how many users discover the bypass.
+
+2. **Gate minting at the data hook level.** Modify `CTDeployer.beforePayRecordedWith` to strip tier-mint metadata from the pay context unless the caller is `CTPublisher`. The hook could return a modified weight/hookSpecs that removes 721 mint instructions.
+   - *Tradeoff:* The data hook only returns `(weight, hookSpecifications)` — it cannot modify payer metadata. The tier IDs are embedded in the payer's metadata, which flows to `afterPayRecordedWith` on the 721 hook. This approach requires architectural changes to how metadata flows through the pay pipeline. **Not feasible without core changes.**
+
+3. **Add a minting allowlist to the 721 hook.** Add a flag to Croptop-created tiers that restricts minting to calls originating from `CTPublisher` (checked in the 721 hook's `afterPayRecordedWith`).
+   - *Tradeoff:* Requires changes to `nana-721-hook-v6` (adding a new tier flag or caller check). Breaks the 721 hook's current caller-agnostic design. High implementation complexity for a fee enforcement feature.
+
+4. **Enforce fees via a custom pay hook.** `CTDeployer.beforePayRecordedWith` can return a `JBPayHookSpecification` that routes the fee portion to the fee project before the main payment, regardless of who initiated the pay.
+   - *Tradeoff:* The hook specification redirects a % of the incoming payment to the fee project automatically. This works within the existing architecture. However, it means ALL payments to Croptop projects pay the 5% fee, not just tier-minting payments. Non-Croptop payments to the same project would also be taxed. Requires careful scoping.
+
+> **Admin note:** Recommend option 1 (accept risk). The fee is a convenience charge on the publisher workflow, not a treasury security invariant. Projects are whole regardless. Direct terminal payments are a core Juicebox feature we shouldn't restrict. Document in RISKS.md that the Croptop 5% fee only applies to `CTPublisher.mintFrom` and is bypassable via direct terminal payment by design.
+
+---
+
+### Medium (6)
+
+#### M-45. Failed Sell-Side Swaps Transfer Holder's Tokens to Beneficiary Instead of Holder
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-buyback-hook-v6 |
+| **File** | `src/JBBuybackHook.sol:244` |
+| **Auditor confidence** | 90 (Nemesis NM-002, PoC passed) |
+| **My confidence** | **90 — VERIFIED** |
+
+**What the bug is:** In `afterCashOutRecordedWith`, when a sell-side swap fails, the hook transfers reminted project tokens to `context.beneficiary` (line 244) instead of `context.holder`. Normally these are the same address. But an operator with `CASH_OUT_TOKENS` permission can call `cashOutTokensOf` with `holder = victim` and `beneficiary = themselves`. The terminal burns the victim's tokens, the hook remints them for the sell-side swap, the swap fails (e.g., manipulated pool), and the reminted tokens go to the operator-controlled beneficiary — effectively stealing the victim's project tokens.
+
+**Impact:** Token theft when holder ≠ beneficiary. Requires the attacker to have `CASH_OUT_TOKENS` permission on the victim's project AND the ability to force a swap failure (pool manipulation or zero liquidity).
+
+**Options:**
+
+1. **Fix: use `context.holder` instead of `context.beneficiary`.** One-line change on line 244: `IERC20(projectToken).safeTransfer(context.holder, cashOutCountToSell)`. The holder whose tokens were burned should get the reminted tokens back on swap failure.
+   - *Tradeoff:* Simple, correct. The beneficiary still receives the reclaim ETH from the terminal (which was already settled). The holder gets their project tokens back. This matches the intent: "swap failed, undo the sell-side."
+
+2. **Accept risk.** The attack requires `CASH_OUT_TOKENS` permission, which is a powerful permission the holder explicitly granted. Granting it implies trust.
+   - *Tradeoff:* Permission grants are broad but don't imply "steal my tokens on swap failure." The operator is supposed to cash out on the holder's behalf, not profit from swap failures.
+
+> **Admin note:** Recommend option 1. One-line fix, no tradeoff. `context.holder` is semantically correct — the holder's tokens were burned, so the holder should receive the fallback. Update RISKS.md 9.6 to reflect the holder/beneficiary distinction.
+
+#### M-46. Buyback Pay-Hook Metadata Decoded With Wrong Layout
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-router-terminal-v6 |
+| **File** | `src/JBPayRouteResolver.sol:277-280` |
+| **Auditor confidence** | 90 (Pashov) |
+| **My confidence** | **90 — VERIFIED** |
+
+**What the bug is:** `_effectivePreviewPayTokenCounts` decodes the buyback hook's pay metadata as a 12-field tuple, but `JBBuybackHook.beforePayRecordedWith` encodes 13 fields (line 896-911). The `weightRatio` field at position 7 is missing from the decode. This shifts all subsequent field positions: `twapTick` (int24) is read from the `weightRatio` slot (uint256), `twapLiquidity` from `twapTick`, etc. The result is corrupt `minimumBeneficiaryTokenCount` and `minimumReservedTokenCount` values.
+
+**Impact:** The router's route-ranking preview computes wrong token counts for buyback-eligible projects. This can cause the router to skip the buyback path (if the corrupt values look worse) or prefer it incorrectly (if they look better). Actual execution via the terminal is unaffected — only the preview/ranking is wrong.
+
+**Options:**
+
+1. **Fix: add the missing `weightRatio` field.** Change the decode tuple from 12 to 13 fields, inserting `uint256` at position 7.
+   - *Tradeoff:* One-line fix. Must be kept in sync with any future changes to the buyback hook's metadata layout.
+
+2. **Fix: use the actual hook's return data.** Instead of re-decoding the internal metadata, call the hook's preview function directly and use its return values.
+   - *Tradeoff:* More robust against future layout changes but requires an additional external call in the preview path.
+
+> **Admin note:** Recommend option 1. Simple, direct fix. Add `uint256` (weightRatio) at position 7 in the decode tuple.
+
+#### M-47. Cash-Out Minimum Checked Against Zero Buyback reclaimAmount
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-router-terminal-v6 |
+| **File** | `src/JBRouterTerminal.sol:1216` |
+| **Auditor confidence** | 85 (Pashov) |
+| **My confidence** | **85 — VERIFIED** |
+
+**What the bug is:** `_cashOutLoop` passes the user's `minTokensReclaimed` into `cashOutTerminal.cashOutTokensOf` (line 1216). When the buyback hook's sell-side path is active (TWAP suggests pool is better than bonding curve), the terminal computes `reclaimAmount = 0` (because all value goes through the pool swap). The terminal then checks `0 < minTokensReclaimed` and reverts — even though the hook would ultimately deliver sufficient tokens to the router via the swap. The router's own balance-delta check (line 1222) is the correct enforcement point, but it never executes because the terminal reverts first.
+
+**Impact:** Buyback sell-side cash-outs via the router are DOA whenever the user specifies a minimum. The user gets a revert instead of a successful swap-based cash-out.
+
+**Options:**
+
+1. **Fix: pass `minTokensReclaimed = 0` to the terminal, enforce on the router side.** The router already checks the balance delta after the cash-out (line 1222). Set `minTokensReclaimed: 0` in the terminal call and let the router's balance-delta check enforce the user's minimum.
+   - *Tradeoff:* Simple fix. The terminal's own minimum check becomes redundant for router-mediated cash-outs, but the router's post-call balance check provides equivalent protection. The minimum is still enforced — just at the router layer instead of the terminal layer.
+
+2. **Accept risk.** Users can still cash out via the terminal directly (without the router) with `minTokensReclaimed = 0` and check the output themselves.
+   - *Tradeoff:* The router's cash-out feature is broken for buyback-active projects. Not a good UX.
+
+> **Admin note:** Recommend option 1. Pass `minTokensReclaimed: 0` to the terminal call, enforce minimum via the router's balance-delta check at line 1222. This is consistent with how `pay()` already works (M-39 removed receipt enforcement from pay for the same reason).
+
+#### M-48. Sold-Out Tiers Create Phantom Reserves After Default Beneficiary Change
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-721-hook-v6 |
+| **File** | `src/JB721TiersHookStore.sol:494-505` (`reserveBeneficiaryOf`), `1012-1025` (`recordAddTiers`), `1276` (`recordMintReservesFor`) |
+| **Auditor confidence** | 75 (Pashov) |
+| **My confidence** | **80 — VERIFIED** |
+
+**What the bug is:** When a tier has `reserveFrequency > 0` but no explicit `reserveBeneficiary` and the global `defaultReserveBeneficiaryOf` is `address(0)`, `_numberOfPendingReservesFor` returns 0 (because `reserveBeneficiaryOf` returns zero, line 721). If the tier later sells out (`remainingSupply = 0`) and then a NEW tier is added with `useReserveBeneficiaryAsDefault = true`, the global default changes. Now `reserveBeneficiaryOf` for the sold-out tier returns non-zero, so `_numberOfPendingReservesFor` computes pending reserves. These phantom reserves are included in `totalCashOutWeight` (line 560), inflating the denominator and diluting all NFT cash-out values. But the reserves can never be minted: `recordMintReservesFor` does `--storedTier.remainingSupply` (line 1276) which underflows from 0 and reverts.
+
+**Impact:** Permanent cash-out value dilution for all NFT holders in that hook. The severity depends on the sold-out tier's price and reserve frequency — a high-price tier with frequent reserves could create substantial phantom weight.
+
+**Options:**
+
+1. **Fix: check `remainingSupply > 0` in `_numberOfPendingReservesFor`.** Add a guard: if `storedTier.remainingSupply == 0`, return 0 — a sold-out tier cannot have mintable pending reserves.
+   - *Tradeoff:* Simple one-line fix. Correctly reflects that sold-out tiers can't mint more reserves regardless of beneficiary changes. No behavioral change for non-edge-case paths.
+
+2. **Fix: check `remainingSupply >= count` in `recordMintReservesFor`.** Prevent the underflow explicitly with a revert.
+   - *Tradeoff:* This prevents the revert but doesn't fix the `totalCashOutWeight` inflation. The phantom reserves would still dilute cash-out values — they just wouldn't revert when someone tries to mint them. Not sufficient alone.
+
+3. **Accept risk.** The RISKS.md already notes that changing `defaultReserveBeneficiary` affects `totalCashOutWeight` "by design." The sold-out edge case is a refinement of this known behavior.
+   - *Tradeoff:* Leaves permanent cash-out dilution in place for an unlikely but possible scenario.
+
+> **Admin note:** Recommend option 1. Add `if (storedTier.remainingSupply == 0) return 0;` at the top of `_numberOfPendingReservesFor`, after the existing early-return checks. This is a strict improvement with no downside.
+
+#### M-49. Split Token Credit Erased When Extra Hook Returns Weight=0
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-omnichain-deployers-v6 |
+| **File** | `src/JBOmnichainDeployer.sol:533-557` |
+| **Auditor confidence** | 85 (Nemesis NM-002, verified) |
+| **My confidence** | **80 — VERIFIED (composition edge case)** |
+
+**What the bug is:** When `issueTokensForSplits = true` on the 721 hook flags, the 721 hook returns `tiered721Weight = context.weight` (unchanged) so the payer gets fungible token credit for the split portion. The deployer then passes this weight to the extra data hook (e.g., buyback hook). If the buyback hook returns `weight = 0` (it found a better swap path), the scaling block on line 555 is skipped (because `tiered721Weight == context.weight`), and the final weight used by the terminal is 0. The payer receives zero fungible tokens — losing the split-portion credit they were supposed to get.
+
+**Impact:** Payers lose fungible token credit when `issueTokensForSplits = true` AND the buyback hook returns weight=0. This only affects the omnichain deployer composition, not standalone 721 or buyback hooks.
+
+**Options:**
+
+1. **Fix: preserve the `issueTokensForSplits` credit portion.** When the buyback hook returns weight=0 but `issueTokensForSplits` is true, use the 721 hook's split-credit weight instead of zero. The weight from the buyback hook should only apply to the project-amount portion, not the split-credit portion.
+   - *Tradeoff:* Requires understanding the weight semantics of both hooks. The buyback hook's weight=0 means "I'm handling token issuance via swap." But the split-credit tokens aren't part of the swap. Implementation needs careful thought about how to compose the two weights.
+
+2. **Accept risk — document the interaction.** `issueTokensForSplits = true` is a niche flag. Most projects don't use it. The edge case only manifests when buyback + 721 splits + `issueTokensForSplits` are all active simultaneously.
+   - *Tradeoff:* Leaves a functional gap in a rare configuration. Projects that enable `issueTokensForSplits` might not know their payers lose credit when buyback is active.
+
+> **Admin note:** Recommend option 2 for now. The `issueTokensForSplits` flag is not currently used by any deployed project. Document in RISKS.md that `issueTokensForSplits = true` is incompatible with buyback hooks that return weight=0. If a project needs this combination, a fix can be scoped then.
+
+#### M-50. ApprovalExpected Rulesets Carry Forward Wrong 721 Hook
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-omnichain-deployers-v6 |
+| **File** | `src/JBOmnichainDeployer.sol:823-844` |
+| **Auditor confidence** | 85 (Nemesis NM-001, verified) |
+| **My confidence** | **75 — VERIFIED (narrow window)** |
+
+**What the bug is:** When queuing new rulesets, the deployer selects the carry-forward 721 hook source by checking `latestQueuedOf`. It only accepts `Approved` or `Empty` status (line 830). But core's `upcomingRulesetOf` also treats `ApprovalExpected` as a valid upcoming ruleset. If a queued ruleset has `ApprovalExpected` status (e.g., within a `JBDeadline` approval window), the deployer falls back to the current ruleset's hook instead of the pending one. The newly queued ruleset gets the old hook when it should get the hook from the pending-approval ruleset.
+
+**Impact:** During the approval window, queuing new rulesets can lock the wrong 721 hook. This only matters if: (a) the project uses an approval hook with a delay, (b) the project has different 721 hooks across rulesets, and (c) new rulesets are queued during the approval window.
+
+**Options:**
+
+1. **Fix: include `ApprovalExpected` in the status check.** Add `|| approvalStatus == JBApprovalStatus.ApprovalExpected` to line 830.
+   - *Tradeoff:* Simple one-line fix. Risk: the `ApprovalExpected` ruleset might ultimately be rejected by the approval hook, in which case the wrong hook was used. But this matches core's own behavior (`upcomingRulesetOf` includes `ApprovalExpected`), so it's more consistent.
+
+2. **Accept risk.** The deployer is being conservative by only using confirmed-approved rulesets. If the pending ruleset is rejected, the fallback to the current hook was correct.
+   - *Tradeoff:* Inconsistency with core's view of "upcoming." But conservatism has value for an irreversible operation like hook selection.
+
+> **Admin note:** Recommend option 1. Align with core's definition of "upcoming." The one-line fix is low risk and eliminates the inconsistency. If the `ApprovalExpected` ruleset is ultimately rejected, core handles the fallback anyway.
+
+---
+
+### Low (2)
+
+#### L-19. Preview Follows 5-Hop Forwarding Chains, Execution Follows 1 Hop
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-router-terminal-v6 |
+| **File** | `src/JBPayRouteResolver.sol:334-367` (5-hop), `src/JBRouterTerminal.sol:1029-1031` (1-hop) |
+| **Auditor confidence** | 80 (Nemesis NM-001, verified) |
+| **My confidence** | **75 — VERIFIED** |
+
+**What the bug is:** `JBPayRouteResolver._isCircularTerminal` follows up to 5 hops of `IJBForwardingTerminal.terminalOf` to detect circular routes. `JBRouterTerminal._isCircularTerminal` only checks `address(terminal) == address(this)` — a direct identity check. A two-hop forwarding cycle (Terminal A → Terminal B → Router) would be caught by the preview (marked as circular) but not by execution. The execution path does have a one-hop probe in `_usablePrimaryTerminalOf` (lines 997-1001), so it catches one-hop circularity. Two-hop+ cycles are missed.
+
+**Impact:** Low. Two-hop forwarding cycles are theoretically possible but would require two forwarding terminals to be deliberately or accidentally misconfigured. The execution path has gas limits and iteration bounds that prevent infinite loops. The practical impact is a preview/execution divergence — a route marked "unavailable" in preview might actually execute (or vice versa).
+
+**Options:**
+
+1. **Fix: align execution `_isCircularTerminal` with preview.** Use the same 5-hop chain-following logic in `JBRouterTerminal`.
+   - *Tradeoff:* Adds gas cost to every cash-out execution (up to 5 staticcalls). Preview gas is free (view function), but execution gas is paid.
+
+2. **Accept risk.** Two-hop forwarding cycles are unrealistic in practice. Document the divergence in RISKS.md.
+   - *Tradeoff:* Simple. The worst case is gas waste, not fund loss.
+
+> **Admin note:** Recommend option 2. Two-hop forwarding cycles require deliberate misconfiguration. The gas cost of 5-hop chain walking on every execution isn't worth the negligible risk reduction.
+
+#### L-20. Same Token as Both Defifa Fee-Token Streams Causes Double Claims or DoS
+
+| Field | Value |
+|-------|-------|
+| **Repo** | defifa |
+| **File** | `src/DefifaHook.sol:492-493` (constructor), `src/libraries/DefifaHookLib.sol:376-383` (claim logic) |
+| **Auditor confidence** | 80 (Nemesis NM-002, verified) |
+| **My confidence** | **75 — VERIFIED (deployment validation gap)** |
+
+**What the bug is:** The `DefifaHook` constructor accepts `DEFIFA_TOKEN` and `BASE_PROTOCOL_TOKEN` as immutables with no check that they differ. If both resolve to the same ERC-20 address, `claimTokensFor` computes both amounts from the same `balanceOf(address(this))`, then transfers sequentially. If `share > 50%` of total: the second transfer reverts (insufficient balance after first transfer = DoS). If `share <= 50%`: the first claimant gets double their share, draining funds from later claimants.
+
+**Impact:** Only exploitable via deployment misconfiguration (same ERC-20 for both fee token roles). Not exploitable at runtime by external actors.
+
+**Options:**
+
+1. **Fix: add constructor guard.** `require(address(_defifaToken) != address(_baseProtocolToken))`.
+   - *Tradeoff:* One-line fix. Prevents misconfigured deployments.
+
+2. **Fix: add deployment script guard.** Validate in `Deploy.s.sol` that the two token addresses differ before deploying.
+   - *Tradeoff:* Catches it at deploy time but doesn't protect against direct contract deployment.
+
+3. **Accept risk.** This is a deployment misconfiguration, not a runtime vulnerability. The deployer (project owner) is responsible for correct parameterization.
+   - *Tradeoff:* Simple. Misconfiguration hurts only the deployer's own game.
+
+> **Admin note:** Recommend option 1. One-line constructor guard is cheap insurance against deployment mistakes. No downside.
+
+---
+
+### Pass 13 Corroborations
+
+56 findings corroborate existing entries:
+
+| Pattern | Count | Existing IDs |
+|---|---|---|
+| Permissionless pool deployment | 2 | H-2 (downgraded), M-4 (fixed), M-38 (accepted) |
+| Registry slippage metadata | 2 | M-5, H-17 (accepted) |
+| Failed commitment payouts | 2 | H-16 (fixed), L-15 (accepted) |
+| Config hash omits fields | 1 | CertiK F2 (accepted) |
+| Remote loan state invisible | 1 | M-33 (accepted) |
+| REALLOCATE needs OPEN_LOAN | 1 | CertiK F16 (acknowledged) |
+| Zero-amount payouts grief | 1 | L-15 (accepted) |
+| Stale permissions after transfer | 3 | H-4 (FP), L-2 (accepted), M-39 (fixed) |
+| Direct fee bypass variants | 2 | M-24 (fixed), H-26 (fixed) |
+| deploySuckersFor wrapper | 2 | M-15, M-28 (accepted) |
+| Migration verification skip | 2 | M-22 (won't fix) |
+| NFT cashouts + extra hooks | 2 | H-6 (fixed), C-2 (fixed) |
+| Project ID squatting | 2 | M-2 (fixed) |
+| Banny resolver owner | 1 | L-9 (fixed) |
+| Tempo chain failures | 3 | H-11, M-3, M-18-20 (all fixed) |
+| Oracle TWAP fallback | 2 | H-21, L-14 (accepted) |
+| Sell-side swap fallback | 1 | H-23 (fixed) |
+| Sucker timestamp/surplus | 3 | H-13, H-14, H-19 (all fixed) |
+| WETH settlement | 1 | H-15 (fixed) |
+| Fee rounding overquote | 1 | CertiK F7 (accepted) |
+| Tier reuse bypasses policy | 1 | M-42 (fixed), Pass 7 NM-001 (FP) |
+| BWA minority tier exploit | 1 | M-21 (accepted) |
+| Single-tier no-timeout lock | 1 | M-21, M-43 (accepted/fixed) |
+| Fee-path refund by design | 1 | RISKS.md P1 (accepted) |
+| Deployment script issues | 15 | Various fixed/documented |
+| ERC-165/721 compliance | 3 | Various documented |
+
+### Pass 13 Already-Documented Findings (Not Actionable)
+
+56 findings were triaged as already documented. Key categories:
+
+| Pattern | Count | Examples |
+|---|---|---|
+| Documented in RISKS.md | 20 | Registry slippage, fee-path degradation, BWA quorum, deploySuckersFor wrapper |
+| Fixed in prior passes | 18 | Tempo chains, project ID squatting, sucker timestamp ordering, WETH settlement |
+| By design / accepted risk | 10 | Config hash tradeoff, REALLOCATE_LOAN UX, oracle TWAP warmup fallback |
+| False positive (verified not exploitable) | 8 | Stale permissions (FP—JBPermissions follow NFT), V4 fee rounding (slippage enforced) |
