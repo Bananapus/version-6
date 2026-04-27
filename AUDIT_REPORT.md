@@ -13,11 +13,11 @@
 |----------|-------|-----------|----------------|---------------|----------|
 | Critical | 6 | ~~6~~ | — | — | — |
 | High     | 32 | ~~23~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **1** (H-27) |
-| Medium   | 53 | ~~29~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **6** (M-45–M-50) |
-| Low      | 23 | ~~12~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **2** (L-19, L-20) |
-| **Total** | **114** | **~~70 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **9 open** |
+| Medium   | 53 | ~~34~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 11 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38, M-50) | — |
+| Low      | 23 | ~~14~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | — |
+| **Total** | **114** | **~~77 fixed~~** | **~~13 downgraded~~** | **23 accepted** | **1 open** |
 
-**105 of 114 findings resolved.** 9 new findings open from Pass 13 (1 High, 6 Medium, 2 Low).
+**113 of 114 findings resolved.** Pass 13: 7 fixed, 1 accepted, 1 open (H-27).
 
 Pass 2 corroborated 10 existing findings (C-3, H-12, M-2, M-5, M-7, M-12, M-14, M-15, M-22, L-2).
 Pass 3 corroborated 7 existing findings (C-3, H-2, H-12, H-13, H-14, M-24, L-2).
@@ -2957,14 +2957,14 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 | ID | Severity | Repo | Status |
 |---|---|---|---|
 | **H-27** | HIGH | croptop-core-v6 | **OPEN** — direct terminal payments mint Croptop tiers without 5% fee |
-| **M-45** | MEDIUM | nana-buyback-hook-v6 | **OPEN** — failed sell-side swaps transfer tokens to beneficiary instead of holder |
-| **M-46** | MEDIUM | nana-router-terminal-v6 | **OPEN** — buyback pay-hook metadata decoded with wrong layout |
-| **M-47** | MEDIUM | nana-router-terminal-v6 | **OPEN** — cash-out minimum checked against zero buyback reclaimAmount |
-| **M-48** | MEDIUM | nana-721-hook-v6 | **OPEN** — phantom reserves from sold-out tiers dilute cash-out weight |
-| **M-49** | MEDIUM | nana-omnichain-deployers-v6 | **OPEN** — split token credit erased when extra hook returns weight=0 |
-| **M-50** | MEDIUM | nana-omnichain-deployers-v6 | **OPEN** — ApprovalExpected rulesets carry forward wrong 721 hook |
-| **L-19** | LOW | nana-router-terminal-v6 | **OPEN** — preview/execution forwarding chain divergence |
-| **L-20** | LOW | defifa | **OPEN** — same token as both fee-token streams causes double claims |
+| **M-45** | MEDIUM | nana-buyback-hook-v6 | **FIXED** (`eca7cfe`) — failed sell-side swaps transfer tokens to beneficiary instead of holder |
+| **M-46** | MEDIUM | nana-router-terminal-v6 | **FIXED** (`5a26e3d`, prior) — buyback pay-hook metadata decoded with wrong layout |
+| **M-47** | MEDIUM | nana-router-terminal-v6 | **FIXED** (`ec885d0`) — cash-out minimum checked against zero buyback reclaimAmount |
+| **M-48** | MEDIUM | nana-721-hook-v6 | **FIXED** (`0e69609d`) — phantom reserves from sold-out tiers dilute cash-out weight |
+| **M-49** | MEDIUM | nana-omnichain-deployers-v6 | **FIXED** (`b0751bc4`, `5d1706c`) — split token credit erased when extra hook returns weight=0 |
+| **M-50** | MEDIUM | nana-omnichain-deployers-v6 | **ACCEPTED** — ApprovalExpected rulesets carry forward wrong 721 hook (conservative by design, documented in RISKS.md) |
+| **L-19** | LOW | nana-router-terminal-v6 | **FIXED** (`ec885d0`) — preview/execution forwarding chain divergence |
+| **L-20** | LOW | defifa | **FIXED** (`0fc4e54`) — same token as both fee-token streams causes double claims |
 
 #### Previously Open (Now Resolved)
 
@@ -3475,13 +3475,13 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 4. **Enforce fees via a custom pay hook.** `CTDeployer.beforePayRecordedWith` can return a `JBPayHookSpecification` that routes the fee portion to the fee project before the main payment, regardless of who initiated the pay.
    - *Tradeoff:* The hook specification redirects a % of the incoming payment to the fee project automatically. This works within the existing architecture. However, it means ALL payments to Croptop projects pay the 5% fee, not just tier-minting payments. Non-Croptop payments to the same project would also be taxed. Requires careful scoping.
 
-> **Admin note:** Recommend option 1 (accept risk). The fee is a convenience charge on the publisher workflow, not a treasury security invariant. Projects are whole regardless. Direct terminal payments are a core Juicebox feature we shouldn't restrict. Document in RISKS.md that the Croptop 5% fee only applies to `CTPublisher.mintFrom` and is bypassable via direct terminal payment by design.
+> **Admin note:** accepted risk. Croptop's purpose is allowing anyone to **post new items** (create new 721 tiers) by minting the first copy — this can only happen through `CTPublisher.mintFrom`, which collects the 5% fee. Once a tier exists, anyone can mint additional copies via direct terminal payment without the fee. The fee gates content creation, not minting from existing tiers. This is by design. Documented in RISKS.md §7.4.
 
 ---
 
 ### Medium (6)
 
-#### M-45. Failed Sell-Side Swaps Transfer Holder's Tokens to Beneficiary Instead of Holder
+#### ~~M-45. Failed Sell-Side Swaps Transfer Holder's Tokens to Beneficiary Instead of Holder~~ — FIXED
 
 | Field | Value |
 |-------|-------|
@@ -3502,9 +3502,9 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 2. **Accept risk.** The attack requires `CASH_OUT_TOKENS` permission, which is a powerful permission the holder explicitly granted. Granting it implies trust.
    - *Tradeoff:* Permission grants are broad but don't imply "steal my tokens on swap failure." The operator is supposed to cash out on the holder's behalf, not profit from swap failures.
 
-> **Admin note:** Recommend option 1. One-line fix, no tradeoff. `context.holder` is semantically correct — the holder's tokens were burned, so the holder should receive the fallback. Update RISKS.md 9.6 to reflect the holder/beneficiary distinction.
+> **Admin note:** fix. Use `context.holder` on line 244. The sell-side failure is a recovery operation, not output delivery — the holder's tokens were burned, the swap failed, so the reminted tokens should restore the holder to their pre-cashout position. `beneficiary` was supposed to receive ETH (the swap proceeds), not project tokens. Update RISKS.md §9.6 accordingly.
 
-#### M-46. Buyback Pay-Hook Metadata Decoded With Wrong Layout
+#### ~~M-46. Buyback Pay-Hook Metadata Decoded With Wrong Layout~~ — FIXED
 
 | Field | Value |
 |-------|-------|
@@ -3527,7 +3527,7 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 
 > **Admin note:** Recommend option 1. Simple, direct fix. Add `uint256` (weightRatio) at position 7 in the decode tuple.
 
-#### M-47. Cash-Out Minimum Checked Against Zero Buyback reclaimAmount
+#### ~~M-47. Cash-Out Minimum Checked Against Zero Buyback reclaimAmount~~ — FIXED
 
 | Field | Value |
 |-------|-------|
@@ -3550,7 +3550,7 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 
 > **Admin note:** Recommend option 1. Pass `minTokensReclaimed: 0` to the terminal call, enforce minimum via the router's balance-delta check at line 1222. This is consistent with how `pay()` already works (M-39 removed receipt enforcement from pay for the same reason).
 
-#### M-48. Sold-Out Tiers Create Phantom Reserves After Default Beneficiary Change
+#### ~~M-48. Sold-Out Tiers Create Phantom Reserves After Default Beneficiary Change~~ — FIXED
 
 | Field | Value |
 |-------|-------|
@@ -3574,9 +3574,9 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 3. **Accept risk.** The RISKS.md already notes that changing `defaultReserveBeneficiary` affects `totalCashOutWeight` "by design." The sold-out edge case is a refinement of this known behavior.
    - *Tradeoff:* Leaves permanent cash-out dilution in place for an unlikely but possible scenario.
 
-> **Admin note:** Recommend option 1. Add `if (storedTier.remainingSupply == 0) return 0;` at the top of `_numberOfPendingReservesFor`, after the existing early-return checks. This is a strict improvement with no downside.
+> **Admin note:** fix. Add `if (storedTier.remainingSupply == 0) return 0;` in `_numberOfPendingReservesFor`. Bug confirmed with test, fix verified with test + regression test for non-sold-out tiers.
 
-#### M-49. Split Token Credit Erased When Extra Hook Returns Weight=0
+#### ~~M-49. Split Token Credit Erased When Extra Hook Returns Weight=0~~ — FIXED
 
 | Field | Value |
 |-------|-------|
@@ -3597,9 +3597,9 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 2. **Accept risk — document the interaction.** `issueTokensForSplits = true` is a niche flag. Most projects don't use it. The edge case only manifests when buyback + 721 splits + `issueTokensForSplits` are all active simultaneously.
    - *Tradeoff:* Leaves a functional gap in a rare configuration. Projects that enable `issueTokensForSplits` might not know their payers lose credit when buyback is active.
 
-> **Admin note:** Recommend option 2 for now. The `issueTokensForSplits` flag is not currently used by any deployed project. Document in RISKS.md that `issueTokensForSplits = true` is incompatible with buyback hooks that return weight=0. If a project needs this combination, a fix can be scoped then.
+> **Admin note:** fix before deployment. Root cause is a signal collision — both hooks overload the `weight` return value with different semantics. Use approach B: add a second return channel (metadata) so the 721 hook can report the split-credit amount separately. This is more general-purpose than A — other hooks may also need to know the split credit. Nothing is deployed yet so no backward compatibility concerns, but once deployed the contracts are fixed forever.
 
-#### M-50. ApprovalExpected Rulesets Carry Forward Wrong 721 Hook
+#### M-50. ApprovalExpected Rulesets Carry Forward Wrong 721 Hook — ACCEPTED
 
 | Field | Value |
 |-------|-------|
@@ -3620,13 +3620,13 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 2. **Accept risk.** The deployer is being conservative by only using confirmed-approved rulesets. If the pending ruleset is rejected, the fallback to the current hook was correct.
    - *Tradeoff:* Inconsistency with core's view of "upcoming." But conservatism has value for an irreversible operation like hook selection.
 
-> **Admin note:** Recommend option 1. Align with core's definition of "upcoming." The one-line fix is low risk and eliminates the inconsistency. If the `ApprovalExpected` ruleset is ultimately rejected, core handles the fallback anyway.
+> **Admin note:** accepted risk — the conservative behavior is correct. Hook selection is irreversible, so only using confirmed-approved rulesets avoids locking in a hook from a ruleset that may later be rejected. Document inline, in RISKS.md, and in tests.
 
 ---
 
 ### Low (2)
 
-#### L-19. Preview Follows 5-Hop Forwarding Chains, Execution Follows 1 Hop
+#### ~~L-19. Preview Follows 5-Hop Forwarding Chains, Execution Follows 1 Hop~~ — FIXED
 
 | Field | Value |
 |-------|-------|
@@ -3647,9 +3647,9 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 2. **Accept risk.** Two-hop forwarding cycles are unrealistic in practice. Document the divergence in RISKS.md.
    - *Tradeoff:* Simple. The worst case is gas waste, not fund loss.
 
-> **Admin note:** Recommend option 2. Two-hop forwarding cycles require deliberate misconfiguration. The gas cost of 5-hop chain walking on every execution isn't worth the negligible risk reduction.
+> **Admin note:** fix. Preview and execution should match. Align execution `_isCircularTerminal` with the 5-hop chain-following logic from the preview resolver.
 
-#### L-20. Same Token as Both Defifa Fee-Token Streams Causes Double Claims or DoS
+#### ~~L-20. Same Token as Both Defifa Fee-Token Streams Causes Double Claims or DoS~~ — FIXED
 
 | Field | Value |
 |-------|-------|
@@ -3673,7 +3673,7 @@ These findings from Pass 12 corroborate or re-confirm existing entries:
 3. **Accept risk.** This is a deployment misconfiguration, not a runtime vulnerability. The deployer (project owner) is responsible for correct parameterization.
    - *Tradeoff:* Simple. Misconfiguration hurts only the deployer's own game.
 
-> **Admin note:** Recommend option 1. One-line constructor guard is cheap insurance against deployment mistakes. No downside.
+> **Admin note:** fix. One-line constructor guard.
 
 ---
 
