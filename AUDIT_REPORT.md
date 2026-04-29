@@ -1,9 +1,9 @@
 # Juicebox V6 EVM Audit Report
 
-**Source:** Pashov Solidity Auditor (Codex) Runs `20260420-112444` + `20260421-000519` + `20260421-130750` + `20260421-203407` | Nemesis Auditor (Codex) Runs `20260420` + `20260421-000900` + `20260421-130747` + `20260421-203404` + `20260422-003458` | CertiK AI Scans (nana-core-v6, revnet-core-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6) | GitHub `Bananapus/version-6` Issues (manual triage)
-**Repos scanned:** 20 (nana-privacy-v6, defifa-collection-deployer-v6 skipped — directories not found)
-**Date:** 2026-04-23 (pass 11 update)
-**Total findings:** 93 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings, passes 7-8: 3 new findings [H-22, H-23, M-36])
+**Source:** Pashov Solidity Auditor (Codex) Runs `20260420-112444` + `20260421-000519` + `20260421-130750` + `20260421-203407` + `20260428-213302` | Pashov Solidity Auditor (Claude) Run `20260428-213315` (partial, 11/21 repos) | Nemesis Auditor (Codex) Runs `20260420` + `20260421-000900` + `20260421-130747` + `20260421-203404` + `20260422-003458` | CertiK AI Scans (nana-core-v6, revnet-core-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6) | Gemini Paranoid QA Scan | GitHub `Bananapus/version-6` Issues (manual triage)
+**Repos scanned:** 21 (nana-privacy-v6 skipped — directory not found)
+**Date:** 2026-04-29 (pass 13 update)
+**Total findings:** 105 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings, passes 7-8: 3 new findings [H-22, H-23, M-36], pass 12: 12 new findings)
 
 ---
 
@@ -12,18 +12,20 @@
 | Severity | Total | ~~Fixed~~ | ~~Downgraded~~ | Accepted risk | **Open** |
 |----------|-------|-----------|----------------|---------------|----------|
 | Critical | 5 | ~~5~~ | — | — | **0** |
-| High     | 28 | ~~20~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **0** |
-| Medium   | 41 | ~~23~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **0** |
-| Low      | 19 | ~~10~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **0** |
-| **Total** | **93** | **~~58 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **0 open** |
+| High     | 29 | ~~20~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **1** (H-27) |
+| Medium   | 45 | ~~23~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **4** (M-41, M-42, M-43, M-44) |
+| Low      | 26 | ~~10~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **7** (L-20 — L-26) |
+| **Total** | **105** | **~~67 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **3 open** |
 
-**All 93 findings resolved.** 58 verified fixed in code. 13 downgraded/FP/invalid/duplicate. 22 accepted risk or documented by design.
+102 prior findings resolved. 3 findings from pass 12 remain **OPEN** (L-22, L-23, L-25).
 
 Pass 2 corroborated 10 existing findings (C-3, H-12, M-2, M-5, M-7, M-12, M-14, M-15, M-22, L-2).
 Pass 3 corroborated 7 existing findings (C-3, H-2, H-12, H-13, H-14, M-24, L-2).
 Pass 4 corroborated 6 existing findings (C-3, H-2, H-12, M-33, Lead 12, Lead 35/43).
 Pass 5 corroborated 3 existing findings (H-21, M-33, L-2).
 GitHub issues corroborated 2 existing findings: #73 → C-3 (FIXED), #62 → M-11 (downgraded).
+Pass 12 corroborated 6 existing findings (C-5, M-22, H-25, H-22, M-2/H-11, L-9).
+Pass 13 (Gemini) corroborated 4 existing findings (H-17, M-38, H-13, M-33). All 25 Gemini findings triaged as FP/by-design/duplicates.
 
 ---
 
@@ -2949,9 +2951,29 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 
 ## Audit Findings Summary (All Passes)
 
-### Open Findings
+### Open Findings (3)
 
-**None — all 93 findings resolved.**
+| ID | Severity | Repo | Title |
+|---|---|---|---|
+| **L-22** | LOW | nana-suckers-v6 | Missing LINK Token Addresses for Polygon, Avalanche, BNB |
+| **L-23** | LOW | nana-suckers-v6 | _findNonceForLeafIndex O(N) Reverse Scan Can Exceed Gas Limit |
+| **L-25** | LOW | nana-router-terminal-v6 | Unquotable High-Liquidity V3 Pools Can Block Usable Routes |
+
+### Previously Resolved (Pass 12)
+
+| ID | Severity | Repo | Resolution |
+|---|---|---|---|
+| ~~**H-27**~~ | HIGH | revnet-core-v6 | **FIXED** — use `context.surplus.currency` instead of token address encoding |
+| ~~**M-41**~~ | MEDIUM | nana-router-terminal-v6 | **FIXED** — pass hookData with minAmountOut to V4 swaps |
+| ~~**M-42**~~ | MEDIUM | nana-suckers-v6 | **FIXED** — unwrap WETH before native ETH settlement in V4 callback |
+| ~~**M-43**~~ | MEDIUM | nana-ownable-v6 | **FIXED** — reset permissionId when resolved owner diverges from stored owner |
+| ~~**M-44**~~ | MEDIUM | nana-omnichain-deployers-v6 | **FIXED** — propagate cashOutCount to extra hooks |
+| ~~**L-20**~~ | LOW | revnet-core-v6 | **FIXED** — extract internal `_borrowFrom` bypassing redundant permission check |
+| ~~**L-21**~~ | LOW | nana-suckers-v6 | **FIXED** — call fromRemote before writing batch metadata and conversion rates |
+| ~~**L-24**~~ | LOW | nana-buyback-hook-v6 | **FIXED** — guard against FOT token accounting drift |
+| ~~**L-26**~~ | LOW | univ4-lp-split-hook-v6 | **FIXED** — skip unpriced tokens in highest-value terminal selection |
+
+### Previously Resolved (Passes 7-11)
 
 | ID | Severity | Repo | Resolution |
 |---|---|---|---|
@@ -2961,7 +2983,7 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 | ~~**M-35**~~ | MEDIUM | revnet-core-v6 | **FIXED** — reordered `_totalBorrowedFrom` to check zero before external call (PR #130, merged) |
 | ~~**M-36**~~ | MEDIUM | revnet-core-v6 | **FIXED** — stage ordering validated against normalized timestamps (PR #130, merged) |
 
-### Cumulative Statistics (Passes 1-11)
+### Cumulative Statistics (Passes 1-13)
 
 | Pass | Source | Scope | Findings Reviewed | Actionable | Acknowledged | Invalid/FP |
 |---|---|---|---|---|---|---|
@@ -2976,4 +2998,332 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 | 9 | CertiK AI (nana-router-terminal-v6) | nana-router-terminal-v6 | 21 | 7 | 12 | 2 |
 | 10 | CertiK AI (nana-omnichain-deployers-v6) | nana-omnichain-deployers-v6 | 8 | 2 | 3 | 3 |
 | 11 | CertiK AI (nana-univ4-router-v6) | univ4-router-v6 | 9 | 1 | 7 | 1 |
-| **Total** | | | **~300** | **20** | **44** | **~236** |
+| 12 | Pashov (Codex `20260428-213302` + Claude `20260428-213315`) | 21 repos | 33 | 12 | 0 | 21 |
+| 13 | Gemini Paranoid QA | All repos | 25 | 0 | 4 | 21 |
+| **Total** | | | **~358** | **32** | **48** | **~278** |
+
+---
+
+## Pass 12 — Pashov Solidity Auditor (2026-04-28/29)
+
+**Source:** Codex run `20260428-213302` (21/21 repos, 13 reports) + Claude run `20260428-213315` (11/21 repos partial, 3 reports)
+**Raw findings:** 20 (Codex) + 13 (Claude) = 33 total
+**After triage:** 12 genuine new | 1 downgraded | 8 duplicate | 5 false positive | 7 by-design/documented
+
+### Corroborations
+
+Pass 12 corroborated 6 existing findings:
+- **C-5** (Hidden Token Burn/Reveal) — re-identified by both Codex and Claude
+- **M-22** (Migration Verifier Fallback-Held Tiers) — re-identified by Codex
+- **H-25** (Distributor Snapshot Manipulation) — re-identified by Codex (the eager locking IS the fix)
+- **H-22** (Controller-Prepaid ERC20 Credits) — re-identified by Codex (balance-delta accounting IS the fix)
+- **M-2/H-11** (Deployment Squatting/Convergence) — re-identified by Codex
+- **L-9** (Banny Resolver Re-Initialization) — re-identified by Codex
+
+### Duplicates / False Positives / By-Design (21)
+
+| # | Title | Repo | Verdict | Reason |
+|---|---|---|---|---|
+| 1 | Revealable hidden supply inflates loan/cashout value | revnet-core-v6 | DUPLICATE of C-5 | Hidden token mechanics are by-design (RISKS.md §2, §4) |
+| 2 | Hidden tokens inflate borrowable amount | revnet-core-v6 | DUPLICATE of C-5 | Same as above, loan-side angle |
+| 3 | Fee-on-transfer tokens cause _addTo mismatch | revnet-core-v6 | INFORMATIONAL | Protocol-wide design limitation, not REVLoans-specific. Tx reverts, no fund loss. |
+| 4 | V4 Spot Tick Fallback sandwich manipulation | nana-suckers-v6 | BY-DESIGN | Documented in RISKS.md §10.6 — spot fallback preferred over stuck bridge messages |
+| 5 | retrySwap TWAP 120s manipulation | nana-suckers-v6 | FALSE POSITIVE | V3 default is 600s, not 120s. 120s is floor only. Overstated risk. |
+| 6 | Conversion rate truncation dust extraction | nana-suckers-v6 | FALSE POSITIVE | Standard rounding favors protocol (project keeps dust). Not extractable by attacker. |
+| 7 | Retained fee ETH inflates project balance | nana-suckers-v6 | BY-DESIGN | Documented in RISKS.md §8 — bounded by MAX_TO_REMOTE_FEE (0.001 ETH) |
+| 8 | assert() consumes all gas on failure | nana-suckers-v6 | FALSE POSITIVE | Incorrect for Solidity 0.8.28 — assert uses Panic(0x01), does NOT consume all gas |
+| 9 | Split-routed NFT mints retain full cash-out weight | nana-721-hook-v6 | DUPLICATE of L-3/H-7 | Documented in RISKS.md §8.2/§8.6. Cash-out weight = treasury share, not purchase price. |
+| 10 | Registry-routed metadata ignores caller minima | nana-buyback-hook-v6 | FALSE POSITIVE | Registry passes context unchanged — no namespace transformation occurs |
+| 11 | Dust-Sized LP fee collections bypass fee routing | univ4-lp-split-hook-v6 | BY-DESIGN | Standard integer rounding. Min amount for 1-wei fee is 40 wei. Economically insignificant. |
+| 12 | Commitment payout failures finalized as winner surplus | defifa | BY-DESIGN | Try-catch is intentional — prevents permanent fund lock when split recipients revert |
+| 13 | Migration verifier skips owner checks for fallback-held tiers | banny-retail-v6 | DUPLICATE of M-22 | Already ACCEPTED |
+| 14 | Same-salt sucker deployments create non-peer suckers | nana-omnichain-deployers-v6 | BY-DESIGN | Documented in RISKS.md §9 — _msgSender() inclusion is intentional replay protection |
+| 15 | Future-round snapshots frozen before round starts | nana-distributor-v6 | DUPLICATE of H-25 | Eager locking IS the fix for H-25 |
+| 16 | Global prepaid ERC20 balances can be hijacked | nana-distributor-v6 | DUPLICATE of H-22 | Balance-delta accounting correctly handles controller-prepaid path |
+| 17 | Current NFT IDs spend snapshot votes from different NFTs | nana-distributor-v6 | FALSE POSITIVE | pastVotes cap correctly prevents double-counting across NFTs |
+| 18 | Canonical project IDs squatted during recovery | deploy-all-v6 | DUPLICATE of M-2/H-11 | Both Deploy and Resume correctly validate ownership |
+| 19 | Banny resolver ownership handed off before init | deploy-all-v6 | RELATED to L-9 | Deployment would revert if mismatch — caught immediately, no runtime impact |
+| 20 | Fee route failures forgive protocol fees | nana-fee-project-deployer-v6 | BY-DESIGN | Core try-catch fee handling + held fees mechanism. Fees held, not forgiven. |
+| 21 | CCIP Encoding Mismatch (JBCCIPSucker vs JBSwapCCIPSucker) | nana-suckers-v6 | DOWNGRADED | Cross-type peering prevented by CREATE2 deployment mechanism. Document as constraint. |
+
+---
+
+### H-27. Cross-Chain Cash-Outs Silently Drop Remote Surplus Due to Currency Parameter Mismatch — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | revnet-core-v6 |
+| **File** | `src/REVOwner.sol:181` + `src/REVLoans.sol:378` |
+| **Source** | Pashov Claude run (conf 95) |
+| **Auditor confidence** | 95 |
+| **My confidence** | **92 — CORROBORATED by test file** |
+| **Known issue?** | No |
+
+**Description:** `REVOwner.beforeCashOutRecordedWith` passes `currency: uint256(uint160(context.surplus.token))` to `SUCKER_REGISTRY.remoteSurplusOf`. For native ETH, this is `61166`. But the sucker registry indexes surplus by `JBCurrencyIds.ETH = 1` (stored via `_peerChainSurplus`). Since `61166 != 1`, `remoteSurplusOf` always returns zero for cross-chain revnets. The same mismatch exists in `REVLoans._borrowableAmountFrom` at line 378.
+
+**Impact:** On cross-chain revnets, the bonding curve sees only local surplus. Cash-outs underpay (local surplus / cross-chain supply). Loans underlend (same deflated curve). The cross-chain surplus aggregation feature is non-functional.
+
+**Mitigation:** Use `context.surplus.currency` instead of `uint256(uint160(context.surplus.token))` in REVOwner. Alternatively, align the currency encoding between JBSuckerLib snapshot messages and JBAccountingContext (one uses `JBCurrencyIds.ETH = 1`, the other uses `uint32(uint160(NATIVE_TOKEN)) = 61166`).
+
+Admin note: fix. Verify which currency encoding is canonical and align both sides. Add fork tests with cross-chain surplus to cover this.
+
+---
+
+### M-41. Hooked V4 Pools Are Discoverable But Not Executable — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-router-terminal-v6 |
+| **File** | `src/JBRouterTerminal.sol:432,1973` |
+| **Source** | Pashov Codex run (conf 85) |
+| **Auditor confidence** | 85 |
+| **My confidence** | **85 — CORROBORATED** |
+| **Known issue?** | No |
+
+**Description:** `_discoverV4Pool` selects pools with `hooks = IHooks(UNIV4_HOOK)` as candidates when they have the deepest liquidity. But `unlockCallback` passes `hookData: ""` (empty) to `POOL_MANAGER.swap()`. The `JBUniswapV4Hook._beforeSwap` requires `hookData.length >= 32` and reverts with `JBUniswapV4Hook_AmountOutMinRequired()`. If the hooked pool dominates liquidity for a pair, all routed swaps for that pair revert.
+
+**Mitigation:** Either pass `hookData: abi.encode(uint256(minAmountOut))` in `unlockCallback`, or exclude `UNIV4_HOOK` pools from `_discoverV4Pool` discovery (the buyback hook already correctly passes hookData).
+
+Admin note: fix.
+
+---
+
+### M-42. V4 WETH Swaps Can Spend Native ETH Instead of WETH — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-suckers-v6 |
+| **File** | `src/libraries/JBSwapPoolLib.sol:110,216,830` |
+| **Source** | Pashov Codex run (conf 90) |
+| **Auditor confidence** | 90 |
+| **My confidence** | **80 — CORROBORATED** |
+| **Known issue?** | No |
+
+**Description:** `executeSwap` normalizes raw WETH and `NATIVE_TOKEN` together. For V4 swaps, WETH is converted to `address(0)` at line 830. The V4 unlock callback then settles with `poolManager.settle{value: amountIn}()`, spending the contract's native ETH balance while the WETH ERC-20 tokens remain unspent. This affects the inbound CCIP path when WETH is delivered and a V4 swap is selected.
+
+**Impact:** Accounting drift — WETH stays in sucker while ETH is consumed. Can cause V4 settlement to revert if insufficient ETH. Stranded WETH eventually flows to project via `amountToAddToBalanceOf`.
+
+**Mitigation:** When `originalTokenIn` is WETH (not `NATIVE_TOKEN`), use WETH ERC-20 settlement instead of native ETH for V4 swaps. The V3 path already handles this correctly (line 266-269 checks `originalTokenIn == NATIVE_TOKEN`).
+
+Admin note: fix.
+
+---
+
+### M-43. Project NFT Transfers Keep Prior Delegated-Owner Permission Policy — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-ownable-v6 |
+| **File** | `src/JBOwnableOverrides.sol:122-151` |
+| **Source** | Pashov Codex run (conf 90) |
+| **Auditor confidence** | 90 |
+| **My confidence** | **82 — CORROBORATED** |
+| **Known issue?** | No |
+
+**Description:** When a project NFT is transferred via standard ERC-721 `transferFrom`, `_transferOwnership` is never called, so the stored `jbOwner.permissionId` persists. If the previous owner set `permissionId = 42`, and the new NFT holder had previously granted permission ID 42 to some address for an unrelated purpose on the same `projectId`, those addresses unexpectedly gain owner access to the `JBOwnable` contract. RISKS.md §3 incorrectly states "permissionId resets on transfer" — this is only true for `_transferOwnership`, not NFT transfers.
+
+**Mitigation:** In `_checkOwner`, detect that the resolved owner differs from a stored owner hint and force `permissionId` to 0 when they diverge. Alternatively, update RISKS.md to correctly document that `permissionId` persists across NFT transfers and advise project buyers to audit JBOwnable contracts.
+
+Admin note: fix. The RISKS.md assertion about reset-on-transfer is incorrect and should be fixed regardless.
+
+---
+
+### M-44. NFT Cash-Outs Forward Stale Counts to Extra Hooks — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-omnichain-deployers-v6 |
+| **File** | `src/JBOmnichainDeployer.sol:454` |
+| **Source** | Pashov Codex run (conf 85) |
+| **Auditor confidence** | 85 |
+| **My confidence** | **80 — CORROBORATED** |
+| **Known issue?** | No |
+
+**Description:** When the 721 hook converts NFT metadata into a nonzero `cashOutCount`, the wrapper updates `hookContext.cashOutTaxRate`, `totalSupply`, and `surplus.value` before forwarding to the extra hook — but leaves `hookContext.cashOutCount` at the caller's original value. The extra hook's internal logic operates on stale `cashOutCount` (e.g., 0 when the 721 hook converted it to a tier-weight-based value). If the extra hook uses `cashOutCount` for policy decisions, those decisions are based on wrong inputs.
+
+**Mitigation:** Add `hookContext.cashOutCount = cashOutCount;` at line 454 alongside the other field updates.
+
+Admin note: fix.
+
+---
+
+### L-20. reallocateCollateralFromLoan Requires Undocumented OPEN_LOAN Permission — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | revnet-core-v6 |
+| **File** | `src/REVLoans.sol:817,628` |
+| **Source** | Pashov Claude run (conf 85) |
+| **Auditor confidence** | 85 |
+| **My confidence** | **78** |
+| **Known issue?** | No |
+
+**Description:** `reallocateCollateralFromLoan` checks `REALLOCATE_LOAN` permission, then calls the public `borrowFrom` which independently checks `OPEN_LOAN` permission. The loan owner passes both checks automatically (`sender == account`), but a delegated operator with only `REALLOCATE_LOAN` reverts at the inner `borrowFrom` permission check. The documented permission model is incomplete.
+
+**Mitigation:** Extract `borrowFrom`'s core logic into an internal `_borrowFrom` and call that from `reallocateCollateralFromLoan`, bypassing the redundant permission check. Or document that `REALLOCATE_LOAN` requires `OPEN_LOAN`.
+
+---
+
+### L-21. ccipReceive Writes Batch Range Data Before fromRemote Rejects Stale Nonce — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-suckers-v6 |
+| **File** | `src/JBSwapCCIPSucker.sol:308-348` |
+| **Source** | Pashov Claude run (conf 85) |
+| **Auditor confidence** | 85 |
+| **My confidence** | **70** |
+| **Known issue?** | No |
+
+**Description:** In `ccipReceive`, `_batchStartOf`, `_batchEndOf`, `_highestReceivedNonce`, and `_conversionRateOf` are written unconditionally before `this.fromRemote(root)` is called. If `fromRemote` rejects the root as stale, the batch metadata persists as orphaned storage. `_findNonceForLeafIndex` may discover this orphaned data and return a stale nonce, potentially applying the wrong conversion rate.
+
+**Mitigation:** Call `fromRemote` first to validate the nonce, then write batch/conversion data only if the inbox nonce was incremented.
+
+---
+
+### L-22. Missing LINK Token Addresses for Polygon, Avalanche, and BNB Chains — OPEN
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-suckers-v6 |
+| **File** | `src/libraries/CCIPHelper.sol:187-211` |
+| **Source** | Pashov Claude run (conf 82) |
+| **Auditor confidence** | 82 |
+| **My confidence** | **82** |
+| **Known issue?** | No |
+
+**Description:** `linkOfChain()` has no entries for Polygon (137), Avalanche (43114), or BNB (56), yet `routerOfChain()`, `selectorOfChain()`, and `wethOfChain()` all support those chains. Deploying a sucker on these chains with `transportPayment == 0` (LINK fee mode) reverts with `CCIPHelper_UnsupportedChain`. Native ETH fee mode still works.
+
+**Mitigation:** Add LINK token addresses: Polygon `0xb0897686c545045aFc77CF20eC7A532E3120E0F1`, Avalanche `0x5947BB275c521040051D82396571985b38D4e7bF`, BNB `0x404460C6A5EdE2D891e8297795264fDe62ADBB75`.
+
+---
+
+### L-23. _findNonceForLeafIndex O(N) Reverse Scan Can Exceed Gas Limit — OPEN
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-suckers-v6 |
+| **File** | `src/JBSwapCCIPSucker.sol:484-513` |
+| **Source** | Pashov Claude run (conf 80) |
+| **Auditor confidence** | 80 |
+| **My confidence** | **65** |
+| **Known issue?** | No |
+
+**Description:** When the cache hint and neighbor probe miss, `_findNonceForLeafIndex` scans from `_highestReceivedNonce` down to 1, each iteration reading 2 SLOADs. For a long-lived sucker with hundreds of nonces, a non-sequential claim after cache invalidation could cost millions of gas. The cache optimization makes sequential claims O(1), limiting this to edge cases.
+
+**Mitigation:** Acceptable with cache for normal usage. Consider bounding the slow path to ~50 nonces and reverting if target not found. Document in RISKS.md.
+
+---
+
+### L-24. Fee-on-Transfer Project Tokens Not Fully Restored After Failed Cash-Out Sells — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-buyback-hook-v6 |
+| **File** | `src/JBBuybackHook.sol:220-247` |
+| **Source** | Pashov Codex run (conf 85) |
+| **Auditor confidence** | 85 |
+| **My confidence** | **75** |
+| **Known issue?** | No |
+
+**Description:** In `afterCashOutRecordedWith`, the sell-side failure path mints `cashOutCountToSell` tokens to the hook, then transfers them back to the holder. For fee-on-transfer project tokens, the holder receives `cashOutCountToSell - feeOnTransferTax`, less than the amount the terminal burned. The holder loses the FOT tax.
+
+**Mitigation:** Document as accepted risk — FOT project tokens (custom ERC-20 with transfer fees) are not a supported configuration. Standard `JBERC20` has no transfer fees.
+
+---
+
+### L-25. Unquotable High-Liquidity V3 Pools Can Block Usable Routes — OPEN
+
+| Field | Value |
+|-------|-------|
+| **Repo** | nana-router-terminal-v6 |
+| **File** | `src/JBRouterTerminal.sol:2463-2494` |
+| **Source** | Pashov Codex run (conf 75) |
+| **Auditor confidence** | 75 |
+| **My confidence** | **68** |
+| **Known issue?** | No |
+
+**Description:** `_discoverPool` picks the highest-liquidity V3 pool before `_getV3TwapQuote` checks TWAP history. A fresh high-liquidity V3 pool without observation history wins discovery but fails the TWAP check, reverting the entire routing flow while lower-liquidity pools with adequate TWAP are ignored.
+
+**Impact:** Griefing vector — expensive (requires real liquidity), self-correcting (pool accumulates observations over time), bypassable (callers can provide `quoteForSwap` metadata to skip auto-quoting).
+
+**Mitigation:** Fall back to the next-best pool if TWAP quoting fails for the best pool. Or filter out V3 pools without sufficient observation history during discovery.
+
+---
+
+### L-26. Raw-Balance Oracle Fallback Can Block Permissionless Pool Deployment — FIXED
+
+| Field | Value |
+|-------|-------|
+| **Repo** | univ4-lp-split-hook-v6 |
+| **File** | `src/JBUniswapV4LPSplitHook.sol:320,387-390` |
+| **Source** | Pashov Codex run (conf 75) |
+| **Auditor confidence** | 75 |
+| **My confidence** | **65** |
+| **Known issue?** | No |
+
+**Description:** In `_findHighestValueTerminalTokenOf`, when a price feed reverts, the code uses `ethValue = balance` (raw token balance as ETH-equivalent). A donated unpriced token with large raw balance can be selected as the "highest value" terminal token, causing downstream pool deployment to fail if that token can't form a valid Uniswap pair.
+
+**Impact:** Griefing vector against permissionless deployment — requires project to have accepted a worthless token (operator misconfiguration). Manual deployment path still works.
+
+**Mitigation:** Skip tokens with no price feed instead of using raw balance as fallback.
+
+---
+
+## Pass 13 — Gemini Paranoid QA Scan (2026-04-29)
+
+**Source:** `GEM_AUDIT_REPORT.md` — Gemini "Paranoid QA & Security Lead" scan
+**Raw findings:** 10 Critical + 5 High + 8 Medium + 6 Low/Gas = 29 total
+**After triage:** 0 genuine new | 4 corroborate existing | 25 false positive/by-design/duplicates
+
+### Corroborations
+
+- **2.7** (Default Hook Hijack) → corroborates **H-17** (ACCEPTED)
+- **2.8** (Permissionless Pool Deployment Arbitrage) → corroborates **M-38** (ACCEPTED by design)
+- **3.2** (Cross-Chain Root Overwrite) → corroborates **H-13** (FIXED)
+- **3.5** (Sucker Supply Desync) → corroborates **M-33** (ACCEPTED)
+
+### All Gemini Findings — Triage
+
+| # | Gemini ID | Severity | Title | Verdict | Reason |
+|---|---|---|---|---|---|
+| 1 | 2.1 | CRITICAL | Reentrancy Double-Counting in JBMultiTerminal | **FALSE POSITIVE** | balance-before/after IS the reentrancy protection. ERC777 not a supported token type. |
+| 2 | 2.2 | CRITICAL | Reserve Drainage via Shared Balance in JBBuybackHook | **FALSE POSITIVE** | Hook uses weight/token count from data hook context, NOT terminal balance deltas. Mechanism described does not exist. |
+| 3 | 2.3 | CRITICAL | Synergistic Hidden Token Multiplier Attack | **FALSE POSITIVE** | "Fake terminal" requires owner action (self-harm). Hidden token math fixed in C-5. |
+| 4 | 2.4 | CRITICAL | Initial Project Configuration Hijacking | **FALSE POSITIVE** | Sequential IDs by design. No pre-announced IDs to "steal." Frontrunner must guess victim's configuration. |
+| 5 | 2.5 | CRITICAL | $REV Auto-Issuance Token Lock | **FALSE POSITIVE** | rulesetId = block.timestamp, not latestId+1. Claim based on incorrect understanding of JBRulesets ID mechanism. |
+| 6 | 2.6 | CRITICAL | Surplus Inflation via Redundant Payout Limits | **FALSE POSITIVE** | Payout limits are unique per terminal/token/currency combo. Duplicate limits not possible within same key. |
+| 7 | 2.7 | CRITICAL | Default Hook Hijack (Buyback Registry) | **DUPLICATE of H-17** | Already ACCEPTED risk — registry owner is trusted. |
+| 8 | 2.8 | CRITICAL | Permissionless Pool Deployment Arbitrage | **DUPLICATE of M-38** | Already ACCEPTED by design. |
+| 9 | 2.9 | CRITICAL | Price Feed Bricking (Zero Price) | **FALSE POSITIVE** | JBChainlinkV3PriceFeed already reverts on zero/negative prices and checks staleness. |
+| 10 | 2.10 | CRITICAL | Terminal Migration Self-Grief / Fund Lock | **INFORMATIONAL** | Owner self-harm only. Requires project owner to call migrateBalanceOf(to=self). |
+| 11 | 3.1 | HIGH | Payout Limit Reset via Terminal Migration | **FALSE POSITIVE** | Limits are per-terminal by design. New terminal needs its own limit config in JBFundAccessLimits. Migration doesn't bypass — it resets correctly. |
+| 12 | 3.2 | HIGH | Cross-Chain Root Overwrite (Nonce Gaps) | **DUPLICATE of H-13** | Already FIXED (`649f90a`). |
+| 13 | 3.3 | HIGH | Protocol Fee Evasion via Obscure Tokens | **BY-DESIGN** | Fee try-catch + held fees mechanism is documented. Fees are held, not forgiven. processHeldFeesOf retries. |
+| 14 | 3.4 | HIGH | Oracle Arbitrage on Payouts | **ACCEPTED RISK** | Standard Chainlink spot price usage. Protocol-wide, same as all DeFi using Chainlink. |
+| 15 | 3.5 | HIGH | Sucker Supply Desync / Flash Manipulation | **DUPLICATE of M-33** | Already ACCEPTED risk — cross-chain surplus staleness is inherent to bridge delays. |
+| 16 | 4.1 | MEDIUM | Sucker Root Stomping | **FALSE POSITIVE** | Each token has its own outbox tree keyed by token address. No cross-token overwrite possible. |
+| 17 | 4.2 | MEDIUM | Blind Decoding of HookData (V4 Hook) | **FALSE POSITIVE** | Hook validates hookData.length >= 32 before decoding. Not "blind." |
+| 18 | 4.3 | MEDIUM | LP Range Manipulation via Surplus Inflation | **INFORMATIONAL** | Requires payment + cashout in same tx. Bonding curve limits extractable value. |
+| 19 | 4.4 | MEDIUM | Bridge Message Loss | **BY-DESIGN** | Inherent to all cross-chain bridges. Documented in RISKS.md. |
+| 20 | 4.5 | MEDIUM | Registry-Keyed Metadata Mismatch | **FALSE POSITIVE** | Registry passes context unchanged — no namespace transformation. Same finding rejected in pass 12. |
+| 21 | 4.6 | MEDIUM | Migration Fee Bypass | **ACCEPTED RISK** | Related to M-7 (DOWNGRADED). Requires owner action. |
+| 22 | 4.7 | MEDIUM | Verified Handle Spoofing | **FALSE POSITIVE** | Bidirectional ENS verification IS the authorization mechanism. ENS text record → project ID is by-design. |
+| 23 | 4.8 | MEDIUM | 39-Wei Protocol Fee Bypass | **FALSE POSITIVE** | Gas cost per 39-wei tx (~21,000 gas) vastly exceeds fee savings. Economically infeasible. |
+| 24 | 5.1-5.2 | LOW | ERC721 Compliance, Hardcoded ENS | **INFORMATIONAL** | No security impact. |
+| 25 | 5.3-5.6 | GAS/LIVENESS | Permission Caching, Transient Storage, Splits DoS, Terminal Registration | **INFORMATIONAL** | Gas optimizations and liveness concerns. Splits DoS documented in RISKS.md (unbounded array risks). |
+
+### Pass 13 Analysis
+
+The Gemini scan produced 10 "CRITICAL" findings, all of which were triaged as false positives, duplicates, or informational. Key patterns:
+
+| Pattern | Count | Examples |
+|---|---|---|
+| Incorrect mechanism understanding | 4 | 2.1 (reentrancy), 2.2 (balance delta), 2.5 (ruleset IDs), 2.6 (payout limits) |
+| Owner self-harm / trusted role | 3 | 2.3, 2.4, 2.10 |
+| Already mitigated in code | 2 | 2.9 (zero price), 4.2 (hookData validation) |
+| Duplicate of existing finding | 4 | 2.7→H-17, 2.8→M-38, 3.2→H-13, 3.5→M-33 |
+| By-design / accepted | 5 | 3.3, 3.4, 4.4, 4.6, 4.8 |
+| Economically infeasible | 2 | 4.3, 4.8 |
+
+The scan's "DEPLOYMENT HALTED — 0/10 confidence" assessment is **not substantiated**. None of its 10 critical findings survived triage.
