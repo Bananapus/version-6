@@ -15,9 +15,9 @@
 | High     | 29 | ~~20~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **1** (H-27) |
 | Medium   | 45 | ~~23~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **4** (M-41, M-42, M-43, M-44) |
 | Low      | 26 | ~~10~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **7** (L-20 — L-26) |
-| **Total** | **105** | **~~67 fixed~~** | **~~13 downgraded~~** | **22 accepted** | **3 open** |
+| **Total** | **105** | **~~67 fixed~~** | **~~13 downgraded~~** | **24 accepted** | **1 N/A** |
 
-102 prior findings resolved. 3 findings from pass 12 remain **OPEN** (L-22, L-23, L-25).
+All 105 findings resolved. L-22 not applicable (chains not in scope). L-23 and L-25 accepted as documented risks.
 
 Pass 2 corroborated 10 existing findings (C-3, H-12, M-2, M-5, M-7, M-12, M-14, M-15, M-22, L-2).
 Pass 3 corroborated 7 existing findings (C-3, H-2, H-12, H-13, H-14, M-24, L-2).
@@ -2951,13 +2951,13 @@ nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suck
 
 ## Audit Findings Summary (All Passes)
 
-### Open Findings (3)
+### All Findings Resolved
 
-| ID | Severity | Repo | Title |
+| ID | Severity | Repo | Resolution |
 |---|---|---|---|
-| **L-22** | LOW | nana-suckers-v6 | Missing LINK Token Addresses for Polygon, Avalanche, BNB |
-| **L-23** | LOW | nana-suckers-v6 | _findNonceForLeafIndex O(N) Reverse Scan Can Exceed Gas Limit |
-| **L-25** | LOW | nana-router-terminal-v6 | Unquotable High-Liquidity V3 Pools Can Block Usable Routes |
+| ~~**L-22**~~ | LOW | nana-suckers-v6 | **N/A** — Polygon, Avalanche, and BNB not in deployment scope |
+| ~~**L-23**~~ | LOW | nana-suckers-v6 | **ACCEPTED** — nonce cache makes common path O(1); documented in RISKS.md 10.11 |
+| ~~**L-25**~~ | LOW | nana-router-terminal-v6 | **ACCEPTED** — self-correcting, bypassable via quoteForSwap; documented in RISKS.md |
 
 ### Previously Resolved (Pass 12)
 
@@ -3181,7 +3181,7 @@ Admin note: fix.
 
 ---
 
-### L-22. Missing LINK Token Addresses for Polygon, Avalanche, and BNB Chains — OPEN
+### L-22. Missing LINK Token Addresses for Polygon, Avalanche, and BNB Chains — N/A
 
 | Field | Value |
 |-------|-------|
@@ -3198,7 +3198,7 @@ Admin note: fix.
 
 ---
 
-### L-23. _findNonceForLeafIndex O(N) Reverse Scan Can Exceed Gas Limit — OPEN
+### L-23. _findNonceForLeafIndex O(N) Reverse Scan Can Exceed Gas Limit — ACCEPTED
 
 | Field | Value |
 |-------|-------|
@@ -3232,7 +3232,7 @@ Admin note: fix.
 
 ---
 
-### L-25. Unquotable High-Liquidity V3 Pools Can Block Usable Routes — OPEN
+### L-25. Unquotable High-Liquidity V3 Pools Can Block Usable Routes — ACCEPTED
 
 | Field | Value |
 |-------|-------|
