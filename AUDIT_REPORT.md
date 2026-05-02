@@ -1,3329 +1,2236 @@
-# Juicebox V6 EVM Audit Report
+# Audit Triage Report
+
+## Scope
+
+Audit seed:
+
+- Depth: deep dive
+- Subsystems: all 19 EVM repos in `ARCHITECTURE.md`
+- Personas: broad adversarial coverage across MEV, malicious project owner, rogue bridge operator, grief attacker, fee evader, flash loan attacker, permission escalator, oracle manipulator, decimals/currency/token arbitrageur, and ruthless thief
+- User deployment constraint: pre-deploy breaking changes are allowed because nothing has been deployed yet
+- Deployment focus: one-shot `deploy-all-v6` rollout with canonical projects `1`-`4`
+
+Inputs reviewed:
+
+- `ARCHITECTURE.md`
+- `RISKS.md`
+- `AUDIT_INSTRUCTIONS.md`
+- `USER_JOURNEYS.md`
+- `.audit-logs/codex-pashov-summary-20260429-143830.log`
+- `.audit-logs/codex-nemesis-summary-20260429-143842.log`
+- `.audit-logs/nana-721-hook-v6-pashov-20260429-143852.log`
+- `.audit-logs/nana-router-terminal-v6-pashov-20260429-143852.log`
+- `.audit-logs/revnet-core-v6-pashov-20260429-143852.log`
+- `.audit-logs/univ4-lp-split-hook-v6-pashov-20260429-143852.log`
+- `.audit-logs/nana-core-v6-pashov-20260429-143852.log`
 
-**Source:** Pashov Solidity Auditor (Codex) Runs `20260420-112444` + `20260421-000519` + `20260421-130750` + `20260421-203407` + `20260428-213302` | Pashov Solidity Auditor (Claude) Run `20260428-213315` (partial, 11/21 repos) | Nemesis Auditor (Codex) Runs `20260420` + `20260421-000900` + `20260421-130747` + `20260421-203404` + `20260422-003458` | CertiK AI Scans (nana-core-v6, revnet-core-v6, nana-router-terminal-v6, nana-omnichain-deployers-v6) | Gemini Paranoid QA Scan | GitHub `Bananapus/version-6` Issues (manual triage)
-**Repos scanned:** 21 (nana-privacy-v6 skipped — directory not found)
-**Date:** 2026-04-29 (pass 13 update)
-**Total findings:** 105 confirmed | 59+ leads (all investigated, 17 promoted from pass 1, 4 promoted from pass 2, pass 3 leads pending triage, pass 4: 6 new findings, pass 5: 2 new findings, passes 7-8: 3 new findings [H-22, H-23, M-36], pass 12: 12 new findings)
+Correlated findings and PoCs were checked against current code, current tests, repo `RISKS.md` files, and the real deployment path through `deploy-all-v6`.
 
----
+## Final Triage
 
-## Summary
+Bottom line under the current threat model:
 
-| Severity | Total | ~~Fixed~~ | ~~Downgraded~~ | Accepted risk | **Open** |
-|----------|-------|-----------|----------------|---------------|----------|
-| Critical | 5 | ~~5~~ | — | — | **0** |
-| High     | 29 | ~~20~~ | ~~4~~ (H-2, H-4, H-9, H-20) | 4 (H-7, H-8, H-17, H-21) | **1** (H-27) |
-| Medium   | 45 | ~~23~~ | ~~8~~ (M-7, M-8, M-9, M-11, M-13, M-29, M-31, M-32) | 10 (M-5, M-10, M-15, M-21, M-22, M-27, M-28, M-33, M-37, M-38) | **4** (M-41, M-42, M-43, M-44) |
-| Low      | 26 | ~~10~~ | ~~1~~ (L-16) | 8 (L-1, L-2, L-3, L-5, L-12, L-13, L-14, L-15) | **7** (L-20 — L-26) |
-| **Total** | **105** | **~~67 fixed~~** | **~~13 downgraded~~** | **24 accepted** | **1 N/A** |
+- No confirmed unpatched issue remains in the working tree under the current threat model, but the local patches still need review, merge, and final deployment rehearsal before mainnet deployment.
+- Forty-six findings from this report are locally mitigated in the working tree and should be reviewed before deployment: five `deploy-all-v6` resume / verification findings plus the shared-hook temporary-allowance leakage, the JB-route minimum-output check, the LP shared-clone fee-claim capture path, the buyback-hook transfer-tax route gating fix, the LP fee-token actual-receipt accounting fix, the LP primary-terminal auto-selection fix, the same-chain sucker snapshot precedence issue, the same-block sucker snapshot freshness fix, the sucker first-terminal snapshot aggregation fix, the sucker peer-value conversion fix, the sucker route-quality fixes for hookless / broken-hook V4 spot fallback and fresh V3 TWAP history, the explicit sucker peer-configuration fix, the Uniswap V4 hook metadata-only buyback buy/sell preview fixes, the Uniswap V4 hook zero-delivery JB sell guard, the Uniswap V4 hook feeless-beneficiary sell-quote fix, the Croptop fail-open sucker-launch and registry-recovery fix, the Croptop stale-owner direct-permission removal, the fee-project canonical-shape guard, the revnet external-caller sucker-salt fix, the revnet configuration-hash expansion, the public launcher project-ID reservation fix, the router-terminal buyback sell-side executable-floor scoring fix, the router-terminal buy-side raw-buyback-quote scoring fix, the router-terminal zero-delivery cashout guard, the router-terminal fee-aware cashout-preview scoring fix, the retained `toRemoteFee` accounting issue, the retained CCIP transport-refund accounting issue, the revnet hidden-supply denominator fix, the revnet local-loan-state cash-out fix, the revnet remote-loan-state peer snapshot fix, the Defifa one-tier timeout guard, Defifa fee-token beneficiary routing, the Defifa pending-reserve preview denominator, the verified-handle Unicode formatting guard, the router-terminal circular-lock guard, the 721 snapshot-owner eligibility fix, and the 721 project-deployer permission preflight.
+- `deploy-all-v6` now resolves the patched ecosystem from sibling working-copy packages instead of npm tarballs for the one-shot deployment; this matters because several published `0.0.x` tarballs still expose stale pre-audit ABI surfaces under the same version numbers.
+- The prior cross-user 721 distributor snapshot-transfer finding is now locally mitigated across the hook and distributor; the prior cross-chain deployment-topology peer-determinism finding is now locally mitigated in `nana-suckers-v6`.
+- The four previously open `nana-suckers-v6` swap-routing bugs are now locally mitigated by route-quality checks in `JBSwapPoolLib`; review is still required before deployment.
+- The two previously open `univ4-router-v6` metadata-only buyback preview findings are now locally mitigated in `JBUniswapV4Hook`; review is still required before deployment.
+- The previously open `nana-router-terminal-v6` buy-side conservative buyback route scorer is now locally mitigated in `JBPayRouteResolver`; review is still required before deployment.
+- Three previously open `nana-router-terminal-v6` sell-side route-selection / execution findings are now locally mitigated in `JBRouterTerminal`; review is still required before deployment.
+- The previously open `univ4-router-v6` zero-output JB sell fallback is now locally mitigated in `JBUniswapV4Hook`; review is still required before deployment.
+- The previously open `univ4-router-v6` feeless-beneficiary sell-quote issue is now locally mitigated in `JBUniswapV4Hook`; review is still required before deployment.
+- The previously open `univ4-lp-split-hook-v6` fee-accounting and deploy-selection bugs are now locally mitigated in `JBUniswapV4LPSplitHook`; review is still required before deployment.
+- The previously open `croptop-core-v6` sucker rollout bug is now locally mitigated across `CTDeployer` and `JBSucker`; review is still required before deployment.
+- The previously open `croptop-core-v6` stale-owner hook-control window is now locally mitigated by removing launch-time direct hook-management grants from `CTDeployer`; review is still required before deployment.
+- The previously open fee-project bootstrap skip bug is now locally mitigated in the standalone fee deployer and deploy-all deploy/resume scripts by requiring configured project `1` to match the canonical NANA revnet shape before skipping; review is still required before deployment.
+- The previously open caller-dependent revnet sucker salt bug is now locally mitigated in `REVDeployer`; registry/deployer topology drift is tracked separately below and is also locally mitigated.
+- The previously open sucker registry/deployer topology drift bug is now locally mitigated by making the remote peer address an explicit deployer configuration field while retaining zero as the deterministic same-address default.
+- The previously open weak revnet configuration hash is now locally mitigated by including split-operator authority, reserved split routing, and extra metadata policy bits in the stored configuration commitment.
+- The previously open `nana-buyback-hook-v6` fee-on-transfer derived-minimum self-brick is now locally mitigated by requiring explicit user minima for ERC-20 sell-output AMM routing and standard Juicebox ERC-20 project tokens for protocol-derived buy-output AMM routing.
+- The previously open `nana-distributor-v6` 721 snapshot-transfer reward-redirection bug is now locally mitigated by token-owner checkpoints in `JB721TiersHook` and snapshot-owner eligibility checks in `JB721Distributor`; review is still required before deployment.
+- The previously open public launcher `count() + 1` grief pattern is now locally mitigated across Croptop, Defifa, Revnet, the shared 721 project deployer, and the omnichain deployer by reserving the project ID before deriving hook / ruleset / sucker configuration.
+- The previously reported Defifa cash-out / one-tier issues, sucker same-block snapshot issue, revnet hidden-supply, local-loan-state, and remote-loan-state issues, verified-handle spoof surface, buyback-hook transfer-tax route gating, and `deploy-all-v6` resume / verifier blind spots remain listed below until their local patches are reviewed and merged.
+- Several earlier findings were dropped because they rely on deployment paths you do not use, behaviors you explicitly accept, or invariants you do not want this system to enforce.
 
-All 105 findings resolved. L-22 not applicable (chains not in scope). L-23 and L-25 accepted as documented risks.
+## Open And Locally Patched Findings
 
-Pass 2 corroborated 10 existing findings (C-3, H-12, M-2, M-5, M-7, M-12, M-14, M-15, M-22, L-2).
-Pass 3 corroborated 7 existing findings (C-3, H-2, H-12, H-13, H-14, M-24, L-2).
-Pass 4 corroborated 6 existing findings (C-3, H-2, H-12, M-33, Lead 12, Lead 35/43).
-Pass 5 corroborated 3 existing findings (H-21, M-33, L-2).
-GitHub issues corroborated 2 existing findings: #73 → C-3 (FIXED), #62 → M-11 (downgraded).
-Pass 12 corroborated 6 existing findings (C-5, M-22, H-25, H-22, M-2/H-11, L-9).
-Pass 13 (Gemini) corroborated 4 existing findings (H-17, M-38, H-13, M-33). All 25 Gemini findings triaged as FP/by-design/duplicates.
+### Review Branches
 
----
+The local remediation patches have been committed and pushed for review:
 
-## Critical
+- `banny-retail-v6`: `codex/v6-audit-remediations-20260501`
+- `croptop-core-v6`: `codex/v6-audit-remediations-20260501`
+- `defifa`: `codex-v6-audit-remediations-20260501`
+- `deploy-all-v6`: `codex/v6-audit-remediations-20260501`
+- `nana-721-hook-v6`: `codex/v6-audit-remediations-20260501`
+- `nana-buyback-hook-v6`: `codex/v6-audit-remediations-20260501`
+- `nana-distributor-v6`: `codex-v6-audit-remediations-20260501`
+- `nana-fee-project-deployer-v6`: `codex/v6-audit-remediations-20260501`
+- `nana-omnichain-deployers-v6`: `codex/v6-audit-remediations-20260501`
+- `nana-project-handles-v6`: `codex-v6-audit-remediations-20260501`
+- `nana-router-terminal-v6`: `codex-v6-audit-remediations-20260501`
+- `nana-suckers-v6`: `codex-v6-audit-remediations-20260501`
+- `revnet-core-v6`: `codex-v6-audit-remediations-20260501`
+- `univ4-lp-split-hook-v6`: `codex-v6-audit-remediations-20260501`
+- `univ4-router-v6`: `codex-v6-audit-remediations-20260501`
 
-### C-1. ~~Cross-Chain Loan Quotes Hardcode 18-Decimal Remote Surplus~~ — FIXED (`c5a6d8d`)
+### 1. `univ4-router-v6` + `univ4-lp-split-hook-v6`: persistent terminal approvals can leak later same-token balances
 
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVLoans.sol:378` |
-| **Auditor confidence** | 95 |
-| **My confidence** | **95 — VERIFIED** |
-| **Known issue?** | No |
+Severity: `MED`
 
-**Description:** `_borrowableAmountFrom` calls `SUCKER_REGISTRY.remoteSurplusOf({..., decimals: 18, ...})` while the local surplus uses the caller's requested `decimals` parameter. When the source token is not 18-decimal (e.g. USDC at 6), the remote surplus is inflated by 10^12 relative to local surplus, allowing borrowers to overdraw the local treasury.
+Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol` and `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`; retained here until the patches are reviewed and merged.
 
-**Mitigation:** Replace `decimals: 18` with `decimals: decimals` to match the local surplus precision.
+Affected code:
 
-Admin note: fix. and add sufficient fork tests to make sure this is well tested across tokens, currencies, and decimals.
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:1087)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1025)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1983)
 
----
+Why it is real:
 
-### C-2. ~~Omnichain Cash-Out Pricing Uses Hardcoded 18-Decimal Remote Surplus~~ — FIXED (`2de02bf`)
+- The hooks `forceApprove` directory-selected terminals before external `pay(...)` / `addToBalanceOf(...)` calls, but they never verify that the terminal consumed the whole allowance and they never reset it back to zero.
+- Core code already treats this as an invariant when interacting with terminals:
+  [JBMultiTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBMultiTerminal.sol:2067) reverts if allowance remains after the transfer path, and [JBController.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBController.sol:351) does the same after routing reserved-token payments through a terminal.
+- [JBDirectory.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBDirectory.sol:176) lets project owners point projects at arbitrary terminals. A malicious terminal can under-consume the forwarded amount, keep the allowance alive, and later `transferFrom` future balances of the same token from the hook.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-omnichain-deployers-v6 |
-| **File** | `src/JBOmnichainDeployer.sol:415` |
-| **Auditor confidence** | 90 |
-| **My confidence** | **92 — VERIFIED** |
-| **Known issue?** | No |
+Impact:
 
-**Description:** Same class of bug as C-1 but in the omnichain deployer's `beforeCashOutRecordedWith`. Remote surplus is fetched with `decimals: 18` instead of `context.surplus.decimals`, and uses `uint256(uint160(context.surplus.token))` instead of `uint256(context.surplus.currency)` for the currency parameter. Non-18-decimal reclaim tokens can be overpaid up to the full local surplus.
+- In `univ4-router-v6`, a malicious project terminal can drain later same-token balances that arrive on the shared hook during future routed swaps.
+- In `univ4-lp-split-hook-v6`, a malicious fee terminal or project terminal can drain later same-token balances held by a shared clone, including funds tied to later flows or other projects using that clone.
+- The stealable amount is bounded by the stale allowance from the most recent routed call, but a single large routed payment can leave a correspondingly large drain window.
 
-**Mitigation:** Use `context.surplus.decimals` and `context.surplus.currency` for the remote surplus call.
+Evidence:
 
-Admin note: fix. and add sufficient fork tests to make sure this is well tested across tokens, currencies, and decimals.
+- PoC: [univ4-router-v6/test/audit/PersistentAllowanceSteal.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/test/audit/PersistentAllowanceSteal.t.sol:1)
+- PoC: [univ4-lp-split-hook-v6/test/audit/PersistentAllowanceSteal.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/test/audit/PersistentAllowanceSteal.t.sol:1)
 
----
+Recommended fix:
 
-### C-3. ~~Buyback Cash-Out Fallback Zeroes The Reclaim Surplus~~ — FIXED (`11f232d`)
+- Mirror the core temporary-allowance pattern after every external terminal call.
+- Either revert when `allowance(address(this), terminal) != 0`, or reset the allowance to zero immediately and base accounting on measured balance deltas.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-buyback-hook-v6 |
-| **File** | `src/JBBuybackHook.sol:693,755,758` |
-| **Auditor confidence** | 90 |
-| **My confidence** | **88 — VERIFIED** |
-| **Known issue?** | No |
+### 2. `univ4-router-v6`: JB-routed swaps do not locally enforce realized `amountOutMin`
 
-**Description:** All three return paths in `beforeCashOutRecordedWith` return `effectiveSurplusValue = 0`. When the swap is not worthwhile (`noop = true`, line 755), the hook won't execute in `afterCashOutRecordedWith`, so `JBTerminalStore` computes reclaim against zero surplus and the user burns tokens for nothing. The non-noop swap path (line 758) intends for the after-hook to handle the payout, but the noop path is a direct loss. *Re-confirmed by Pashov pass 2 (20260421) with identical analysis.*
+Severity: `LOW`
 
-**Mitigation:** When `noop = true`, return `context.surplus.value` instead of `0` so the normal bonding curve reclaim applies.
+Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
 
-Admin note: fix. and add sufficient fork tests to make sure this is well tested across tokens, currencies, and decimals.
+Affected code:
 
----
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:1048)
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:1122)
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:598)
 
-### C-4. ~~Non-Canonical tokenIds Allow Duplicate Distribution Claims~~ — FIXED (`9918cd6`)
+Why it is real:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JBTokenDistributor.sol:125,136` |
-| **Auditor confidence** | 95 |
-| **My confidence** | **95 — VERIFIED** |
-| **Known issue?** | No |
+- The hook accepts `amountOutMin` in `hookData`, documents JB-route slippage as already validated in `_beforeSwap`, and only re-checks `amountOutMin` in `_afterSwap` for real V4 swaps.
+- `_routeThroughJuicebox` forwards `amountOutMin` into `terminal.pay(...)` / `cashOutTokensOf(...)`, but after measuring the realized balance delta it never checks `outputReceived >= amountOutMin`.
+- That means the slippage guarantee is delegated entirely to the directory-selected terminal. If that terminal ignores or under-enforces the minimum, the hook itself still returns a successful JB route with below-min output.
 
-**Description:** `_canClaim` and `_tokenStake` truncate `uint256 tokenId` to `address(uint160(tokenId))`. Any two tokenIds sharing the same lower 160 bits authorize the same staker and look up the same voting power. An attacker can submit multiple alias tokenIds to `beginVesting` and multiply their claim for the same round.
+Scope note:
 
-**Mitigation:** Validate `tokenId >> 160 == 0` in `_canClaim`, or deduplicate by the derived address in `beginVesting`.
+- The bundled [JuiceboxSwapRouter.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/test/utils/JuiceboxSwapRouter.sol:119) currently masks this by re-validating the final delta after the swap.
+- The bug is still in the hook contract itself, so any direct `PoolManager.swap(...)` integration or future router that trusts the hook’s advertised guarantee can be under-filled.
 
-Admin note: fix. Not truncated for packing — it's a semantic encoding where `tokenId = uint256(uint160(stakerAddress))`. The base `JBDistributor` uses full uint256 mapping keys. Fix by validating `tokenId >> 160 == 0` in `_canClaim` and `_tokenStake` to reject aliased IDs.
+Evidence:
 
----
+- PoC: [univ4-router-v6/test/audit/JBRouteMinOutputBypass.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/test/audit/JBRouteMinOutputBypass.t.sol:1)
 
-### C-5. ~~Hidden Token Burn/Reveal Cycle Inflates Visible-Holder Exit Value~~ — FIXED (`c5a6d8d`)
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVHiddenTokens.sol` (hideTokensOf) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **80** |
-| **Known issue?** | Partially related to H-4 (pending reserved tokens inflate totalSupply) but different mechanism |
+- After computing `outputReceived`, revert if it is below `amountOutMin`.
+- That makes the hook’s own slippage contract true even when the selected terminal is buggy or adversarial.
 
-**Description:** Hidden balances are burned from circulating supply but can be revealed later. A large holder can hide tokens, cash out or borrow against the artificially smaller supply (which inflates per-token value), then reveal. Remaining holders absorb the loss.
+### 3. `univ4-lp-split-hook-v6`: overreported cash-out returns can consume other projects’ reserved fee-token claims
 
-**Mitigation:** Include `totalHiddenOf(projectId)` in every supply-sensitive valuation path (cash-outs, loans, LP sizing).
+Severity: `MED`
 
-Admin note: the goal of hiding tokens is to allow someone with a large supply to "even the playing field" economically while also maintaining control just in case. Need a mechanism that reduces the hider's economic dominance without letting them profit from the supply reduction. Open design question — see discussion below.
+Status: locally mitigated in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`; retained here until the patch is reviewed and merged.
 
-**Design discussion:** The core tension is that reducing supply increases per-token value, and the hider still holds unhidden tokens that benefit. Approach to explore: **per-account supply adjustment** — when computing cash-out or borrow value for a specific account that has hidden tokens, add their own hidden balance back into the totalSupply denominator. Other users see the reduced supply (their field is evened). The hider sees the original supply (they can't profit from their own hide). On reveal, supply restores for everyone. This is the only approach that achieves economic evening without creating an extraction vector, because the hider's own valuation is unaffected by their own action.
+Affected code:
 
-admin note to the design discussion: but this isnt sybil resistant.
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1083)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1242)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1729)
 
-**Sybil analysis:** Correct — the per-account adjustment breaks if the hider splits tokens across wallets before hiding. Each sybil wallet has zero hidden balance, so they all benefit from the reduced supply. The only sybil-proof approach is **global supply adjustment**: add `totalHiddenOf(projectId)` back into totalSupply for ALL cash-out/borrow calculations, for everyone. Nobody benefits economically from hiding. The "field evening" effect is limited to governance weight reduction only. This changes the feature from "economic evening" to "governance evening."
+Why it is real:
 
----
+- During pool deployment, `_addUniswapLiquidity` trusts the terminal’s `cashOutTokensOf(...)` return value as `terminalTokenAmount` instead of measuring the actual balance delta.
+- The later liquidity mint spends raw contract balances through `PositionManager.SETTLE`, but the only reserved-balance segregation in this contract is `_burnReceivedTokens`, which protects project-token burns, not liquidity-add spends.
+- In a shared clone, if the hook is already holding reserved fee-project ERC-20s for one project and a second project’s malicious terminal overreports its cash-out proceeds in that same token, the second project can make deployment consume the first project’s reserved fee claims.
 
-## High
+Impact:
 
-### H-1. ~~Public Checkpoint Predeployment Permanently Bricks Hook~~ — FIXED (`4a0e481`)
+- This is cross-project theft on shared clones, not just self-grief.
+- The cleanest live target is the fee-project token itself: claimable fee tokens are intentionally pooled on the clone, so a malicious project that uses that token as its terminal token can consume another project’s already-earned claimable balance into its own LP position.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-721-hook-v6 |
-| **File** | `src/JB721CheckpointsDeployer.sol:39-44` |
-| **Auditor confidence** | 95 |
-| **My confidence** | **93 — VERIFIED** |
-| **Known issue?** | No |
+Evidence:
 
-**Description:** `deploy(address hook, IJB721TiersHookStore store)` has no access control. An attacker can front-run the first mint by deploying a checkpoint clone to the deterministic CREATE2 slot with a wrong `store`, causing every subsequent `_update()` call (mint/transfer/burn) on the legitimate hook to revert.
+- PoC: [univ4-lp-split-hook-v6/test/audit/FeeClaimReserveCapture.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/test/audit/FeeClaimReserveCapture.t.sol:1)
 
-**Mitigation:** Add `if (msg.sender != hook) revert Unauthorized();` to `deploy`.
+Recommended fix:
 
-admin note: great, yes fix. make sure its well tested.
+- Do not let liquidity-add sizing trust a terminal return value alone when the clone can already hold the same token for unrelated accounting buckets.
+- Measure the actual terminal-token balance delta from the cash-out, cap it against any reserved balance of that token, and size the LP mint from the measured free balance only.
 
----
+### 4. `nana-buyback-hook-v6`: buy-side and sell-side derived minima ignore output-token transfer tax and can self-brick AMM routing
 
-### H-2. Permissionless LP Deployment Binds Wrong Terminal Token
+Severity: `MED`
 
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-lp-split-hook-v6 |
-| **File** | `src/JBUniswapV4LPSplitHook.sol` (deployPool) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **82** |
-| **Known issue?** | No |
+Status: locally mitigated in `nana-buyback-hook-v6/src/JBBuybackHook.sol`; retained here until the patch is reviewed and merged.
 
-**Description:** Once the 10x weight decay window opens, `deployPool` becomes permissionless and any caller can deploy against any valid primary terminal token, irreversibly locking the project to the wrong pool.
+Affected code:
 
-**Mitigation:** Add a `commitTerminalToken` function gated by project ownership, and require the committed token during permissionless deployment.
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:746)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:758)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:883)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:895)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:1177)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:343)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:410)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:243)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:259)
 
-Admin note: VERIFIED — tokens are project-approved only. `deployPool` validates via `DIRECTORY.primaryTerminalOf(projectId, terminalToken)` and reverts with `JBUniswapV4LPSplitHook_InvalidTerminalToken()` if it returns address(0). Only tokens the project already has a configured terminal for are accepted. Downgrade to informational — note risk in repo's RISKS.md that permissionless deployers pick among project-approved tokens.
+Why it is real:
 
----
+- Before the local patch, `beforePayRecordedWith(...)` compared the direct mint path against a TWAP-derived pool minimum that assumed the project-token output arrived losslessly, then `afterPayRecordedWith(...)` enforced that minimum against the realized post-tax balance delta.
+- Before the local patch, `beforeCashOutRecordedWith(...)` compared net direct reclaim against a TWAP-derived pool minimum that assumed the terminal-token output arrived losslessly, then `afterCashOutRecordedWith(...)` enforced that minimum against the realized post-tax balance delta.
+- For high-fee-on-transfer output tokens, the hook could therefore select the AMM path because the untaxed derived minimum beat the direct protocol path, but the real taxed delivery still landed below that same internally-derived floor.
+- This was not just a user-specified-slippage issue. Both PoCs used empty metadata and the hook's own TWAP-derived minima to trigger the revert.
+- The local patch keeps metadata-less, protocol-derived sell-side AMM routing on the direct protocol path for ERC-20 output tokens, while preserving explicit user-minimum sell routing. On the buy side, metadata-less derived AMM routing is limited to the standard `JBTokens.deployERC20For(...)` clone runtime; custom project tokens must supply explicit quote metadata before the AMM path activates.
 
-### H-3. ~~Buyback Routing Ignores Omnichain Cash-Out Context~~ — FIXED (`c5a6d8d`)
+Impact:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVOwner.sol` (beforeCashOutRecordedWith) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **82** |
-| **Known issue?** | No |
+- Any payer or holder using an affected buyback-hook pool could hit a hard revert once the AMM route won, even though the direct mint or direct cash-out path was live.
+- Because pool configuration is immutable per `(projectId, terminalToken)` pair, projects cannot swap that pair over to a non-lossy pool configuration after the fact.
+- The patched default policy makes lossy / unknown ERC-20 output routes explicit-opt-in instead of silently deriving a floor that the transfer may make impossible to satisfy.
 
-**Description:** The buyback hook sees only local supply and surplus, but the returned reclaim values include remote supply and surplus. Cross-chain cash-outs can be routed to a worse swap path and underpay the holder.
+Evidence:
 
-**Mitigation:** Build a modified context with the cross-chain-adjusted `totalSupply` and `surplus.value` before forwarding to the buyback hook.
+- Regression: [nana-buyback-hook-v6/test/audit/DerivedMinBuySideFOTDoS.t.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/test/audit/DerivedMinBuySideFOTDoS.t.sol:253)
+- Regression: [nana-buyback-hook-v6/test/audit/DerivedMinSellSideFOTDoS.t.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/test/audit/DerivedMinSellSideFOTDoS.t.sol:199)
+- Explicit opt-in coverage: [nana-buyback-hook-v6/test/audit/SellSideFOTOutputDoS.t.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/test/audit/SellSideFOTOutputDoS.t.sol:222)
+- Non-18-decimal explicit ERC-20 sell route coverage: [nana-buyback-hook-v6/test/TestAuditGaps.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/test/TestAuditGaps.sol:497)
 
-Admin note: yes, fix. Verified the 721 hook forwarding is safe — both `JBOmnichainDeployer` and `REVOwner` discard the 721 hook's returned `effectiveSurplusValue` and `totalSupply` (via `,,` destructuring), so stale surplus in the 721 context is harmless. The real issue is only in the buyback hook's routing decision: it uses local-only surplus/supply to decide swap vs passthrough, which can route to a worse path. Fix in `REVOwner`: build `routedContext` with cross-chain-adjusted values before forwarding to buyback hook. H-6 already covers the omnichain deployer's extra hook path separately.
+Recommended fix:
 
----
+- Review and merge the local conservative route-gating patch.
+- Keep this developer-facing policy documented: protocol-derived no-metadata routing assumes standard lossless outputs; custom project tokens and ERC-20 sell outputs can still use AMM routes, but only when the caller supplies an explicit minimum that accounts for the token's behavior.
 
-### H-4. Former Project Owner Retains Hook Control After NFT Transfer
+### 5. `nana-suckers-v6` + `revnet-core-v6`: stale deprecated same-chain sucker snapshots can inflate omnichain revnet accounting during migration
 
-| Field | Value |
-|-------|-------|
-| **Repo** | croptop-core-v6 |
-| **File** | `src/CTDeployer.sol` (deployProjectFor) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **85** |
-| **Known issue?** | No |
+Severity: `MED`
 
-**Description:** `deployProjectFor` grants `ADJUST_721_TIERS`, `SET_721_METADATA`, `MINT_721`, and `SET_721_DISCOUNT_PERCENT` permissions to the original recipient via `CTDeployer`. After the project NFT is sold/transferred, the former owner retains these permissions until the buyer manually calls `claimCollectionOwnershipOf`.
+Status: locally mitigated in `nana-suckers-v6/src/JBSuckerRegistry.sol`; retained here until the patch is reviewed and merged.
 
-**Mitigation:** Transfer hook ownership to the project NFT via `transferOwnershipToProject(projectId)` instead of granting permissions to an individual address.
+Affected code:
 
-Admin note: CONFIRMED FALSE POSITIVE. JBPermissions are keyed by `(operator, account, projectId)`. All permission-gated operations resolve `account` as the current project owner via `PROJECTS.ownerOf(projectId)`. When the NFT transfers, the new owner becomes the `account` in all checks, and permissions keyed to the old owner stop working automatically. Downgrade to informational — no fix needed.
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:275)
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:347)
+- [REVOwner.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVOwner.sol:176)
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:378)
 
----
+Why it is real:
 
-### H-5. ~~Defifa Games Launch With Unsupported Tier Counts Above 128~~ — FIXED (`a765988`)
+- The registry keeps both active and deprecated suckers in its remote aggregate views so pending claims are not undercounted during migration.
+- For duplicate peer chains, `remoteSurplusOf(...)`, `remoteBalanceOf(...)`, and `remoteTotalSupplyOf(...)` resolve the collision by taking the per-chain maximum across both the deprecated sucker and the replacement active sucker.
+- That means a deprecated sucker's stale high snapshot can continue to dominate a fresh lower snapshot from the new live sucker on the same remote chain after migration.
+- `REVOwner.beforeCashOutRecordedWith(...)` and `REVLoans._borrowableAmountFrom(...)` consume those registry views directly as if they were the current omnichain state.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | defifa |
-| **File** | `src/DefifaDeployer.sol` (launchGameWith) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **88** |
-| **Known issue?** | No |
+Impact:
 
-**Description:** The deployer accepts 129+ tiers but the hook and governor hardcode `uint256[128]` tier-weight tables. Tokens in tier 129+ become unscorable and their cash-out path reverts. *Nemesis independently confirmed with PoC at `test/audit/CodexTierCapMismatch.t.sol`.*
+- During same-chain sucker migrations, holders on another chain can cash out or borrow against overstated remote surplus and supply assumptions until bounded by the local treasury cap.
+- This is not just an informational discrepancy. The registry tests prove the stale-max condition, and the revnet loan PoC shows that overstated remote values translate into a larger live borrow than the corrected omnichain state supports.
+- The project owner controls migration timing, but once the stale state exists the exploit path is permissionless for local holders and borrowers.
 
-**Mitigation:** Add `if (numberOfTiers > 128) revert DefifaDeployer_InvalidGameConfiguration();`.
+Evidence:
 
-admin note: fix, make sure well tested.
+- PoC: [nana-suckers-v6/test/audit/RegistryStaleDeprecatedMaxSurplus.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/RegistryStaleDeprecatedMaxSurplus.t.sol:1)
+- PoC: [nana-suckers-v6/test/audit/RegistryStaleMaxAggregation.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/RegistryStaleMaxAggregation.t.sol:1)
+- Composition proof: [revnet-core-v6/test/audit/RemoteLoanAccountingGap.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/RemoteLoanAccountingGap.t.sol:1)
 
----
+Recommended fix:
 
-### H-6. ~~Extra Cash-Out Hooks Receive Stale Local-Only Surplus~~ — FIXED (`2de02bf`)
+- When both an active and deprecated sucker exist for the same peer chain, prefer the active sucker's snapshot in economic aggregate views instead of taking the maximum.
+- If deprecated suckers must stay included for claim-completion safety, split that concern from the omnichain economic views used by `REVOwner` and `REVLoans`.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-omnichain-deployers-v6 |
-| **File** | `src/JBOmnichainDeployer.sol` (beforeCashOutRecordedWith) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **82** |
-| **Known issue?** | No |
+### 6. `nana-suckers-v6`: failed `toRemoteFee` payments permanently strand fee ETH while overstating claimable native balance
 
-**Description:** The wrapper computes cross-chain `effectiveSurplusValue` but forwards the extra cash-out hook a context with the old local-only `surplus.value`. Route/tax decisions in downstream hooks use stale data.
+Severity: `LOW`
 
-**Mitigation:** Set `hookContext.surplus.value = effectiveSurplusValue` before forwarding to extra hooks.
+Status: locally mitigated in `nana-suckers-v6/src/JBSucker.sol`; retained here until the patch is reviewed and merged.
 
-admin note: fix, make sure well tested.
+Affected code:
 
----
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:582)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:615)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:709)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:853)
 
-### H-7. Pay Credits Let Buyers Underfund Tier Split Obligations
+Why it is real:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-721-hook-v6 |
-| **File** | `src/JB721TiersHook.sol` (beforePayRecordedWith / afterPayRecordedWith) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **75** |
-| **Known issue?** | No |
+- `toRemote(...)` deducts `toRemoteFee`, then treats the fee payment into the fee project as best-effort. If the fee terminal is missing or `pay(...)` reverts, the ETH stays in the sucker.
+- The inline comment says later native claims will absorb that retained ETH via `amountToAddToBalanceOf(...)`, but `_handleClaim(...)` only forwards each claim leaf's `terminalTokenAmount`, not the extra residue.
+- As a result, the retained ETH remains forever, while `amountToAddToBalanceOf(JBConstants.NATIVE_TOKEN)` continues to report it as addable.
 
-**Description:** Split forwarding is capped to fresh payment value in `beforePayRecordedWith`, but `afterPayRecordedWith` combines stored credits with the payment to mint split-bearing tiers. A buyer can use accumulated credits to mint tiers whose split obligations exceed the fresh ETH, underfunding the split recipients.
+Impact:
 
-**Mitigation:** Reject credit-funded mints for tiers whose configured split share exceeds the fresh payment amount.
+- A misconfigured or unavailable fee terminal can permanently trap up to `MAX_TO_REMOTE_FEE` per failed bridge send inside each sucker.
+- The fee project is underpaid, the sucker's native accounting becomes misleading, and there is no sweep path to recover the residue.
+- I did not find a theft path from this residue, so this is stranded value plus bad accounting rather than a direct drain.
 
-admin note: this is known and is an accepted risk, should be in RISKS.md of the repo. project owners should use the flag the prevent buying a tier with credits if they want to prevent this.
+Evidence:
 
----
+- PoC: [nana-suckers-v6/test/audit/ToRemoteFeeIrrecoverable.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/ToRemoteFeeIrrecoverable.t.sol:1)
 
-### H-8. Phantom Terminal Registration Inflates REVLoans Borrow Capacity *(nemesis — promotes Lead 4)*
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVLoans.sol` (_borrowableAmountFrom) |
-| **Auditor confidence** | HIGH (nemesis verified) |
-| **My confidence** | **70 — accepted risk** |
-| **Known issue?** | No |
+- If fee payment fails, either add the retained ETH back into `transportPayment` on bridges that can tolerate it, or track retained fee residue separately and add an explicit sweep/retry path.
+- Do not count retained fee ETH inside `amountToAddToBalanceOf(...)` unless a later claim path can actually forward it.
 
-**Description:** `_borrowableAmountFrom` sums surplus across all registered terminals. A privileged actor who registers an extra terminal with inflated accounting can make `borrowableAmountFrom` return a higher value than the real economic surplus, allowing over-borrowing against local treasury funds.
+### 7. `defifa`: one-tier games with disabled scorecard timeout can never ratify or no-contest, permanently locking the pot
 
-**Mitigation:** Restrict surplus aggregation to terminals that hold actual project funds, or cap borrow against the specific terminal being drawn from.
+Severity: `MED`
 
-admin note: a revnet's terminals are set and fixed on deploy. there is a risk that should be noted in RISKS that a project that expands to a new chain can add a malicious terminal on that chain that corrupts the project's data. this is an accepted risk (for now, if you have ideas, lets brainstorm solutions to mitigate this risk while still allowing a project to grow omnichain).
+Status: locally mitigated in `defifa/src/DefifaDeployer.sol`; retained here until the patch is reviewed and merged.
 
----
+Affected code:
 
-### H-9. ~~CroptopDeployer Fee-Project Currency Zeroes Fee Collection~~ *(nemesis)* — DOWNGRADED: FALSE POSITIVE
+- [DefifaDeployer.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaDeployer.sol:413)
+- [DefifaDeployer.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaDeployer.sol:248)
+- [DefifaGovernor.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaGovernor.sol:617)
+- [DefifaGovernor.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaGovernor.sol:170)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | croptop-core-v6 |
-| **File** | `src/CTDeployer.sol` |
-| **Auditor confidence** | HIGH (nemesis verified) |
-| **My confidence** | **30 — false positive** |
-| **Known issue?** | No |
+Why it is real:
 
-**Description:** The deployer configures the fee project with a currency mismatch — the fund access limit currency doesn't match the actual terminal accounting currency, so `sendPayoutsOf` resolves the payout limit to zero. Fee collection silently fails.
+- `launchGameWith(...)` allows one-tier games and only validates `scorecardTimeout` when it is nonzero, so the default timeout-disabled configuration passes unchanged.
+- In any one-tier scorecard, the only tier must carry the full `TOTAL_CASHOUT_WEIGHT`. `getBWAAttestationWeight(...)` therefore computes a zero BWA multiplier for that tier, so every holder in the game has zero attestation power against every valid scorecard.
+- `attestToScorecardFrom(...)` explicitly rejects zero-weight attestors.
+- If `scorecardTimeout == 0` and `minParticipation` does not already force `NO_CONTEST`, `currentGamePhaseOf(...)` stays in `SCORING` forever. The game can neither ratify nor enter `NO_CONTEST`, so refunds and prize cash-outs never become available.
 
-**Mitigation:** ~~Align the fund access limit currency with the terminal's accounting currency for the fee project.~~
+Impact:
 
-admin note: im not sure what you mean here. show me.
+- Any one-tier game launched with the timeout-disabled default can permanently lock all participant funds once it reaches scoring.
+- This is not limited to a single lonely player. Because all holders live in the only tier, all of them have zero BWA power against the only possible one-tier scorecard.
+- A malicious or careless game creator can therefore launch a structurally unwinnable game that still accepts user funds during mint.
 
-**Investigation result:** Neither CTDeployer nor REVDeployer sets any payout limits at all — revnets/croptop projects don't use `sendPayoutsOf`. Revenue distribution happens through the bonding curve and reserved token splits. The nemesis auditor misread the absence of payout limits as a currency-caused zero. The baseCurrency = 1 (ETH) pattern is the same as M-13, which is correct by design. **No fix needed.**
+Evidence:
 
----
+- Regression: [defifa/test/audit/SingleTierTimeoutLock.t.sol](/Users/jango/Documents/jb/v6/evm/defifa/test/audit/SingleTierTimeoutLock.t.sol:1)
+- Regression: [defifa/test/audit/OneTierZeroTimeoutLock.t.sol](/Users/jango/Documents/jb/v6/evm/defifa/test/audit/OneTierZeroTimeoutLock.t.sol:1)
 
-### H-10. ~~Fee-Project Economics Bound To Wrong Trust Root~~ *(nemesis)* — FIXED (`24121fb`)
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-fee-project-deployer-v6 |
-| **File** | `script/Deploy.s.sol:89-90` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **88** |
-| **Known issue?** | No |
+- Review and merge the local one-tier timeout guard.
+- Alternatively, special-case single-tier governance so there is always at least one reachable terminal state (`COMPLETE` or `NO_CONTEST`).
 
-**Description:** The deploy script derives `operator` from `safeAddress()` instead of the canonical NANA operator (`0x80a8...eb5`). This fans out into every beneficiary config: reserved-token splits, auto-issuance beneficiaries, and `REVConfig.splitOperator` all point to the Gnosis Safe instead of the intended operator.
+### 8. `defifa`: fee-token cash-out claims ignore `beneficiary` and always pay the holder
 
-**Mitigation:** Hardcode `operator = 0x80a8F7a4bD75b539CE26937016Df607fdC9ABeb5` to match the canonical workspace operator used in `deploy-all-v6`.
+Severity: `LOW`
 
-admin note: yes hardcode.
+Status: locally mitigated in `defifa/src/DefifaHook.sol`; retained here until the patch is reviewed and merged.
 
----
+Affected code:
 
-### H-11. ~~Tempo Resume Script Cannot Converge Partial Deployments~~ *(nemesis — promotes Lead 21)* — FIXED (`7d89d7d`)
+- [DefifaHook.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaHook.sol:694)
+- [DefifaHook.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaHook.sol:786)
+- [IDefifaHook.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/interfaces/IDefifaHook.sol:59)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 |
-| **File** | `script/Resume.s.sol` |
-| **Auditor confidence** | HIGH (nemesis verified) |
-| **My confidence** | **85** |
-| **Known issue?** | Pashov flagged as lead |
+Why it is real:
 
-**Description:** `Resume.s.sol` has no Tempo/Tempo-Moderato branches. `Deploy.s.sol` supports both chains across chain addresses, CCIP deployers, price feeds, and sucker config — but `Resume` omits all of them. Interrupted Tempo deployments are operationally stranded with no canonical recovery path.
+- `afterCashOutRecordedWith(...)` is documented as reclaiming value for `context.beneficiary`, and the interface event for claimed tokens is also beneficiary-based.
+- The terminal reclaim does follow the caller-supplied `beneficiary`, but the Defifa-specific fee-token claim path calls `_claimTokensFor(...)` with `context.holder`.
+- A single cash-out therefore splits its outputs across two addresses: the terminal token goes to `beneficiary`, while `$DEFIFA` and `$NANA` go to the NFT holder instead.
 
-**Mitigation:** Port all Tempo-specific branches from `Deploy` into `Resume`. Add fork tests simulating partial deploy + resume on both Tempo chains.
+Impact:
 
-admin note: yes, fix.
+- Holders and integrations that route a cash-out to a vault, bridge, or alternate receiver do not get the full settlement bundle at that destination.
+- Third-party operators can execute a successful cash-out while silently leaving the fee-token side of the settlement behind on the holder, breaking accounting expectations for downstream integrations.
+- I did not find a direct theft path from this mismatch, but it is a real asset-routing bug.
 
----
+Evidence:
 
-### H-12. ~~721 Distributor Allocates Rewards From Live NFT State, Not Round-Start Snapshot~~ *(nemesis — promotes Lead 25)* — FIXED (`9918cd6`)
+- PoC: [defifa/test/audit/CodexNemesisBeneficiaryMismatch.t.sol](/Users/jango/Documents/jb/v6/evm/defifa/test/audit/CodexNemesisBeneficiaryMismatch.t.sol:20)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JB721Distributor.sol:137,146` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **90** |
-| **Known issue?** | Pashov flagged as lead |
+Recommended fix:
 
-**Description:** `JB721Distributor._totalStake` and `_tokenStake` ignore the `blockNumber` parameter and read current NFT tier/owner state. `beginVesting` is permissionless, so late mints or last-block acquisitions can capture pro-rata rewards from rounds they never backed, diluting honest holders.
+- Pass `context.beneficiary` into `_claimTokensFor(...)`, or make the split-destination behavior explicit in the interface, docs, and events if it is intentional.
 
-**Mitigation:** Persist a 721 stake snapshot at round start, or freeze the eligible owner/stake set used by `beginVesting` for each round.
+### 9. `defifa`: `tokensClaimableFor` overquotes fee-token claims while pending reserves are unminted
 
-admin note: yes, fix. new stakers during a round are only eligible next round.
+Severity: `LOW`
 
-*Re-confirmed by Pashov pass 2 (20260421) — [95] "Round-start NFT rewards can be stolen by a post-snapshot owner". Same root cause: `ownerOf(tokenId)` read at vesting time, not at round boundary.*
+Status: locally mitigated in `defifa/src/DefifaHook.sol`; retained here until the patch is reviewed and merged.
 
----
+Affected code:
 
-### H-13. ~~Out-of-Order Root Delivery Permanently Strands Earlier Bridge Batches~~ *(Pashov pass 2)* — FIXED (`649f90a`)
+- [DefifaHook.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaHook.sol:453)
+- [DefifaHook.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaHook.sol:786)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/JBSucker.sol` (fromRemote) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+Why it is real:
 
-**Description:** Arbitrum's out-of-order retryable delivery can make nonce `N+1` overwrite the inbox root before nonce `N` arrives, after which every nonce-`N` claim fails against the newer root and the earlier batch has no remaining local exit path. The current code only accepts strictly increasing nonces, silently dropping any root whose nonce isn't greater than the current inbox nonce.
+- `tokensClaimableFor(...)` previews claims using only `_totalMintCost`.
+- The real complete-phase claim path uses `_totalMintCost + _pendingReserveMintCost()` as the denominator, explicitly diluting paid holders by unminted reserve cost.
+- As a result, the public preview overstates the claim whenever pending reserves still exist.
 
-**Mitigation:** Buffer pending roots by nonce and apply them sequentially:
-```solidity
-_pendingInboxRoots[root.token][root.remoteRoot.nonce] = root.remoteRoot.root;
-while (_pendingInboxRoots[root.token][inbox.nonce + 1] != bytes32(0)) {
-    inbox.nonce += 1;
-    inbox.root = _pendingInboxRoots[root.token][inbox.nonce];
-}
-```
+Impact:
 
----
+- Holders, UIs, and integrators can materially overestimate the `$DEFIFA` and `$NANA` that a cash-out will actually distribute while reserve NFTs remain unminted.
+- In the live PoC, the preview prices one token against a `1/6` share while execution uses a `1/9` denominator.
+- This is a quote/accounting mismatch rather than a direct drain, but it is large enough to mislead automated flows and user decisions.
 
-### H-14. ~~Unsynchronized Deprecation Can Blackhole Already-Sent Roots~~ *(Pashov pass 2)* — FIXED (`ae8428d`)
+Evidence:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/JBSucker.sol` (fromRemote) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+- PoC: [defifa/test/audit/CodexNemesisBeneficiaryMismatch.t.sol](/Users/jango/Documents/jb/v6/evm/defifa/test/audit/CodexNemesisBeneficiaryMismatch.t.sol:79)
 
-**Description:** If one peer is deprecated before an in-flight root arrives, `fromRemote` silently drops that valid root while the sending side has already marked the leaves as sent, leaving users unable to claim remotely or emergency-exit locally.
+Recommended fix:
 
-**Mitigation:** Accept roots even in deprecated state — deprecation should prevent new *sends*, not reject already-in-flight *receives*:
-```diff
-- if (root.remoteRoot.nonce > inbox.nonce && state() != JBSuckerState.DEPRECATED) {
-+ if (root.remoteRoot.nonce > inbox.nonce) {
-```
+- Make `tokensClaimableFor(...)` use the same pending-reserve-aware denominator as `_claimTokensFor(...)` in the complete-phase execution path.
 
----
+### 10. `croptop-core-v6`: transferring the project NFT does not transfer hook authority, so the previous owner keeps collection-control permissions until the buyer explicitly claims
 
-### H-15. ~~CCIP Native-Token Mapping Encodes Token the Receiver Never Unwraps~~ *(promotes Lead 30)* — FIXED (`ef60d7b`)
+Severity: `MED`
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/JBCCIPSucker.sol` (`_validateTokenMapping` override, `_sendRoot`, `_fromRemote`) |
-| **Auditor confidence** | 90 (Pashov) |
-| **My confidence** | **90 — VERIFIED** |
-| **Known issue?** | No |
+Status: locally mitigated in `croptop-core-v6/src/CTDeployer.sol` and `croptop-core-v6/src/interfaces/ICTDeployer.sol`; retained here until the patch is reviewed and merged.
 
-**Description:** `JBCCIPSucker._validateTokenMapping` overrides the base class and **removes the invariant** that `NATIVE_TOKEN` must map to `NATIVE_TOKEN` on the remote side. This allows mapping `NATIVE_TOKEN → arbitrary_erc20`. On send, `_sendRoot` wraps native ETH into WETH and encodes `remoteToken.addr` (the arbitrary ERC-20) in the message. On receive, `_fromRemote` only unwraps when `root.token == NATIVE_TOKEN` — but the encoded token is the arbitrary ERC-20, so the unwrap branch is never taken. The WETH sits permanently in the remote sucker contract, and claims revert because the contract has no balance of the mapped ERC-20.
+Affected code:
 
-**Impact:** Any batch sent through a CCIP sucker with a misconfigured native-token mapping has its funds permanently stranded. The sending side marks leaves as sent (cannot be re-sent), and the receiving side cannot fulfill claims.
+- [CTDeployer.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTDeployer.sol:154)
+- [CTDeployer.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTDeployer.sol:252)
+- [ICTDeployer.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/interfaces/ICTDeployer.sol:26)
 
-**Mitigation:** Restore the `NATIVE_TOKEN → NATIVE_TOKEN` invariant in the CCIP override:
-```solidity
-function _validateTokenMapping(JBTokenMapping calldata map) internal view override {
-    super._validateTokenMapping(map);
-    // CCIP requires native maps to native for wrap/unwrap symmetry
-    if (map.localToken == NATIVE_TOKEN) {
-        require(map.remoteToken == NATIVE_TOKEN, "CCIP: native must map to native");
-    }
-}
-```
+Why it is real:
 
----
+- Before the local patch, `deployProjectFor(...)` launched the project with `CTDeployer` as the static hook owner, then granted the initial project recipient `ADJUST_721_TIERS`, `SET_721_METADATA`, `MINT_721`, and `SET_721_DISCOUNT_PERCENT` permissions from `CTDeployer`.
+- Hook authority does not automatically follow later `PROJECTS.transferFrom(...)` ownership transfers. It only moves once the current project-NFT holder separately calls `claimCollectionOwnershipOf(...)`, which invokes `transferOwnershipToProject(projectId)`.
+- Before the local patch, the hook still checked permissions against `CTDeployer` as owner until that claim, so the previous project owner retained full collection-control powers even after selling the project NFT.
+- The local patch keeps the publisher path working from `CTDeployer` but stops granting direct hook-management permissions from `CTDeployer` to the initial owner. Project owners who want direct hook control must first claim collection ownership, after which permissions resolve through the current project NFT owner.
 
-### ~~H-16. ERC-20 Games Skip All Commitment Payouts Via Currency Mismatch~~ — FIXED (`e698782`) *(pass 3 nemesis)*
+Impact:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | defifa |
-| **File** | `src/DefifaDeployer.sol:342-349,750-773,847-853` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+- Before the local patch, a seller could mutate tiers, metadata, discounts, or mint authority after the buyer already owned the project NFT.
+- This was a real cross-user privilege-retention window, not just a local admin footgun. A buyer who assumed the project NFT transfer also transferred hook control could be frontrun or griefed before discovering and completing the extra claim step.
+- The local patch trades away launch-time direct hook bypass privileges to remove the stale-authority grant. Owners still receive the project NFT and can claim project-based hook ownership when they want direct control.
 
-**Description:** `_launchGame` stores scoring payout limits under `launchProjectData.token.currency` (caller-supplied), but `fulfillCommitmentsOf` later calls `sendPayoutsOf` with `currency = uint32(uint160(token))`. For ERC-20 games where the launch currency doesn't match the canonical token-address currency, the payout reverts. The catch block stores sentinel `1`, queues the final ruleset, and leaves the full pot unreduced — winners cash out value that should have been removed as protocol/commitment fees.
+Evidence:
 
-**PoC:** `test/audit/CodexNemesisCurrencyMismatchBypass.t.sol` — launches USDC game with `currency: 1`, fulfillment fails, winner cashes out full `200e6` instead of post-fee amount.
+- Regression: [croptop-core-v6/test/audit/CodexNemesisPoCs.t.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/test/audit/CodexNemesisPoCs.t.sol:185)
+- Regression: [croptop-core-v6/test/audit/DeployerPermissionBypass.t.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/test/audit/DeployerPermissionBypass.t.sol:175)
 
-**Recommended fix:** Read the terminal's accounting context at fulfillment time and use its currency:
-```solidity
-JBAccountingContext memory ctx = terminal.accountingContextForTokenOf({projectId: gameId, token: token});
-try terminal.sendPayoutsOf({projectId: gameId, token: token, amount: feeAmount, currency: ctx.currency, minTokensPaidOut: 0}) {}
-```
-Also reject non-canonical ERC-20 currency IDs at launch: `if (token != NATIVE_TOKEN && currency != uint32(uint160(token))) revert DefifaDeployer_UnexpectedTerminalCurrency();`
+Recommended fix:
 
-admin note: where else is launchProjectData.token.currency used?
+- Review and merge the local patch that removes launch-time direct hook-management permissions from `CTDeployer`.
+- Keep the interface and user-facing flow clear: publisher-managed posting works before claim, while direct collection control requires `claimCollectionOwnershipOf(...)` and any needed post-claim publisher permission grant from the project owner.
 
-**Resolution:** FIXED — `fulfillCommitmentsOf` now uses `metadata.baseCurrency` unconditionally (matches the currency under which payout limits were stored at launch). Added launch-time validation rejecting ERC-20 games with `currency=0`. 5 new tests in `test/audit/H16CurrencyMismatchFix.t.sol`. 255 tests pass.
+### 11. `nana-fee-project-deployer-v6` + `deploy-all-v6`: hardcoded project-`1` fee-sink assumptions let a first-project squat brick or silently hijack the canonical fee project
 
----
+Severity: `MED`
 
-### H-17. Mutable `defaultHook` Lets Registry Owner Hijack Unlocked Projects — Accepted risk *(pass 3 nemesis)*
+Status: locally mitigated in `nana-fee-project-deployer-v6/script/Deploy.s.sol`, `deploy-all-v6/script/Deploy.s.sol`, and `deploy-all-v6/script/Resume.s.sol`; retained here until the cross-repo patches are reviewed and merged.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-buyback-hook-v6 |
-| **File** | `src/JBBuybackHookRegistry.sol:153,299,349` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **Accepted — document in RISKS.md** |
-| **Known issue?** | No |
+Affected code:
 
-**Description:** Projects that adopt `JBBuybackHookRegistry` as their data hook without explicitly setting `_hookOf[projectId]` fall back to `defaultHook`. The registry owner can call `setDefaultHook(maliciousHook)` and instantly retarget every unlocked project's payment routing, cash-out routing, and mint authority to the new hook — without any project-owner action. Core trusts the registry as the data hook and forwards payment logic and `hasMintPermissionFor` to whatever hook the registry resolves.
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/nana-fee-project-deployer-v6/script/Deploy.s.sol:213)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/nana-fee-project-deployer-v6/script/Deploy.s.sol:232)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:390)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2411)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2941)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2420)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2491)
 
-**PoC:** `test/audit/CodexRegistryDefaultHookHijack.t.sol` — shows `hasMintPermissionFor` flips from hook A to hook B after `setDefaultHook(hookB)`.
+Why it is real:
 
-**Recommended fix:** Require projects to explicitly set their hook before the registry can serve as their data hook. Revert if `_hookOf[projectId] == address(0)`:
-```solidity
-if (_hookOf[projectId] == IJBRulesetDataHook(address(0))) revert JBBuybackHookRegistry_HookNotSet(projectId);
-```
-Alternatively, pin the resolved default into project-local storage on first use.
+- `JBProjects.createFor(...)` is permissionless. The first externally created project on a fresh core deployment becomes project `1`.
+- Before the local patch, the fee-project deployer hardcoded `feeProjectId = 1`, skipped deployment whenever `controllerOf(1) != 0`, and otherwise tried to `approve(...)` and configure project `1` as the canonical NANA fee sink.
+- The PoC proved three failure modes: an attacker could squat project `1`, push the intended operator to project `2`, make the approval step revert if project `1` was still blank, or fully configure project `1` so the deploy script silently returned early and accepted the attacker-controlled project as already deployed.
+- `deploy-all-v6` intentionally keeps NANA at project `1`; its core deployment mints project `1` to the deployer up front, but the deploy and resume scripts still needed fail-closed handling for preconfigured or interrupted states.
+- The local patch keeps the intentional project-`1` identity, but accepts an already-configured project `1` only if it is owned by the canonical `REVDeployer`, controlled by the canonical controller, has a nonzero revnet configuration hash, and exposes the `NANA` ERC-20 symbol.
 
-admin note: accepted risk. make a note in the repo's RISKS.md file.
+Impact:
 
-**Resolution:** Accepted — Projects must call `setHookOf(projectId, hook)` to pin their hook. Documented in RISKS.md.
+- A first-project squat on a fresh chain could brick the canonical fee-project rollout or, worse, silently redirect the ecosystem’s assumed fee sink to an attacker-controlled project `1`.
+- Because later deployment and verification phases kept treating project `1` as canonical, the misconfiguration could propagate into broader protocol wiring, monitoring, and fee-flow assumptions instead of failing cleanly.
+- This is a deployment-phase issue, but it hits the globally assumed fee beneficiary project and therefore has ecosystem-wide blast radius when triggered.
 
----
+Evidence:
 
-### ~~H-18. Zero-Output CCIP Swap Batches Mint Unbacked Remote Project Tokens~~ — FIXED (`4f97522`) *(pass 3 nemesis, re-opens Lead 12)*
+- PoC: [nana-fee-project-deployer-v6/test/audit/CodexNemesisProjectOneSquat.t.sol](/Users/jango/Documents/jb/v6/evm/nana-fee-project-deployer-v6/test/audit/CodexNemesisProjectOneSquat.t.sol:1)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/JBSwapCCIPSucker.sol:316,429` / `src/JBSucker.sol:854` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **pending** |
-| **Known issue?** | Lead 12 dismissed as "explicitly handled" — this PoC shows it is NOT |
+Recommended fix:
 
-**Description:** When a CCIP batch arrives and the swap completes without reverting but returns `0` local tokens, `ccipReceive()` stores `ConversionRate({leafTotal: root.amount, localTotal: 0})` and leaves `pendingSwapOf` unset. Claims proceed because the gate only checks `pendingSwapOf.bridgeAmount > 0`. `_handleClaim()` then mints the full bridged project-token amount while `_addToBalance()` adds `0` terminal backing. Breaks cross-chain solvency.
+- Review and merge the local canonical-shape guard in the standalone fee deployer and deploy-all deploy/resume scripts.
+- Keep the current deploy-all behavior that mints project `1` to the deployer in the core constructor before public project creation can claim it.
+- Do not skip NANA configuration merely because `controllerOf(1) != 0`; skip only after owner, controller, revnet hash, and token-symbol checks prove it is the intended NANA revnet.
 
-**PoC:** `test/audit/codex-nemesis-SwapZeroLocalTotalUnbackedClaim.t.sol` — `terminal.lastAmount == 0` while `controller.lastMintAmount == 5e18`.
+### 12. `nana-distributor-v6`: `JB721Distributor` lets late-minted replacement NFTs consume round rewards using the seller’s snapshot votes
 
-**Recommended fix:** Route zero-output swaps into `pendingSwapOf` instead of marking them claimable:
-```solidity
-if (root.amount > 0 && localAmount == 0) {
-    pendingSwapOf[localToken][root.remoteRoot.nonce] =
-        PendingSwap({bridgeToken: tokenAmount.token, bridgeAmount: tokenAmount.amount, leafTotal: root.amount});
-} else {
-    _conversionRateOf[localToken][root.remoteRoot.nonce] =
-        ConversionRate({leafTotal: root.amount, localTotal: localAmount});
-}
-```
+Severity: `MED`
 
-admin note: are you sure? ok, fix, but add sufficient comments to the inline impl, make sure the repo's .md docs make note of thise, and make sure this is well tested.
+Status: locally mitigated in `nana-distributor-v6/src/JB721Distributor.sol`, `nana-721-hook-v6/src/JB721TiersHook.sol`, and `nana-721-hook-v6/src/interfaces/IJB721TiersHook.sol`; retained here until the cross-repo patches are reviewed and merged.
 
-**Resolution:** FIXED — Zero-output swaps now route to `pendingSwapOf` for retry instead of storing a zero-backed conversion rate. Extensive inline comments. 2 new tests in `test/audit/H18_ZeroOutputSwapPending.t.sol`. Documented in RISKS.md section 10.8. 281 tests pass.
+Affected code:
 
----
+- [JB721Distributor.sol](/Users/jango/Documents/jb/v6/evm/nana-distributor-v6/src/JB721Distributor.sol:268)
+- [JB721Distributor.sol](/Users/jango/Documents/jb/v6/evm/nana-distributor-v6/src/JB721Distributor.sol:322)
+- [JB721Distributor.sol](/Users/jango/Documents/jb/v6/evm/nana-distributor-v6/src/JB721Distributor.sol:433)
+- [IJB721TiersHook.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/interfaces/IJB721TiersHook.sol:142)
+- [JB721TiersHook.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/JB721TiersHook.sol:107)
+- [JB721TiersHook.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/JB721TiersHook.sol:174)
+- [JB721TiersHook.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/JB721TiersHook.sol:809)
 
-### ~~H-19. `removeDeprecatedSucker()` Undercounts Remote Supply in Downstream Math~~ — FIXED (`4f97522`) *(pass 3 nemesis)*
+Why it is real:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/JBSuckerRegistry.sol:265,432,445` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+- Before the local patch, the 721 distributor did not prove that a specific token existed and was held at the round snapshot block.
+- `_tokenStake(...)` and `_vestSingleToken(...)` only checked the token’s current owner and that owner’s checkpointed `pastVotes` at `roundSnapshotBlock[currentRound()]`.
+- That meant any NFT currently owned by an address that had snapshot voting power could vest rewards for the round, even if that NFT was minted or acquired after the snapshot.
+- The cross-user PoC showed the concrete consequence: a seller could hold token `1` at round start, transfer token `1` to a buyer after the snapshot, mint or receive token `2` after the snapshot, and then vest the full round through token `2` while the buyer’s real snapshot token became ineligible because the buyer had zero past votes.
+- The local patch adds token-owner checkpoints to the 721 hook, exposes `ownerOfAt(tokenId, blockNumber)`, and makes the distributor score / consume round eligibility against the token's snapshot owner. Tokens that cannot prove a snapshot owner get zero eligibility.
 
-**Description:** `remoteTotalSupplyOf()` only counts suckers with `_SUCKER_EXISTS` state. `removeDeprecatedSucker()` flips state to `_SUCKER_DEPRECATED`, immediately hiding that chain's supply/surplus from all aggregate views. But deprecated suckers still accept roots via `fromRemote()` and retain mint permission via `isSuckerOf`. Downstream consumers (`JBOmnichainDeployer`, `REVOwner`, `REVLoans`) use the understated totals for cash-out tax and loan math.
+Impact:
 
-**PoC:** `test/audit/codex-nemesis-DeprecatedRemovalUndercount.t.sol` — `remoteTotalSupplyOf` drops from `1_000e18` to `0` immediately after removal.
+- This was not just a cosmetic documentation mismatch. It was a real reward-redirection bug across users.
+- Buyers of snapshot-eligible NFTs could receive no rewards for the current round, while the seller drained that round through a post-snapshot replacement NFT.
+- Total extraction remained bounded by the seller’s snapshot voting power, so this was a cross-user theft / misallocation issue rather than system-wide inflation.
 
-**Recommended fix:** Include deprecated suckers in economic aggregate views until fully settled:
-```solidity
-if (val == _SUCKER_EXISTS || val == _SUCKER_DEPRECATED) {
-    totalSupply += IJBSucker(allSuckers[i]).peerChainTotalSupply();
-}
-```
-Or split UX listing state from accounting inclusion state.
+Evidence:
 
-admin note: are you sure? ok, fix, but add sufficient comments to the inline impl, make sure the repo's .md docs make note of thise, and make sure this is well tested.
+- Regression: [nana-distributor-v6/test/audit/CodexNemesisFreshVerification.t.sol](/Users/jango/Documents/jb/v6/evm/nana-distributor-v6/test/audit/CodexNemesisFreshVerification.t.sol:1)
+- Regression: [nana-distributor-v6/test/audit/CodexNemesisFreshRoundVerification.t.sol](/Users/jango/Documents/jb/v6/evm/nana-distributor-v6/test/audit/CodexNemesisFreshRoundVerification.t.sol:1)
+- Regression: [nana-distributor-v6/test/audit/CodexNemesisAccountingPoC.t.sol](/Users/jango/Documents/jb/v6/evm/nana-distributor-v6/test/audit/CodexNemesisAccountingPoC.t.sol:213)
+- Regression: [nana-721-hook-v6/test/unit/getters_constructor_Unit.t.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/test/unit/getters_constructor_Unit.t.sol:505)
 
-**Resolution:** FIXED — `remoteTotalSupplyOf`, `remoteSurplusOf`, and `remoteBalanceOf` now include deprecated suckers. Per-chain max deduplication prevents double-counting when both deprecated and active suckers target the same chain. 6 new tests in `test/audit/H19_DeprecatedSuckerAggregateViews.t.sol`. Documented in RISKS.md section 10.5. 281 tests pass.
+Recommended fix:
 
----
+- Review and merge the local cross-repo patch that makes 721 eligibility token-specific instead of current-owner-specific.
+- Keep distributor eligibility strict: if a hook cannot prove token ownership at the snapshot block, that token should not vest the round.
+- Preserve the current-owner claim flow for UX, but calculate per-token reward eligibility from snapshot ownership so post-snapshot replacement NFTs cannot steal transferred-token rewards.
 
-### ~~H-20. Permissionless Provenance Registration for Any Deployer's Contract~~ — FALSE POSITIVE *(pass 3 nemesis)*
+### 13. `nana-project-handles-v6`: `handleOf(...)` can return bidi-spoofed handles as verified output
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-address-registry-v6 |
-| **File** | `src/JBAddressRegistry.sol:50,66` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **FALSE POSITIVE — intentionally permissionless by design** |
-| **Known issue?** | Yes — documented in ARCHITECTURE.md and RISKS.md |
+Severity: `LOW`
 
-**Description:** Both `registerAddress` overloads accept any caller-supplied `deployer` parameter and write `deployerOf[addr] = deployer` with no authorization check.
+Status: locally mitigated in `nana-project-handles-v6/src/JBProjectHandles.sol`; retained here until the patch is reviewed and merged.
 
-**Why FALSE POSITIVE:** This is intentionally permissionless by design:
-- `ARCHITECTURE.md` states: "permissionless because correctness comes from deterministic derivation" — the contract verifies the address matches `CREATE`/`CREATE2` derivation from the claimed deployer+nonce/salt, so only the correct deployer can be registered
-- `RISKS.md` documents: "Caller identity is irrelevant" — anyone can register the provenance because the deterministic math prevents false claims
-- `deployerOf` is never used for on-chain security decisions; it's informational/UX only
-- Front-running doesn't help: the attacker can only register the TRUE deployer (derivation enforces this), not a false one
+Affected code:
 
-admin note: are you sure? this feels like something we would have caught ages ago.
+- [JBProjectHandles.sol](/Users/jango/Documents/jb/v6/evm/nana-project-handles-v6/src/JBProjectHandles.sol:77)
+- [JBProjectHandles.sol](/Users/jango/Documents/jb/v6/evm/nana-project-handles-v6/src/JBProjectHandles.sol:132)
+- [JBProjectHandles.sol](/Users/jango/Documents/jb/v6/evm/nana-project-handles-v6/src/JBProjectHandles.sol:170)
 
-**Resolution:** FALSE POSITIVE — Confirmed intentionally permissionless. The CREATE/CREATE2 derivation check ensures only the correct deployer can be registered regardless of who calls the function. Documented in repo's ARCHITECTURE.md and RISKS.md.
+Why it is real:
 
----
+- `setEnsNamePartsFor(...)` only rejects dots, ASCII control bytes, and DEL. It allows bidirectional override characters and other visually dangerous Unicode formatting bytes.
+- `handleOf(...)` does not normalize or canonicalize the stored labels before treating them as verified. It simply hashes the raw bytes, queries the ENS registry for a resolver, checks the `juicebox` text record, and returns the formatted string.
+- The interface comment claims non-canonical labels will fail to resolve in `handleOf`, but that is not generally true. If a matching raw-byte ENS node exists and its resolver returns the expected text record, `handleOf(...)` will surface the spoofed handle as verified.
+- The PoC proves the end-to-end verified-output path, not just storage acceptance: a bidi override label is stored, the mocked ENS registry/resolver validates it, and `handleOf(...)` returns the spoofed string.
 
-### H-21. Large V4 Trades Misrouted Due to Price Impact Ignorance — Accepted risk *(pass 3 nemesis)*
+Impact:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-router-v6 |
-| **File** | `src/JBUniswapV4Hook.sol:381-440,746-769` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **Accepted — known limitation** |
-| **Known issue?** | Yes |
+- A project can present a misleading “verified” handle that renders differently from how users intuitively read it in wallets, dashboards, or frontends.
+- This is a phishing / identity-confusion risk rather than a direct treasury drain, but it undermines the main trust signal this repo is supposed to provide.
 
-**Description:** `estimateUniswapOutput()` uses a linear TWAP quote with fees but no liquidity-depth simulation. `_beforeSwap()` trusts the inflated estimate and selects V4 over Juicebox even when the real V4 fill is materially worse. For shallow pools, the discrepancy can be large.
+Evidence:
 
-**PoC:** `test/audit/CodexNemesisLargeTradeMisroute.t.sol` — 5 ETH buy where `quotedV4Out > jbLiveOut` but `actualV4Out < jbLiveOut`.
+- PoC: [nana-project-handles-v6/test/audit/JBProjectHandlesUnicodeSpoof.t.sol](/Users/jango/Documents/jb/v6/evm/nana-project-handles-v6/test/audit/JBProjectHandlesUnicodeSpoof.t.sol:1)
 
-**Recommended fix:** Replace the linear TWAP quote with a conservative lower-bound estimate that accounts for liquidity depth, or use the Uniswap V4 quoter for execution-faithful estimates before comparing against the JB route.
+Recommended fix:
 
-admin note: i think this is know and should be documented in risks. we use v4 geomean hook when applicable, and the liquidity depth check is too complex iirc.
+- Reject bidi override and other dangerous Unicode formatting characters in ENS name parts, not just ASCII control bytes.
+- If the intended policy is “only ENS-normalized labels are valid,” enforce that onchain before storing or returning a verified handle.
 
-**Resolution:** Accepted — Known limitation. V4 geomean hook used when applicable. Liquidity depth check too complex for routing hot path. amountOutMin prevents worst-case execution. Documented in RISKS.md.
+### 14. `revnet-core-v6`: hidden tokens leave the economic denominator, so the same holder can drain via cash out or loans and then restore the hidden tranche
 
----
+Severity: `MED`
 
-### ~~H-22. Controller-Prepaid ERC20 Split Funds Are Never Credited~~ — FIXED (`fda4e33`) *(pass 3 pashov)*
+Status: locally mitigated in `revnet-core-v6/src/REVOwner.sol` and `revnet-core-v6/src/REVLoans.sol`; retained here until the patch is reviewed and merged.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JBTokenDistributor.sol` / `src/JB721Distributor.sol` (processSplitWith) |
-| **Auditor confidence** | 95 |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+Affected code:
 
-**Description:** The controller sends ERC20 split funds to the distributor before calling `processSplitWith`. Both distributors sample `balanceBefore` after receipt and then check allowance for a transferFrom. On the controller-prepaid path, `allowance < amount` so no transferFrom occurs, and `balanceOf(this) - balanceBefore = 0`. The rewards are permanently stranded outside the vesting accounting.
+- [REVHiddenTokens.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVHiddenTokens.sol:79)
+- [REVHiddenTokens.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVHiddenTokens.sol:110)
+- [REVOwner.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVOwner.sol:176)
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:360)
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:1173)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:389)
 
-**Recommended fix:** When `allowance < amount`, credit `context.amount` directly to `_balanceOf` (the funds are already held):
-```solidity
-if (allowance >= context.amount) {
-    uint256 balanceBefore = IERC20(context.token).balanceOf(address(this));
-    IERC20(context.token).safeTransferFrom(msg.sender, address(this), context.amount);
-    _balanceOf[hook][IERC20(context.token)] += IERC20(context.token).balanceOf(address(this)) - balanceBefore;
-} else {
-    _balanceOf[hook][IERC20(context.token)] += context.amount;
-}
-```
+Why it is real:
 
-admin note: good catch, fix, and make sure to document inline in the imp, in the .md docs, and test thoroughly.
+- `REVHiddenTokens.hideTokensOf(...)` burns a holder’s tokens out of the live revnet supply, tracks them separately, and later `revealTokensOf(...)` re-mints that exact balance back to the holder.
+- `REVOwner.beforeCashOutRecordedWith(...)` uses `context.totalSupply` plus remote supply for cash-out pricing, and `REVLoans._borrowableAmountFrom(...)` uses `CONTROLLER.totalTokenSupplyWithReservedTokensOf(...) + totalCollateralOf[...]` for loan pricing. Neither path adds hidden supply back into the economic denominator.
+- That means hidden balances stop diluting reclaim / borrow math even though they remain a recoverable claim. A holder can hide part of their stack, use the smaller visible supply to reclaim or borrow against an outsized share of the treasury, then reveal the hidden tranche afterward.
+- This is not limited to operator-managed allowlists for arbitrary users. `REVDeployer` grants the split operator `HIDE_TOKENS` by default, and `REVHiddenTokens` explicitly lets any holder who has that permission hide their own balance.
 
-**Resolution:** FIXED — Restructured ERC-20 handling in both `JBTokenDistributor.processSplitWith` and `JB721Distributor.processSplitWith`. Terminal path (allowance >= amount) uses transferFrom with balance-delta accounting. Controller-prepaid path (else) credits `context.amount` directly. Documented inline. 8 new tests in `test/AuditFixes.t.sol`.
+Impact:
 
----
+- Any holder that is allowlisted for hiding, and any split operator by default, can amplify the per-token claim of their visible tranche without giving up the hidden tranche permanently.
+- The cash-out PoC drains the full revnet balance with only the visible half of the holder’s stack, then restores the hidden half immediately afterward.
+- The loan PoC borrows against the reduced denominator, leaves only the 2.5% protocol-fee residue in treasury, restores the hidden tranche, and leaves the full pre-hide treasury amount booked as debt.
+- This turns a governance / visibility feature into an economic-drain primitive against revnet treasuries.
 
-### ~~H-23. Buyback Sell-Side Cash-Out Swap Has No Failure Fallback~~ — FIXED (`3c18d77`) *(GitHub #75)*
+Evidence:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-buyback-hook-v6 |
-| **File** | `src/JBBuybackHook.sol:234` (afterCashOutRecordedWith) |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **HIGH — VERIFIED** |
-| **Known issue?** | No |
+- PoC: [revnet-core-v6/test/audit/HiddenSupplyCashout.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/HiddenSupplyCashout.t.sol:1)
+- PoC: [revnet-core-v6/test/audit/HiddenSupplyLoanBorrow.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/HiddenSupplyLoanBorrow.t.sol:1)
 
-**Description:** The sell-side cash-out path calls `_swapExactInput` without try-catch, unlike the buy-side `_swap` which has explicit failure handling and a mint fallback. If the Uniswap V4 pool reverts (insufficient liquidity, pool not initialized, internal hook revert), the entire `afterCashOutRecordedWith` call reverts. Since `beforeCashOutRecordedWith` already set `cashOutTaxRate = MAX_CASH_OUT_TAX_RATE` and `effectiveSurplusValue = 0`, there is no terminal-level reclaim to fall back to. The user's project tokens have been burned (then reminted to the hook at line 224), so the revert atomically restores them — but the user cannot cash out at all while the pool is in a bad state.
+Recommended fix:
 
-The asymmetry is clear:
-- **Pay-side** (`_swap`, line 1048): `try POOL_MANAGER.unlock(...) catch { return (0, true); }` → fallback to mint at issuance rate
-- **Sell-side** (`_swapExactInput`, line 1079): `POOL_MANAGER.unlock(...)` → bare call, revert propagates
+- Hidden balances must remain in the economic denominator used by both cash outs and loans.
+- The cleanest design fix is to make hiding affect governance / visibility only, not treasury math.
+- The local patch keeps burning hidden tokens as the storage model, adds local hidden supply back into `REVOwner.beforeCashOutRecordedWith(...)` and `REVLoans._borrowableAmountFrom(...)`, and updates the hidden-token docs/tests to state the governance/visibility-vs-economic-denominator split.
+- The system should still review whether hidden balances can be revealed while the holder has outstanding loan exposure, but the direct drain/borrow amplification path is closed by keeping hidden supply in the denominator.
 
-**Recommended fix:** Wrap `_swapExactInput` in try-catch. On failure, fall back to the terminal's bonding curve reclaim by returning the tokens to the user without executing the swap. This matches the pay-side pattern.
+### 15. `deploy-all-v6`: `Verify.s.sol` is stale against the real canonical routing and ownership topology
 
-admin note: fair enough, fix. make sure its this well tested and well documented.
+Severity: `LOW`
 
-**Resolution:** FIXED — `_swapExactInput` now returns `swapFailed=true` on pool revert via try-catch. `afterCashOutRecordedWith` transfers reminted project tokens back to the beneficiary on failure and emits `SellSwapReverted`. 5 new tests in `test/audit/SellSwapFallback.t.sol`. Documented in RISKS.md. 177 tests pass.
+Status: locally mitigated in `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
 
----
+Affected code:
 
-## Medium
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2086)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2189)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2362)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2489)
+- [JBDirectory.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBDirectory.sol:212)
+- [JBDirectory.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBDirectory.sol:304)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:281)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:868)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:885)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:914)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:803)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:820)
+- [ResumeDeployFork.t.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/test/fork/ResumeDeployFork.t.sol:784)
 
-### M-1. ~~Dust V3 Liquidity Pins Routing Away From Deeper V4 Markets~~ — FIXED (`f36e90a`)
+Why it is real:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/libraries/JBSwapPoolLib.sol` (_discoverPool) |
-| **Auditor confidence** | 82 |
-| **My confidence** | **75** |
-| **Known issue?** | No |
+- The deploy path passes `JBRouterTerminalRegistry` into `terminalConfigurations`, so `JBDirectory.setTerminalsOf(...)` stores the registry address as the project terminal.
+- `Verify.s.sol` instead searches each canonical project’s terminal list for the raw `JBRouterTerminal` singleton.
+- That means the route check is stale against the actual deployment topology. A correct registry-based deployment will log route failures, while the verifier still never asserts that the real forwarding registry terminal is present.
+- The same verifier also exposes an optional `VERIFY_SAFE` assertion that treats canonical projects as safe-owned, but `REVDeployer` actually launches or transfers canonical revnets into itself. The resume harness already asserts that owner target.
+- The route checks are also non-critical, so this drift weakens the only automated post-deploy check meant to confirm canonical route wiring.
 
-**Description:** Any non-zero V3 liquidity blocks selection of a deeper hookless V4 pool. An attacker can seed a thin V3 market so bridge swaps route through the weaker venue at worse execution.
+Impact:
 
-**Mitigation:** Remove the V3 preference guard — always select the pool with the highest liquidity regardless of version.
+- Operators get false negatives from the verifier on healthy deployments and no automated proof that the routing surface actually used by canonical projects was installed.
+- If operators rely on the optional safe-owner check, correct canonical revnet deployments can also be rejected for matching the actual owner topology.
+- Because the verifier is checking the wrong terminal shape, real route miswirings can hide behind noisy output instead of being isolated as a precise post-deploy failure.
 
-admin note: seems worth a fix, and worth extensive fork tests.
+Recommended fix:
 
----
+- Make `Verify.s.sol` check `directory.terminalsOf(projectId)` for `routerTerminalRegistry`, not the raw `routerTerminal`.
+- Then verify that the registry resolves to the intended router terminal for canonical projects, and consider making the route check critical once it matches real deploy intent.
+- Remove or repurpose `VERIFY_SAFE` for canonical revnets so owner checks match the actual steady-state owner targets.
 
-### M-2. ~~Interrupted Deployments Griefed by Permissionless Project-ID Minting~~ — FIXED (`62c0cc1`)
+### 16. `deploy-all-v6`: `Resume.s.sol` can accept an attacker-configured project `2` as the canonical Croptop fee sink after an interrupted deployment
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 |
-| **File** | `script/Deploy.s.sol` (_ensureProjectExists) |
-| **Auditor confidence** | 82 |
-| **My confidence** | **78** |
-| **Known issue?** | Acknowledged in RISKS.md as "Deployment scripts -> project IDs -> cross-chain peer wiring" |
+Severity: `MED`
 
-**Description:** Canonical project IDs are inferred from the mutable global `count`. An outsider can mint IDs 2-4 during an interrupted rollout, causing both deploy and resume to revert on owner mismatch.
+Status: locally mitigated in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
 
-**Mitigation:** Reserve canonical project IDs atomically in the first resumable phase and reuse stored IDs on resume.
+Affected code:
 
-admin note: great. fix if there's a clean fix with no tradeoffs.
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:1941)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:1949)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:3044)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:3049)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2228)
+- [CTPublisher.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTPublisher.sol:61)
+- [CTPublisher.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTPublisher.sol:105)
+- [CTPublisher.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTPublisher.sol:303)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:365)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:910)
 
-*Re-confirmed by Pashov pass 2 (20260421) — [90] "Permissionless project creation can brick interrupted deployment recovery". Same root cause.*
+Why it is real:
 
----
+- In the resume path, `_ensureProjectExists(...)` skips the ownership check for any expected project ID that already has a controller set.
+- `_resumeCroptop()` immediately consumes that returned project ID as `_cpnProjectId` and deploys `CTPublisher` with it as the immutable `FEE_PROJECT_ID`.
+- If deployment is interrupted after the core/controller phases, a third party can permissionlessly create and configure project `2` using the just-deployed controller before the operator resumes.
+- Resume will then accept that attacker-owned but controller-configured project `2`, and `_resumeCpnRevnet()` will later skip canonical CPN configuration entirely because `controllerOf(2) != 0`.
+- `CTPublisher` routes Croptop fees to whatever project ID it was constructed with, so the resumed deployment silently adopts the attacker’s project `2` as the Croptop fee sink.
+- `Verify.s.sol` does not assert `CTPublisher.FEE_PROJECT_ID()` or the expected canonical owner target for project `2`, so a squatted project using the same controller / terminal shape can evade the normal post-resume verification flow.
 
-### M-3. ~~Tempo ETH/USD Feed Registered Against `address(0)`~~ — FIXED (`c4521cc`)
+Impact:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 |
-| **File** | `script/Deploy.s.sol:1655-1667` |
-| **Auditor confidence** | 95 |
-| **My confidence** | **90 — VERIFIED** (but marked TODO in source, Tempo not yet deployed) |
-| **Known issue?** | Source has a TODO comment acknowledging placeholder |
+- An interrupted deployment can be resumed into an attacker-controlled Croptop fee project without failing fast.
+- After that point, Croptop publication fees are routed into the attacker’s project `2`, and the canonical CPN revnet setup is skipped as if it were already complete.
+- This is not the same as the earlier project-`1` squat issue. It is a distinct resume-path hijack that appears after core deployment is already live and public.
 
-**Description:** Tempo mainnet and Tempo Moderato build `JBChainlinkV3PriceFeed(address(0), 3600)`. Any ETH-priced conversion on those chains reverts permanently. The code has a `// TODO: Replace with actual Chainlink ETH/USD feed address on Tempo once available` comment.
+Evidence:
 
-**Mitigation:** Replace with `revert("Tempo ETH/USD feed not configured")` until a real feed is available, preventing accidental deployment.
+- PoC: [deploy-all-v6/test/audit/ResumeCroptopProjectTwoSquat.t.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/test/audit/ResumeCroptopProjectTwoSquat.t.sol:1)
 
-admin note: lets research what the actual feed addresses are and fix them. looks like there arent any right now. keep the TODO and add a revert to make sure we cant go live with this.
+Recommended fix:
 
----
+- Resume should not trust `controllerOf(projectId) != 0` alone as proof that an expected canonical project is the right one.
+- For project `2`, require both the expected owner / controller topology and the expected Croptop-specific invariants before accepting it, otherwise revert and force operator intervention.
+- More generally, persist canonical project IDs and expected owners from the initial deployment state and verify them explicitly during resume instead of rediscovering them from public project numbering alone.
 
-### M-4. ~~Public V4 Pool Pre-Initialization Blocks LP Deployment~~ — FIXED (`a3e5e4a`)
+### 17. `deploy-all-v6`: `Resume.s.sol` can treat an attacker-configured project `4` as canonical BAN/Banny, and `Verify.s.sol` does not assert any Banny-specific invariant to catch it
 
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-lp-split-hook-v6 |
-| **File** | `src/JBUniswapV4LPSplitHook.sol` (_createAndInitializePool) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **70** |
-| **Known issue?** | No |
+Severity: `MED`
 
-**Description:** An attacker can initialize the public V4 pool at an out-of-band price first, causing `deployPool()` to revert with `PoolInitializedAtUnexpectedPrice` until external recovery changes the pool state.
+Status: locally mitigated in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
 
-**Mitigation:** Check if the pool is already initialized and validate the current price is within acceptable bounds rather than reverting.
+Affected code:
 
-admin note: yeah fair. can we add liquidity within our bounds even if the price can be out of band? out of bandwill always get arb'd away quickly. make sure this is well tested.
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2503)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2512)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2427)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:334)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:365)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:873)
 
----
+Why it is real:
 
-### M-5. Registry Pool-Setup Forwarding Unusable Out Of The Box
+- `_resumeBanny()` skips the whole Banny phase whenever `projects.count() >= 4` and `controllerOf(4) != 0`.
+- That skip path never checks whether project `4` is the canonical BAN deployment target, whether it is owned by the expected party, or whether any Banny-specific assets were actually deployed.
+- After an interrupted deployment, once the controller is live and projects `1-3` already exist, a third party can create and configure project `4` before the operator resumes.
+- Resume will then mark Phase 09 as already configured and never deploy the canonical `Banny721TokenUriResolver` or the intended BAN-specific revnet / tier setup.
+- `Verify.s.sol` currently has no Banny-specific assertion. It only checks that project `4` exists and has generic JB controller / terminal wiring. It does not assert any deterministic Banny deployment artifact, resolver wiring, or BAN-specific project shape.
+- Because the current verification path does not require `VERIFY_SAFE` and already has stale assumptions around canonical owner topology, an attacker-owned but generically wired project `4` can satisfy the normal BAN checks even though the intended Banny deployment never happened.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-buyback-hook-v6 |
-| **File** | `src/JBBuybackHookRegistry.sol` (initializePoolFor/setPoolFor) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **72** |
-| **Known issue?** | No |
+Impact:
 
-**Description:** The registry forwards pool setup after its own permission check, but the downstream hook re-authenticates `msg.sender` as the registry contract, which doesn't hold `SET_BUYBACK_POOL` by default. The documented owner-facing setup path is broken.
+- An interrupted deployment can silently ship with an attacker-controlled or arbitrary project `4` standing in for BAN.
+- Operators can get a clean generic verification result for BAN’s controller / terminal shape while the actual Banny product surface was never deployed.
+- This is a deployment blocker for a “one-stop” rollout because the canonical app namespace can be lost without an explicit verification failure.
 
-**Mitigation:** Grant `SET_BUYBACK_POOL` to the registry during deployment, or have the hook recognize forwarded calls from the registry.
+Evidence:
 
-Admin note: CONFIRMED — REVDeployer already handles this. Its constructor grants `SET_BUYBACK_POOL` to the buyback hook registry with wildcard `revnetId=0` (line 211-212). This covers all revnet deployments. The issue only affects non-revnet integrators who bypass REVDeployer. Document as known integration requirement for future deployers.
+- PoC: [deploy-all-v6/test/audit/ResumeBannyProjectFourSquat.t.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/test/audit/ResumeBannyProjectFourSquat.t.sol:1)
 
-*Re-confirmed by Nemesis pass 2 (20260421) — NM-001 "Registry Pool-Configuration Wrapper Re-Authenticates The Wrong Actor" with PoC. Same root cause: registry validates caller, forwarded call re-authenticates registry address.*
+Recommended fix:
 
----
+- Resume should reject project `4` unless BAN-specific invariants hold, instead of treating any controller-configured project `4` as canonical Banny.
+- `Verify.s.sol` should assert Banny-specific deterministic outputs, not just generic project wiring. At minimum it should verify that the canonical Banny deployment artifacts exist and that BAN was configured through that path.
+- More generally, the deploy/resume flow should persist and re-check canonical project identity rather than rediscovering it from public numbering and generic controller presence.
 
-### M-6. ~~Reverting Terminal Metadata Read Bricks Routed `pay()` Calls~~ — FIXED (`7eee418`)
+### 18. `deploy-all-v6`: `Resume.s.sol` can adopt an attacker-configured project `3` as canonical REV if the attacker pre-approves the resume caller, and `Verify.s.sol` does not check the REV identity immutables
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBPayRouteResolver.sol` (_candidatePayRouteTokens) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **70** |
-| **Known issue?** | No |
+Severity: `MED`
 
-**Description:** One reverting terminal in `terminalsOf(projectId)` aborts candidate-token enumeration before the per-candidate try/catch isolation runs, so `JBRouterTerminal.pay()` is DoSed for that project even when another healthy terminal could route the payment.
+Status: locally mitigated in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
 
-**Mitigation:** Wrap the terminal metadata read in a try/catch during candidate enumeration.
+Affected code:
 
-admin note: ok, fix, and make sure well tested.
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2003)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2095)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2098)
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:3044)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:105)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:813)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:820)
+- [REVOwner.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVOwner.sol:61)
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:122)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:332)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:621)
 
----
+Why it is real:
 
-### M-7. ~~Fee-Refunded Terminal Migrations Leave Residual Source Balance~~ *(nemesis)* — DOWNGRADED TO LOW
+- `_ensureProjectExists(...)` in the resume path accepts any expected project ID that already has a controller set, without proving that the project NFT is still the canonical one.
+- `_resumeRevnet()` then deploys `REVLoans`, `REVOwner`, and `REVDeployer` with that returned project ID baked in as their canonical REV identity (`REV_ID` / `FEE_REVNET_ID`) before checking anything else about project `3`.
+- It next calls `_projects.approve(address(_revDeployer), _revProjectId)` unconditionally. An attacker-owned project `3` would normally make resume revert here, but the attacker can simply pre-approve the known resume caller so the approval succeeds.
+- Because `controllerOf(3) != 0`, resume then skips `_deployRevFeeProject()`. The attacker’s project `3` remains the live canonical REV project while the freshly deployed REV infrastructure binds to it as if it were legitimate.
+- That binding is not cosmetic. `REVOwner` routes cash-out fees to `FEE_REVNET_ID`, `REVLoans` uses `REV_ID` as the canonical fee revnet, and later deployment phases like Defifa resolve `tokens.tokenOf(3)` as their fee token surface.
+- `Verify.s.sol` currently checks only generic project-`3` existence plus revnet contract interconnections. It does not assert `REVDeployer.FEE_REVNET_ID()`, `REVOwner.FEE_REVNET_ID()`, `REVLoans.REV_ID()`, or any project-`3` provenance invariant that would distinguish the attacker’s project from the intended canonical REV fee sink.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-core-v6 |
-| **File** | `src/JBMultiTerminal.sol` (migrateBalanceOf) |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **55 — real behavior, low impact** |
-| **Known issue?** | No |
+Impact:
 
-**Description:** When a terminal migration triggers held-fee refunds, the refunded amounts reduce the balance that gets migrated. But the source terminal's internal accounting still records the pre-refund balance, leaving a phantom residual that can't be withdrawn.
+- An interrupted deployment can resume into an attacker-owned canonical REV fee project if the attacker cooperates just enough to pre-approve the resume caller.
+- After that, canonical REV fee flows, revnet loan accounting, and downstream integrations that assume project `3` is the real REV deployment are all anchored to attacker-controlled project identity.
+- This is a stronger failure mode than a plain resume DoS because the resumed deployment can appear structurally healthy while adopting the wrong fee revnet.
 
-**Mitigation:** Re-read the actual balance after processing held fees and migrate only the delta.
+Evidence:
 
-admin note: im not sure about this one, not confident. if you're confident, show me, convince me that the tradeoffs are worth it.
+- PoC: [deploy-all-v6/test/audit/ResumeRevProjectThreeSquat.t.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/test/audit/ResumeRevProjectThreeSquat.t.sol:1)
 
-**Investigation result:** The behavior is real but overstated. Traced full flow: if fee routing fails during migration, the catch block adds the fee amount back to source terminal accounting. The residual (2.5% of balance) is backed by real ETH and recoverable via a second migration. The project actually ends up *better off* (pays less in total fees) than a successful single migration. The proposed fix (skip fee deduction on failure) opens a fee-avoidance vector: a project owner could temporarily break fee routing, migrate fee-free, then restore it. **Downgraded to LOW — residual is always recoverable, fix has tradeoff.**
+Recommended fix:
 
-*Re-confirmed by Nemesis pass 2 (20260421) — NM-001 "Fee-Refunded Migrations Leave Residual Source Balance And Double-Charge Cleanup" with PoC at `test/audit/CodexMigrationFeeFailure.t.sol`. Same root cause traced with state-coupling analysis.*
+- Resume should not deploy any REV infrastructure until project `3` has passed explicit owner / provenance validation, even if `controllerOf(3) != 0`.
+- `Verify.s.sol` should assert the identity immutables that make these contracts canonical, including `REVDeployer.FEE_REVNET_ID() == 3`, `REVOwner.FEE_REVNET_ID() == 3`, and `REVLoans.REV_ID() == 3`, plus the expected canonical project-`3` provenance.
+- More generally, stop treating public project numbering plus generic controller presence as sufficient proof that a resumed deployment is still converging on the intended canonical products.
 
----
+### 19. `croptop-core-v6` + `defifa` + `revnet-core-v6` + `nana-omnichain-deployers-v6` + `nana-721-hook-v6`: public launchers can be griefed by permissionless `JBProjects.createFor(...)` front-runs because they predict `projectId = count() + 1`
 
-### M-8. ~~Router Terminal Registry Forwarding Disables Receipt-Token Check~~ *(nemesis)* — DOWNGRADED TO INFORMATIONAL
+Severity: `LOW`
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBRouterTerminal.sol` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **40 — real gap, no practical exploit** |
-| **Known issue?** | No |
+Status: locally mitigated across `croptop-core-v6/src/CTDeployer.sol`, `defifa/src/DefifaDeployer.sol`, `revnet-core-v6/src/REVDeployer.sol`, `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol`, and `nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol`; retained here until the cross-repo patches are reviewed and merged.
 
-**Description:** When the router terminal forwards a payment through the registry, the underlying terminal's receipt-token validation is bypassed because the registry acts as the caller and doesn't propagate the original caller's expected receipt parameters.
+Affected code:
 
-**Mitigation:** ~~Forward receipt-token expectations through the registry call, or validate receipt tokens at the router level after the underlying call returns.~~
+- [JBProjects.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBProjects.sol:70)
+- [CTDeployer.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTDeployer.sol:185)
+- [DefifaDeployer.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaDeployer.sol:432)
+- [JB721TiersHookProjectDeployer.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol:105)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:524)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:806)
+- [JBOmnichainDeployer.sol](/Users/jango/Documents/jb/v6/evm/nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol:728)
 
-admin note: im not sure about this one, not confident. if you're confident, show me, convince me that the tradeoffs are worth it.
+Why it is real:
 
-**Investigation result:** Code gap confirmed — the router classifies the registry as a "forwarding terminal" and skips receipt enforcement, and the registry doesn't enforce receipts either. BUT the downstream JBMultiTerminal independently measures actual received balance via its own `_acceptFundsFor` balance-delta accounting. The gap only affects fee-on-transfer tokens, which the protocol doesn't target. Standard tokens (USDC, WETH, DAI) are unaffected. **Downgraded to informational — downstream terminal self-corrects.**
+- `JBProjects.createFor(...)` is permissionless, so any address can increment the global project counter at low cost.
+- The unpatched `CTDeployer.deployProjectFor(...)`, `DefifaDeployer.launchGameWith(...)`, `JB721TiersHookProjectDeployer.launchProjectFor(...)`, `REVDeployer.deployFor(... revnetId == 0 ...)`, and `JBOmnichainDeployer.launchProjectFor(...)` all predicted the next canonical project ID from `count() + 1` before calling `launchProjectFor(...)`.
+- If any unrelated project creation lands first in the same block, the actual launched project ID differs from the predicted one and the launcher reverts.
+- Defifa already carries an explicit QA regression for this race and confirms the revert path is live. Croptop, the shared 721 project deployer, and Revnet use the same count-based prediction pattern.
+- The strongest argument against severity is that the revert rolls state back and the caller can retry. That is true, but it does not stop a mempool observer from repeatedly front-running every public launch with a cheap dummy project creation.
+- The local patches reserve the project first with `JBProjects.createFor(address(this))`, derive hooks/rulesets/suckers against the assigned ID, launch via `launchRulesetsFor(...)`, set project URIs explicitly where needed, and then transfer the project NFT when the launcher is not intended to retain ownership.
 
----
+Impact:
 
-### M-9. ~~Two-Hop Router Forwarding Cycles Evade Fee/Filter Logic~~ *(nemesis)* — DOWNGRADED TO INFORMATIONAL
+- Public-mempool launches of new Croptop projects, Defifa games, 721-hook projects, fresh revnets, and omnichain project launches can be griefed at low cost.
+- No direct fund loss occurs and retries can succeed, especially with private order flow, but the launch surface is not reliably permissionless under adversarial ordering.
+- This is an ecosystem liveness issue rather than a treasury-drain issue, but it is live across multiple user-facing launchers.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBRouterTerminal.sol` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **35 — misleading title, self-inflicted DoS** |
-| **Known issue?** | No |
+Evidence:
 
-**Description:** A payment can cycle through two router terminals: Terminal A forwards to Terminal B, which routes back to A's underlying terminal. Each hop applies its own fee and filter logic independently, but the composition can evade intended per-payment constraints like fee deduction or metadata filtering.
+- PoC: [croptop-core-v6/test/audit/ProjectIdFrontRunDoS.t.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/test/audit/ProjectIdFrontRunDoS.t.sol:1)
+- PoC: [nana-721-hook-v6/test/audit/ProjectIdFrontRunDoS.t.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/test/audit/ProjectIdFrontRunDoS.t.sol:1)
+- PoC: [revnet-core-v6/test/audit/ProjectIdFrontRunDoS.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/ProjectIdFrontRunDoS.t.sol:1)
+- PoC: [nana-omnichain-deployers-v6/test/audit/ProjectIdFrontRunDoS.t.sol](/Users/jango/Documents/jb/v6/evm/nana-omnichain-deployers-v6/test/audit/ProjectIdFrontRunDoS.t.sol:1)
+- Existing QA regression: [defifa/test/TestQALastMile.t.sol](/Users/jango/Documents/jb/v6/evm/defifa/test/TestQALastMile.t.sol:332)
+- Fix regression / verification:
+  - `forge test --match-path test/audit/ProjectIdFrontRunDoS.t.sol` in `croptop-core-v6`
+  - `forge test --match-path test/CTDeployer.t.sol` in `croptop-core-v6`
+  - `forge test --match-path test/audit/CodexNemesisFreshRound.t.sol --match-test 'test_deployProjectFor_failsOpenWhenSuckerDeploymentFails|test_directRegistryDeploymentAfterOwnershipTransferCanMapThroughRegistry'` in `croptop-core-v6`
+  - `forge build` in `croptop-core-v6`
+  - `forge test --match-path test/audit/ProjectIdFrontRunDoS.t.sol` in `nana-721-hook-v6`
+  - `forge test --match-path test/unit/deployer_Unit.t.sol` in `nana-721-hook-v6`
+  - `forge test --match-path test/regression/ProjectDeployerRulesets.t.sol` and `forge test --match-path test/audit/ProjectDeployerAuth.t.sol` in `nana-721-hook-v6`
+  - `forge build` in `nana-721-hook-v6`
+  - `forge test --match-path test/DefifaSecurity.t.sol`, `forge test --match-path test/DefifaNoContest.t.sol`, and `forge build` in `defifa`
+  - `forge test --match-path test/audit/ProjectIdFrontRunDoS.t.sol`, `forge test --match-path test/TestConversionDocumentation.t.sol`, `forge test --match-path test/TestTerminalEncodingInHash.t.sol`, and `forge build` in `revnet-core-v6`
+  - `forge test --match-path test/audit/ProjectIdFrontRunDoS.t.sol`, `forge test --match-path test/JBOmnichainDeployer.t.sol`, `forge test --match-path test/Tiered721HookComposition.t.sol`, `forge test --match-path test/JBOmnichainDeployerGuard.t.sol`, `forge test --match-path test/OmnichainDeployerEdgeCases.t.sol`, `forge test --match-path test/OmnichainDeployerAttacks.t.sol`, `forge test --match-path test/TestAuditGaps.sol`, and `forge build` in `nana-omnichain-deployers-v6`
 
-**Mitigation:** ~~Track and reject re-entrant routing, or apply constraints based on the original payment context rather than per-hop context.~~
+Recommended fix:
 
-admin note: im not sure about this one, not confident. if you're confident, show me, convince me that the tradeoffs are worth it.
+- Review and merge the local reservation-based launcher patches.
+- Keep future public launchers on the same pattern: reserve/create the project ID first, then build dependent hook / config / peer data around the assigned ID.
+- Do not reintroduce `count() + 1` as an authority for externally visible project IDs.
 
-**Investigation result:** The finding title is misleading — **no fee/filter evasion is possible.** A multi-hop cycle causes infinite recursion until gas exhaustion, then the whole transaction reverts. No funds at risk. Creating a cycle requires privileged project-owner actions (setting terminals in JBDirectory). The consequence is self-inflicted DoS, not value extraction. `lockTerminalFor` already documents this risk in its NatSpec. **Downgraded to informational.**
+### 20. `deploy-all-v6`: `Verify.s.sol` can green-light incomplete deployments because address-registry / Defifa remain optional and the always-deployed Phase 11 periphery is never checked
 
----
+Severity: `LOW`
 
-### M-10. Retroactive Default Reserve Beneficiary Rebinding *(nemesis — promotes Lead 6)*
+Status: locally mitigated in `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-721-hook-v6 |
-| **File** | `src/JB721TiersHook.sol` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **50 — accepted design** |
-| **Known issue?** | Pashov flagged as lead |
+Affected code:
 
-**Description:** The default reserve beneficiary can be changed by the project owner after tiers are already configured. Pending reserve distributions that accumulated under the old beneficiary will mint to the new one, retroactively redirecting economic value without the original beneficiary's consent.
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:283)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:292)
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:671)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:425)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:472)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:475)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:695)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2698)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2820)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2831)
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2865)
 
-**Mitigation:** Snapshot the beneficiary at reserve-accumulation time, or require explicit consent from the current beneficiary before rebinding.
+Why it is real:
 
-admin note: this is ok and by design, should be documented in the repo's RISKS.
+- `Deploy.s.sol` always executes Phase 02 address-registry deployment and always executes Phase 11 periphery deployment for project handles, both distributors, and the project-payer deployer.
+- `Verify.s.sol` only fail-closes production chains for router / buyback / revnet addresses. `VERIFY_ADDRESS_REGISTRY` and `VERIFY_DEFIFA_DEPLOYER` are optional env vars, and Category 7 simply skips both checks when they are unset.
+- Even when those env vars are supplied, Category 7 only checks `code.length > 0`; it does not verify any of the address-registry or Defifa wiring that the deploy script actually depends on.
+- `Verify.s.sol` does not load or check the Phase 11 periphery at all, so a rollout can miss those artifacts entirely and still finish verification without a critical failure.
 
----
+Impact:
 
-### M-11. ~~Large Trades Misrouted to V4 Due to Stale TWAP Quote~~ *(nemesis)* — DOWNGRADED TO INFORMATIONAL
+- `deploy-all-v6` is not currently a trustworthy one-stop deployment plus verification flow for the full advertised product surface.
+- A release can be missing the address registry, the Defifa game factory, or the always-deployed project-handles / distributor / project-payer periphery and still appear verified if the operator omits those env vars or relies on the current categories.
+- This is not a direct onchain theft vector, but it is a deployment blocker because incomplete rollouts can escape post-deploy detection.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-router-v6 |
-| **File** | `src/JBUniswapV4Hook.sol` (estimateUniswapOutput) |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **35 — already mitigated and documented** |
-| **Known issue?** | Yes — documented in NatSpec, RISKS.md, ARCHITECTURE.md |
+Evidence:
 
-**Description:** The router uses a TWAP-based quote to decide whether to route through V4. For large trades that would move the price significantly, the TWAP quote overestimates V4 output, causing the router to select V4 even when a V3 pool with deeper liquidity would give better execution.
+- Code-path comparison only. The issue is the absence of required verification logic relative to the actual deploy phases.
 
-**Mitigation:** ~~Apply slippage-aware routing that simulates actual execution impact, not just spot/TWAP quotes.~~
+Recommended fix:
 
-admin note: i was under the impression that our repo here was already very much aware of slippage and trying to make the best decision possible. if not, fix it for sure, but beware of tradeoffs. make sure this is well tested with fork tests and integration tests.
+- Require `VERIFY_ADDRESS_REGISTRY` and the expected Defifa envs on every chain where `Deploy.s.sol` deploys them.
+- Add real invariant checks for the Defifa stack, not just `code.length > 0`.
+- Add a Category 11 verification pass for `JBProjectHandles`, `JB721Distributor`, `JBTokenDistributor`, and `JBProjectPayerDeployer`, with constructor-argument / immutable checks that match the deployment path.
 
-**Investigation result:** Your impression is correct. The repo is thoroughly aware: (1) `estimateUniswapOutput()` has explicit `@dev` NatSpec (lines 354-361) warning about linearized price not reflecting liquidity depth, (2) every swap enforces `amountOutMin` in `_afterSwap` — if V4 execution produces less than user tolerance, it **reverts** (not silently underpays), (3) RISKS.md Section 3 explicitly calls this out, (4) true tick-walking simulation is documented as gas-prohibitive. Worst case is an unnecessary revert (wasted gas), not misrouted value. **Downgraded to informational — already mitigated by amountOutMin enforcement.**
+### 21. `revnet-core-v6` + `nana-suckers-v6`: caller-salted sucker deployment breaks default peer symmetry even for identical revnet configs
 
----
+Severity: `MED`
 
-### M-12. ~~Fee-On-Transfer Tokens Break Buyback Swap Settlement~~ *(nemesis — promotes Lead 9)* — FIXED (`11f232d`)
+Status: locally mitigated in `revnet-core-v6/src/REVDeployer.sol`; retained here until the patch is reviewed and merged. The separate registry/deployer-topology assumption remains open in finding 27.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-buyback-hook-v6 |
-| **File** | `src/JBBuybackHook.sol` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **75** |
-| **Known issue?** | Pashov flagged as lead |
+Affected code:
 
-**Description:** The buyback hook's swap settlement assumes `amountOut` from the DEX matches what the hook actually receives. Fee-on-transfer tokens deliver less than `amountOut`, causing the hook to promise more tokens than it holds. Subsequent operations revert or underpay.
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:904)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:915)
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:503)
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:510)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:714)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:725)
 
-**Mitigation:** Use balance-delta accounting for swap output, or explicitly reject fee-on-transfer tokens in the hook.
+Why it is real:
 
-admin note: sure, use balance-delta accounting. make sure well tested.
+- Before the local patch, `REVDeployer._deploySuckersFor(...)` salted sucker deployment with `_msgSender()` before calling the registry.
+- `JBSuckerRegistry.deploySuckersFor(...)` then salts again with its own caller and explicitly documents that same-address peer symmetry only holds when deployments originate from the same sender across chains.
+- `JBSucker.peer()` defaults to `address(this)`, so the entire default peer model assumes those CREATE2 inputs converge to the same deployed sucker address on every chain.
+- That meant two revnets with identical `hashedEncodedConfigurationOf(...)` values did not, by themselves, determine the same sucker addresses. Different split operators, forwarders, or caller choices changed the deployed addresses even when the revnet configuration and sucker salt were identical.
+- Once the deployed addresses diverged, the default `peer()` on each sucker pointed to itself instead of the counterpart on the other chain, and cross-chain message handling rejected the real remote sucker as a non-peer.
+- The local patch removes the external caller from the REV-side sucker salt and derives the registry input from only the encoded revnet configuration hash plus the project-provided sucker salt. The registry still namespaces deployments by its caller, which is now the stable `REVDeployer` path for revnets.
 
-*Expanded by Nemesis pass 2 (20260421) — NM-002 "Transfer-Taxed Output Tokens Break Routed Settlement On Both Buy And Sell Paths" with PoCs for both sides. Original M-12 focused on one path; Nemesis demonstrated the buy-side also reverts when `burnTokensOf` is called with the callback-reported amount that exceeds actual hook balance.*
+Impact:
 
----
+- Revnet cross-chain expansion was not actually determined solely by revnet configuration plus deployment salt.
+- A project could deploy matching revnet configs on two chains, believe the default same-address peer assumption held, and still end up with suckers that did not recognize each other because the external caller path differed.
+- This could silently break default cross-chain peer wiring after split-operator rotation, different relayer usage, or any deployment path variation that changed `_msgSender()`.
+- The failure mode was not just cosmetic. Bridge messages could hard-revert at the peer check, leaving the expansion path broken until custom peer overrides or a redeploy strategy was used.
 
-### M-13. ~~CroptopDeployer Broken Currency Domain at Launch~~ *(nemesis — promotes Lead 14)* — FALSE POSITIVE
+Evidence:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | croptop-core-v6 |
-| **File** | `src/CTDeployer.sol` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **20 — false positive** |
-| **Known issue?** | Pashov flagged as lead |
+- Regression: [revnet-core-v6/test/audit/SuckerCallerDeterminism.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/SuckerCallerDeterminism.t.sol:152)
 
-**Description:** The deployer sets `baseCurrency = ETH` (value 1) for the ruleset, but the terminal uses native-token accounting where the currency is `uint32(uint160(NATIVE_TOKEN))`. When the project tries to resolve prices for payout limits, the currency mismatch triggers a price feed lookup for a pair that may not be registered, causing payouts to revert.
+Recommended fix:
 
-**Mitigation:** ~~Use the terminal's accounting currency consistently in the ruleset configuration, or register the necessary price feed during deployment.~~
+- Review and merge the local `REVDeployer` salt patch.
+- Keep finding 27 open until registry / deployer topology drift is also addressed or explicitly documented, because same external caller removal does not prove the registry and underlying sucker deployer addresses match across chains.
 
-admin note: no this is by design. the baseCurrency should always be a general currency not directly tied to a token address. 1 is correct here. our documentation in nana-core and even in top level repo should make this clear.
+### 22. `revnet-core-v6` + `nana-suckers-v6`: omnichain cash-outs and loans ignore remote outstanding loan state
 
-**Confirmed false positive.** The nemesis auditor confused conceptual currency IDs (`JBCurrencyIds.ETH = 1`) with terminal accounting currency IDs (`uint32(uint160(token))`). The protocol uses identity price feeds to bridge between the two domains. `baseCurrency = 1` is the correct and intended pattern.
+Severity: `MED`
 
----
+Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSuckerLib.sol` and `revnet-core-v6/src/REVOwner.sol`; retained here until the cross-repo patches are reviewed and merged.
 
-### M-14. ~~Omnichain launchRulesetsFor Breaks Fresh-Project Bootstrap Path~~ *(nemesis)* — FIXED (`2de02bf`)
+Affected code:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-omnichain-deployers-v6 |
-| **File** | `src/JBOmnichainDeployer.sol:741` |
-| **Auditor confidence** | MEDIUM (nemesis verified, PoC) |
-| **My confidence** | **78** |
-| **Known issue?** | No |
+- [JBSuckerLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSuckerLib.sol:224)
+- [JBSuckerLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSuckerLib.sol:266)
+- [REVOwner.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVOwner.sol:176)
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:377)
 
-**Description:** `_launchRulesetsFor` calls `_validateController` which requires `controllerOf(projectId) != address(0)`. But for fresh projects that haven't launched rulesets yet, the controller is zero — the very call that would install it is gated behind a check that it's already installed. Fresh projects can't use the omnichain deployer for their first ruleset launch.
+Why it is real:
 
-**Mitigation:** Allow zero controller in `_validateController` — treat it as "not yet set" rather than "mismatch":
-```solidity
-if (current != address(0) && current != address(controller)) revert;
-```
+- Local revnet accounting correctly treats active loans as part of the economic state: `REVLoans._borrowableAmountFrom(...)` adds local outstanding debt back into surplus and local burned loan collateral back into supply before running the bonding curve.
+- Cross-chain snapshots do not carry that same loan state. `JBSuckerLib.buildSnapshotMessage(...)` only exports the visible `totalTokenSupplyWithReservedTokensOf(...)`, terminal surplus, and terminal balance from the source chain.
+- `REVOwner.beforeCashOutRecordedWith(...)` and `REVLoans._borrowableAmountFrom(...)` then build their omnichain curve from `remoteTotalSupplyOf(...)` and `remoteSurplusOf(...)` alone.
+- If another chain has active loans, its visible supply is lower because collateral was burned there, and its visible terminal surplus is lower because borrowed funds left the treasury there. Those omissions are not neutral in the bonding curve. The remote chain's burned collateral and outstanding debt should both still participate in omnichain pricing, just like the local chain's loan state does.
 
-admin note: why is the _validateController thing currently there? what purpose does it currently serve? if none, remove it. make sure this is well tested.
+Impact:
 
-**Investigation result:** `_validateController` serves a real security purpose. The JBOmnichainDeployer is the `OMNICHAIN_RULESET_OPERATOR`, which gets unconditional permission bypass in JBController. Without this check, an authorized operator could pass a fake controller that returns arbitrary rulesetIds, corrupting the deployer's internal `_tiered721HookOf` and `_extraDataHookOf` mappings. **Keep the check, but allow address(0)** for the fresh-project case only: `if (current != address(0) && current != address(controller)) revert;`. This preserves the security check for existing projects while unblocking fresh-project bootstrap.
+- A holder cashing out on chain A can receive more than the true omnichain curve allows if chain B has outstanding loans, because chain B's loan-collateral supply and loan-backed surplus are missing from chain A's pricing inputs.
+- The same omission can overstate `borrowableAmountFrom(...)` on chain A, again bounded only by the local treasury cap.
+- This does not require stale snapshots or bad peers. It happens under otherwise healthy cross-chain operation as soon as one remote chain originates loans.
 
-*Re-confirmed by Nemesis pass 2 (20260421) — NM-001 with PoC at `test/audit/CodexNemesisAudit.t.sol`. Identical root cause and identical fix recommendation.*
+Evidence:
 
----
+- PoC: [revnet-core-v6/test/audit/RemoteLoanStateOmission.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/RemoteLoanStateOmission.t.sol:1)
+- Supporting proof: [revnet-core-v6/test/audit/NemesisVerification.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/NemesisVerification.t.sol:27)
+- Regression: [nana-suckers-v6/test/unit/peer_chain_state.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/unit/peer_chain_state.t.sol:1) now covers optional data-hook accounting in outbound snapshots.
+- Regression: [revnet-core-v6/test/audit/LocalLoanStateOmissionCashout.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/LocalLoanStateOmissionCashout.t.sol:1) now covers `REVOwner.peerChainAccountingContextOf(...)`.
 
-### M-15. Existing Projects Cannot Deploy Suckers Through Omnichain Wrapper *(nemesis)*
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-omnichain-deployers-v6 |
-| **File** | `src/JBOmnichainDeployer.sol:150` |
-| **Auditor confidence** | MEDIUM (nemesis verified, PoC) |
-| **My confidence** | **45 — expected behavior, document** |
-| **Known issue?** | Related to Lead 15 |
+- Review and merge the local optional peer-chain accounting patch.
+- `nana-suckers-v6` now augments outbound snapshots with an optional current-ruleset data-hook contribution, and `revnet-core-v6` exposes that contribution as hidden supply plus local burned loan collateral for `sourceTotalSupply`, and outstanding local loan debt for `sourceSurplus`.
+- Keep the existing deploy-time ETH/native identity feed checks, because revnet loan debt is converted into the sucker snapshot's ETH-denominated surplus.
 
-**Description:** `deploySuckersFor` checks `DEPLOY_SUCKERS` for the external caller, then calls `JBSuckerRegistry.deploySuckersFor` which re-checks the permission for `address(this)` (the deployer contract). Initial launches work because the deployer temporarily owns the project NFT. For existing projects, the call fails unless the deployer contract was separately granted `DEPLOY_SUCKERS`.
+### 23. `nana-suckers-v6` + `revnet-core-v6`: later same-block remote snapshots cannot refresh shared omnichain state
 
-**Mitigation:** Either make the end user the downstream caller, bootstrap a documented per-project `DEPLOY_SUCKERS` grant to the deployer, or add a trusted-wrapper path in the registry.
+Severity: `MED`
 
-admin note: this is expected, the deployer contract needs to be granted this permission separately. make sure this is documented in USER JOURNEYS.
+Status: locally mitigated in `nana-suckers-v6/src/JBSucker.sol`; retained here until the patch is reviewed and merged.
 
-*Re-confirmed by Nemesis pass 2 (20260421) — NM-002 with PoC. Also re-confirmed by Pashov pass 2 (croptop-core-v6 [75] "Owner-facing `deploySuckersFor` helper cannot satisfy the registry permission check") — same wrapper-permission pattern in CTDeployer.*
+Affected code:
 
----
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:403)
+- [REVOwner.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVOwner.sol:176)
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:377)
 
-### M-16. ~~Fee-Project Deployment Hard-Reverts on Replay~~ *(nemesis)* — FIXED (`24121fb`)
+Why it is real:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-fee-project-deployer-v6 |
-| **File** | `script/Deploy.s.sol:96-97` |
-| **Auditor confidence** | MEDIUM (nemesis verified, PoC) |
-| **My confidence** | **72** |
-| **Known issue?** | No |
+- `JBSucker.fromRemote(...)` accepts per-token inbox roots by nonce, but it updates the shared peer-chain supply/surplus/balance snapshot only when `root.sourceTimestamp > snapshotTimestamp`.
+- `sourceTimestamp` is just the source chain's `block.timestamp`, so every snapshot created in the same source block has the same freshness key even if the underlying remote economic state changed between sends.
+- That means the first same-block snapshot to arrive pins the shared state, and any later snapshot from that same block is unable to refresh it, even with a higher per-token nonce and newer real treasury/supply values.
+- `REVOwner` and `REVLoans` consume this shared state directly for cross-chain cash-out and borrowing math.
 
-**Description:** The deploy script unconditionally calls `revnet.basic_deployer.deployFor(projectId=1, ...)` on every run. After the first successful deployment, the caller is no longer the project owner, so `REVDeployer` reverts on the ownership check. Resume and replay flows are not safe.
+Impact:
 
-**Mitigation:** Check if the controller is already set before attempting deployment:
-```solidity
-if (address(core.controller.DIRECTORY().controllerOf(feeProjectId)) != address(0)) return;
-```
+- A revnet that bridges more than once in the same source block can leave remote peers stuck on whichever same-block snapshot landed first instead of the latest real state.
+- The stale values can persist until a later bridge message is sent from a strictly newer block timestamp; if no later bridge occurs, the stale omnichain pricing can last indefinitely.
+- Cash-outs and loan quotes on the remote chain can therefore use materially stale supply/surplus inputs under normal operation, without requiring deprecated suckers or broken peers.
 
-admin note: if you're confident there are no tradeoffs, fix it.
+Evidence:
 
----
+- PoC: [nana-suckers-v6/test/audit/SameTimestampSnapshotPinned.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/SameTimestampSnapshotPinned.t.sol:1)
+- Regression: [nana-suckers-v6/test/unit/peer_chain_state.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/unit/peer_chain_state.t.sol:1) now covers monotonic same-block outbound snapshot freshness.
 
-### M-17. ~~Distributor Controller-Path Overcredits Fee-On-Transfer Tokens~~ *(nemesis — promotes Lead 24)* — FIXED (`9918cd6`)
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JBTokenDistributor.sol:72`, `src/JB721Distributor.sol:77` |
-| **Auditor confidence** | MEDIUM (nemesis verified, PoC) |
-| **My confidence** | **78** |
-| **Known issue?** | Pashov flagged as lead |
+- Review and merge the local source-freshness patch.
+- Outbound snapshots now use a monotonic per-sucker source freshness key in the existing `sourceTimestamp` field, so multiple roots sent in the same source block no longer share the same shared-state freshness boundary.
+- Keep message-layout compatibility tests in place because the field name is retained for ABI compatibility even though it now acts as a freshness key.
 
-**Description:** The terminal split path uses balance deltas for accounting, but the controller pre-send path trusts `context.amount`. For fee-on-transfer tokens, the distributor receives less than the nominal amount but books the full value. Later `collectVestedRewards` reverts because the real balance is short.
+### 24. `revnet-core-v6`: cash-out pricing ignores local outstanding loan debt and burned loan collateral
 
-**Mitigation:** Use balance-delta accounting in the controller path too, or reject controller-prepaid flows for transfer-tax tokens.
+Severity: `MED`
 
-admin note: fix it, and make sure this is well tested with fork tests..
+Status: locally mitigated in `revnet-core-v6/src/REVOwner.sol`; retained here until the patch is reviewed and merged.
 
-*Re-confirmed by Pashov pass 2 (20260421) — [90] "Controller-funded split callbacks strand ERC20 rewards". Same root cause: `balanceBefore` read after transfer already landed, credited delta is zero.*
+Affected code:
 
----
+- [REVOwner.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVOwner.sol:176)
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:360)
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:377)
 
-### M-18. ~~Verify Script Doesn't Model No-Uniswap and Tempo Deployments Correctly~~ *(nemesis)* — FIXED (`c4521cc`)
+Why it is real:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 |
-| **File** | `script/Verify.s.sol` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **70** |
-| **Known issue?** | Related to Lead 21 |
+- `REVLoans._borrowableAmountFrom(...)` explicitly treats active local loans as part of the revnet's economic state: it adds `totalCollateralOf[revnetId]` back into supply and `_totalBorrowedFrom(...)` back into surplus before running the bonding curve.
+- `REVOwner.beforeCashOutRecordedWith(...)` does not mirror that adjustment. It prices ordinary cash-outs from the terminal-provided visible `context.totalSupply` and visible `context.surplus.value`, then only adds remote registry values on top.
+- Once a loan is opened, the local treasury has less visible surplus because funds left through `useAllowanceOf(...)`, and the local token supply is lower because the collateral tokens were burned. Those omissions are not neutral in the cash-out curve.
+- The live PoC shows the consequence with two equal holders: the attacker opens a loan against half their stack, then cashes out their remaining visible tranche. The quoted cash-out is larger than the corrected curve that includes the same local debt and collateral state the loans contract already treats as economic reality.
 
-**Description:** `Verify.s.sol` uses different branch predicates than `Deploy.s.sol`. It treats "no router terminal" as "only projects 1-2 exist", treats "buyback registry exists" as "all projects must be wired", and treats ETH/NATIVE as an identity feed on every chain. These assumptions are violated on no-Uniswap and Tempo branches, causing valid deployments to fail certification.
+Impact:
 
-**Mitigation:** Centralize feature detection around the same branch logic used in `Deploy`; add Tempo-aware price-feed verification.
+- This is a real cross-holder extraction path, not just an accounting mismatch. A borrower can pull out more cash-out value than their post-loan visible tranche should receive, leaving the remaining holders with a reduced treasury while the outstanding loan still exists.
+- It does not require cross-chain state, deprecated suckers, or privileged roles. Any holder with enough balance to collateralize a loan can use the single-chain loan flow and then immediately cash out against the under-counted denominator.
+- The hidden-token finding covers balances voluntarily burned into the hidden-token helper. This issue is separate: even without hidden tokens, the ordinary live loan system already creates burned collateral and outstanding debt that `REVOwner` forgets during cash-outs.
 
-admin note: fix is if you're sure no tradeoffs.
+Evidence:
 
----
+- PoC: [revnet-core-v6/test/audit/LocalLoanStateOmissionCashout.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/LocalLoanStateOmissionCashout.t.sol:1)
 
-### M-19. ~~Tempo Defifa Deployments Created With Null Typeface~~ *(nemesis — promotes Lead 23)* — FIXED (`c4521cc`)
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 |
-| **File** | `script/Deploy.s.sol:2625` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **75** |
-| **Known issue?** | Pashov flagged as lead |
+- Make `REVOwner.beforeCashOutRecordedWith(...)` include local outstanding loan debt in effective surplus and local burned loan collateral in total supply before running any cash-out or buyback-routing math.
+- The local cash-out curve should consume the same economic state that `REVLoans` already uses for local borrow pricing. If revnet cash-outs are meant to stay fee-free or route differently for specific callers, that should only change fees and routing, not the denominator itself.
+- The local patch mirrors `REVLoans` source iteration and decimal/currency normalization in `REVOwner`, adds `totalCollateralOf[revnetId]` to the local cash-out denominator, and adds converted local outstanding debt to effective surplus before buyback routing and fee calculations.
 
-**Description:** Tempo chains set `_typeface = address(0)` but still deploy `DefifaTokenUriResolver(ITypeface(_typeface))`. The resolver stores `TYPEFACE` immutably and unconditionally calls `sourceOf(...)` on it during metadata generation. Every `tokenURI()` call on Tempo Defifa NFTs reverts.
+### 25. `nana-suckers-v6`: failed CCIP excess-payment refunds permanently strand ETH while overstating claimable native balance
 
-**Mitigation:** Skip Defifa deployment on chains without a live `Typeface`, or require a non-zero `Typeface` address before deploying the resolver.
+Severity: `LOW`
 
-admi note: yes, skip.
+Status: locally mitigated in `nana-suckers-v6/src/JBSucker.sol`, `nana-suckers-v6/src/JBCCIPSucker.sol`, and `nana-suckers-v6/src/JBSwapCCIPSucker.sol`; retained here until the patch is reviewed and merged.
 
----
+Affected code:
 
-### M-20. ~~Tempo Moderato USDC Address Is Zero — Bricks Deployment~~ *(lead investigation — promotes Lead 22)* — FIXED (`c4521cc`)
+- [JBCCIPLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBCCIPLib.sol:147)
+- [JBCCIPSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBCCIPSucker.sol:238)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:709)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:853)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 |
-| **File** | `script/Deploy.s.sol:1841-1848` |
-| **Auditor confidence** | Lead (promoted after investigation) |
-| **My confidence** | **80** |
-| **Known issue?** | Flagged as lead |
+Why it is real:
 
-**Description:** The deploy script sets `_usdc = address(0)` on Tempo Moderato (`chainId == 978658`). This propagates into `_setupPriceFeeds()` which calls `PRICES.addPriceFeedFor(projectId: 0, pricingCurrency: uint32(uint160(address(0))), unitCurrency: …, feed: …)`. `JBPrices.addPriceFeedFor` reverts with `JBPrices_ZeroUnitCurrency` when either currency parameter resolves to zero. The entire deployment transaction reverts.
+- `JBCCIPLib.sendCCIPMessage(...)` refunds `transportPayment - fees` with a low-level ETH call after `ccipSend(...)` succeeds. If the refund recipient cannot receive ETH, the library only reports `refundFailed = true` and leaves the excess ETH on the sucker.
+- `JBCCIPSucker._sendRootOverAMB(...)` treats that as best-effort and only emits `TransportPaymentRefundFailed(...)`. There is no retry path and no sweep path for the retained ETH.
+- The unpatched implementation did not track failed CCIP refund residue separately; `JBSucker.amountToAddToBalanceOf(JBConstants.NATIVE_TOKEN)` counted any native balance above `outbox.balance` as addable.
+- The live PoC showed that later native claims still only forwarded their own proved `terminalTokenAmount`, so the failed-refund residue remained stuck after ordinary claim settlement instead of being naturally flushed.
+- The local patch records failed native CCIP transport-payment refunds as caller-scoped credit, excludes the retained total from native add-to-balance accounting, and lets the original caller claim the retained refund to any payable beneficiary.
 
-**Mitigation:** Either assign a valid USDC address for Tempo Moderato, or skip USDC-related price feed setup on chains where USDC is not yet deployed (same pattern as no-Uniswap branches).
+Impact:
 
----
+- Any non-payable caller, reverting refund recipient, or wrapper contract with a failing receive path can permanently strand arbitrary excess transport ETH in a CCIP sucker after an otherwise successful bridge send.
+- This is worse than the `toRemoteFee` path operationally because the retained amount is not capped by `MAX_TO_REMOTE_FEE`; it scales with however much excess `transportPayment` the caller supplied above the actual CCIP fee.
+- I did not find a theft path from this residue. The issue is stranded user value plus misleading native-balance accounting.
 
-### M-21. One-Tier Defifa Games Are Launchable But Can Never Complete Governance *(nemesis)*
+Evidence:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | defifa |
-| **File** | `src/DefifaDeployer.sol:454` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **72** |
-| **Known issue?** | No |
+- PoC: [nana-suckers-v6/test/audit/FeeLocking.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/FeeLocking.t.sol:272)
 
-**Description:** `launchGameWith()` permits single-tier games. The only valid scorecard for a one-tier game gives that tier 100% of `TOTAL_CASHOUT_WEIGHT`. But the BWA (beneficiary-weighted attestation) model zeroes the attestation weight for holders of a tier that receives 100% — the sole tier's holders get `weight == 0` and `attestToScorecardFrom` reverts. No attestations can accumulate, quorum is unreachable, and the game can only exit via timeout/no-contest. Funds are locked until the no-contest path is triggered.
+Recommended fix:
 
-**Investigation:** Confirmed: when `scorecardTimeout > 0`, one-tier games fall through to NO_CONTEST correctly — `triggerNoContestFor()` is permissionless, queues a refund ruleset with `cashOutTaxRate: 0`, and players recover their exact mint price. However, if `scorecardTimeout = 0`, the timeout check is disabled and funds are permanently locked with no exit path. No validation prevents this misconfiguration.
+- Review and merge the local retained-transport-refund patch. It mirrors the retained `toRemoteFee` pattern with `retainedTransportPaymentRefundOf`, `retainedTransportPaymentRefundBalance`, `claimRetainedTransportPaymentRefund(...)`, and retained-refund events.
+- Keep retained transport-payment refunds out of `amountToAddToBalanceOf(JBConstants.NATIVE_TOKEN)` unless a future ordinary claim path can actually forward them safely.
 
-**Mitigation:** Document one-tier no-contest behavior in RISKS.md. Consider also validating that `scorecardTimeout > 0` when tier count is 1.
+### 26. `revnet-core-v6`: the revnet configuration hash used for omnichain sucker identity previously omitted split-operator authority, reserved split routing, and custom ruleset policy bits
 
-admin note: one tier games ending in no contest is fine. document in RISKS.md. the scorecardTimeout=0 edge case is worth noting.
+Severity: `MED`
 
----
+Status: locally mitigated in `revnet-core-v6/src/REVDeployer.sol`; retained here until the patch is reviewed and merged.
 
-### M-22. Migration Verification Skips All Owners For Tiers With Fallback-Resolver Balance — WON'T FIX, NOTED *(nemesis — promotes Lead 17)*
+Affected code:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | banny-retail-v6 |
-| **File** | `script/helpers/MigrationHelper.sol:93` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **68** |
-| **Known issue?** | Flagged as lead |
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:628)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:914)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:952)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:1019)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:1034)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:1089)
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:510)
+- [JBSuckerDeployer.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/deployers/JBSuckerDeployer.sol:160)
 
-**Description:** `verifyTierBalances()` checks if the V4 fallback resolver owns any token of a tier, and if so, `continue`s past the entire tier without comparing any individual owner's V5 balance to their V4 balance. An owner over-credited for that tier in V5 passes migration verification silently. The nemesis PoC shows Alice with V5 balance `2` vs V4 balance `1` passes verification when the fallback resolver holds any token of that tier.
+Why it is real:
 
-**Mitigation:** Split verification into (1) aggregate tier conservation and (2) per-owner redistribution accounting that deducts fallback-held tokens from the allowed delta rather than skipping the entire tier.
+- In the unpatched implementation, `_makeRulesetConfigurations(...)` built `encodedConfigurationHash` from base currency, name, ticker, description salt, terminal addresses, selected stage timing/economic fields, and auto-issuances, then stored it as `hashedEncodedConfigurationOf[revnetId]`.
+- That encoding omitted several fields that materially change the deployed revnet: `configuration.splitOperator`, `stageConfiguration.splits`, and `stageConfiguration.extraMetadata`.
+- The same hash is reused as the revnet's sucker-identity commitment: `deployFor(...)` and `deploySuckersFor(...)` feed it into `_deploySuckersFor(...)`, which feeds it into the registry salt, which feeds it into the deployer salt before the CREATE2 clone is created.
+- `localProjectId` is only passed to `initialize(...)` after clone deployment, so it does not rescue the identity commitment. If the caller and explicit deployment salt match across chains, two materially different revnets can line up behind the same cross-chain sucker address scheme unless the configuration hash commits to those differences.
+- The local patch adds `configuration.splitOperator`, `stageConfiguration.extraMetadata`, the reserved split count, and each reserved split's routing fields to the encoded configuration before hashing.
+- The prior collision PoCs have been converted into regressions proving that split-operator, reserved-split, and extra-metadata differences now change `hashedEncodedConfigurationOf(...)`.
 
-*Re-confirmed by Nemesis pass 2 (20260421) — NM-001 with PoC at `test/audit/MigrationHelperVerificationBypass.t.sol`. Also re-surfaced as Pashov pass 2 lead: "Migration verification can skip over-allocated owners for an entire tier".*
+Impact:
 
-Admin note: dont touch migration script.
+- Cross-chain operators and tooling can treat materially different revnets as having the "same configuration" and pair them through the omnichain sucker path.
+- A remote expansion can preserve the expected peer identity while changing who controls split-operator powers, where reserved issuance is routed, or whether future sucker deployment is allowed.
+- This breaks the intended equivalence guarantee behind omnichain revnet pairing. The peer-auth and shared-accounting layer can be established between revnets that are not actually the same product.
 
----
+Evidence:
 
-### M-23. ~~Default Registry Topology Bricks Routered Payments~~ *(Pashov pass 2)* — FIXED (`5b42a87`)
+- Regression: [WeakConfigurationHash.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/audit/WeakConfigurationHash.t.sol:17)
+- Regression: [TestTerminalEncodingInHash.t.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/test/TestTerminalEncodingInHash.t.sol:170)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBRouterTerminal.sol` (_usablePrimaryTerminalOf) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+Recommended fix:
 
-**Description:** The shipped deployment wires `JBRouterTerminalRegistry` to forward to `JBRouterTerminal`, but the router rejects any destination terminal whose `terminalOf(projectId)` resolves back to itself. Projects pointed at the registry cannot be previewed or paid through the default route — the self-loop check fires because the registry's resolution chain terminates at the router.
+- Review and merge the local configuration-hash expansion.
+- Treat future `REVConfig` / `REVStageConfig` fields as identity-affecting by default unless they are explicitly documented as chain-local and deliberately excluded from cross-chain revnet equivalence.
 
-**Mitigation:** Distinguish between the registry forwarding to the router (expected) and the router forwarding to itself (cycle):
-```diff
-- if (ok && data.length >= 32 && address(abi.decode(data, (IJBTerminal))) == address(this)) {
--     return IJBTerminal(address(0));
-- }
-+ if (
-+     ok && data.length >= 32 && address(terminal) != address(DIRECTORY.primaryTerminalOf(projectId, token))
-+         && address(abi.decode(data, (IJBTerminal))) == address(this)
-+ ) {
-+     return IJBTerminal(address(0));
-+ }
-```
+### 27. `nana-suckers-v6`: default peer authentication also depends on identical deployment topology, so matching salts still fail when registry or deployer addresses drift
 
----
+Severity: `MED`
 
-### ~~M-24. Empty-Post Metadata Shadowing Bypasses Croptop Fees~~ — FIXED (`7a8d3ad`) *(Pashov pass 2)*
+Status: locally mitigated in `nana-suckers-v6`; retained here until the patch is reviewed, packaged, and consumed by the deployment repos.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | croptop-core-v6 |
-| **File** | `src/CTPublisher.sol` (mintFrom) |
-| **Auditor confidence** | 95 |
-| **My confidence** | **95 — VERIFIED** |
-| **Known issue?** | No |
+Affected code:
 
-**Description:** `mintFrom` charges the fee from `totalPrice` derived only from `posts`, so an attacker can pass `posts = []` and preload the same pay-metadata id in `additionalPayMetadata` to mint existing tiers while routing the full payment with zero Croptop fee.
+- [JBSuckerDeployerConfig.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/structs/JBSuckerDeployerConfig.sol:11)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:747)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:847)
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:502)
+- [JBSuckerDeployer.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/deployers/JBSuckerDeployer.sol:147)
+- [JBSuckerDeployer.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/deployers/JBSuckerDeployer.sol:168)
+- [JBOptimismSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBOptimismSucker.sol:78)
 
-**Mitigation:** Reject empty posts and/or check that `additionalPayMetadata` does not already contain the hook's metadata ID:
-```solidity
-if (posts.length == 0) revert();
-(bool found,) = JBMetadataResolver.getDataFor(
-    JBMetadataResolver.getId({purpose: "pay", target: hook.METADATA_ID_TARGET()}), additionalPayMetadata
-);
-if (found) revert();
-```
+Why it is real:
 
-Admin note: fix it, make sure its well tested.
+- The default peer model is `peer() == address(this)`. That means cross-chain peers only authenticate correctly if the sucker clone lands at the same address on every chain.
+- Matching user salts are not enough. The clone address also depends on the deployer address and singleton topology that sit underneath `cloneDeterministic(...)`.
+- The live `PeerTopologyAuthBreak` PoC shows that direct deployer calls with the same caller and same explicit salt still yield different sucker addresses when the deployment topology differs.
+- The live `RegistryPeerAuthBreak` PoC shows the same failure one layer higher: deploying through different registry addresses produces different clone addresses, and bridge authentication then rejects the real remote sucker as a non-peer.
+- `localProjectId` is only supplied after the clone already exists, during `initialize(...)`, so project identity does not help stabilize the CREATE2 address.
+- The local patch makes `peer` a required member of `JBSuckerDeployerConfig`, threads it through `JBSuckerRegistry.deploySuckersFor(...)` and `IJBSuckerDeployer.createForSender(...)`, and initializes each clone with the explicit remote peer. `bytes32(0)` still opts into the same-address deterministic default.
+- The regression coverage now proves both sides of the envelope: default zero-peer deployments still fail when the topology differs, while the same divergent topology accepts bridge messages once each sucker is initialized with its counterpart's explicit address.
 
-**Resolution:** FIXED — Added `if (posts.length == 0) revert CTPublisher_NoPosts()` at the start of `mintFrom`. Test: `test/audit/EmptyPostFeeBypass.t.sol`.
+Impact:
 
----
+- Cross-chain deployments are not determined solely by project config, explicit salt, and caller. They also require strict address symmetry across the registry / deployer / singleton stack.
+- If one chain's topology drifts, default peer authentication hard-reverts legitimate bridge messages and the omnichain path is unusable until operators add explicit peer wiring or redeploy around the mismatch.
+- This makes the default same-address peer assumption much more fragile than it appears from the user-facing deployment API.
 
-### ~~M-25. Deployer Configuration Accepts Broken Bridge Tuples~~ — FIXED (`8509f39`) *(Nemesis pass 2)*
+Evidence:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/deployers/JBOptimismSuckerDeployer.sol:49-78`, `src/deployers/JBArbitrumSuckerDeployer.sol:51-82` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **85 — VERIFIED** |
-| **Known issue?** | No |
+- PoC: [nana-suckers-v6/test/audit/PeerTopologyAuthBreak.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/PeerTopologyAuthBreak.t.sol:1)
+- PoC: [nana-suckers-v6/test/audit/RegistryPeerAuthBreak.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/RegistryPeerAuthBreak.t.sol:1)
 
-**Description:** `setChainSpecificConstants` writes each field in the bridge tuple independently, but `_layerSpecificConfigurationIsSet()` uses OR logic — it returns `true` when *any* field is nonzero. A configurator that sets only `opMessenger` (missing `opBridge`) or only part of the Arbitrum tuple can successfully call `configureSingleton()`. The singleton constructor snapshots zero transport addresses into immutables. The registry can then allowlist and deploy a sucker whose message delivery or auth will silently fail.
+Recommended fix:
 
-**Mitigation:** Use AND logic in the configuration checks:
-```solidity
-// Optimism:
-function _layerSpecificConfigurationIsSet() internal view override returns (bool) {
-    return address(opMessenger) != address(0) && address(opBridge) != address(0);
-}
-// Arbitrum:
-function _layerSpecificConfigurationIsSet() internal view override returns (bool) {
-    if (arbLayer == JBLayer.L1) return address(arbInbox) != address(0) && address(arbGatewayRouter) != address(0);
-    if (arbLayer == JBLayer.L2) return address(arbGatewayRouter) != address(0);
-    return false;
-}
-```
+- Review and merge the local explicit-peer patch in `nana-suckers-v6`.
+- `deploy-all-v6` now consumes the patched sibling working-copy packages through `file:../...` dependencies and explicit remappings, which prevents npm from silently resolving published tarballs with stale ABI surfaces during the immutable deployment run.
+- If the deployment workflow moves back to registry packages, publish fresh package versions for every locally patched repo first, then regenerate `deploy-all-v6/package-lock.json` from those new tarballs and rerun `forge build`.
+- For deterministic same-address deployments, pass `peer: bytes32(0)` and verify the registry / deployer / singleton topology is identical across chains before enabling bridge traffic.
+- For any topology that intentionally differs, precompute each counterpart address and pass the nonzero `peer` explicitly on both sides.
 
-Admin note: fix if you're confident. make sure you're confident and there are no tradeoffs.
+### 28. `nana-suckers-v6`: pool discovery can divert cross-chain batches from a live V3 TWAP pool into a hookless V4 spot pool on a one-wei liquidity edge
 
-**Resolution:** FIXED in commit `8509f39` — `||` changed to `&&` in `JBOptimismSuckerDeployer._layerSpecificConfigurationIsSet()`. Already in code, missed during earlier verification.
+Severity: `MED`
 
----
+Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`; retained here until the patch is reviewed and merged.
 
-### ~~M-26. Credit Cashout Preferred-Token Short-Circuit Spends Stray Router Balances~~ — FIXED (`d387e4e`) *(promotes Lead 29)*
+Affected code:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBRouterTerminal.sol:1182-1193` (`_cashOutLoop`) |
-| **Auditor confidence** | 90 (Pashov) |
-| **My confidence** | **80 — VERIFIED, conditional** |
-| **Known issue?** | No |
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:426)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:449)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:560)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:606)
+- [JBSwapCCIPSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSwapCCIPSucker.sol:582)
+- [JBSwapCCIPSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSwapCCIPSucker.sol:639)
+- [RISKS.md](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/RISKS.md:143)
 
-**Description:** In `_cashOutLoop`, the preferred-token early return (lines 1182-1193) fires *before* calling `cashOutTokensOf` on any terminal. When a user holds only credits (no ERC-20 tokens) and the router happens to hold stray ETH (from a prior failed transfer, accidental send, etc.), the credit count is used as the token amount in the return value. The caller receives stray ETH that doesn't correspond to an actual cashout redemption, while the credits remain unburned and the terminal's accounting is unchanged.
+Why it is real:
 
-**Impact:** Conditional fund loss — requires stray native token in the router contract. When triggered, credits are effectively free-loaded with unaccounted ETH. MEDIUM because the precondition (stray ETH) is uncommon but possible.
+- `JBSwapCCIPSucker` intentionally owns the slippage floor itself because each swap sets the conversion rate for every claimer in the batch, not just the caller.
+- `JBSwapPoolLib._discoverV4Pool(...)` probes hookless V4 pools first and then simply keeps whichever V4 or V3 pool has the highest current in-range liquidity.
+- That ranking does not distinguish between a V3 pool with a built-in TWAP oracle and a hookless V4 pool whose quote falls back to the current spot tick.
+- `_getV4Quote(...)` only uses a TWAP when the selected V4 pool has a working oracle hook. For hookless pools it explicitly falls back to `POOL_MANAGER.getSlot0(...)` spot pricing.
+- The accepted risk in [RISKS.md](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/RISKS.md:143) is narrower: it accepts spot fallback when no TWAP-capable alternative exists. The live issue here is that a hookless V4 pool can outrank an already-live V3 TWAP pool on a trivial current-liquidity edge, so the safer oracle-backed route is skipped even though it exists.
+- The local patch makes hookless V4 spot a last-resort route: it can be selected only when no TWAP-capable V3 or V4 route is available.
 
-**Mitigation:** Skip the preferred-token early return when the credit balance is nonzero and no terminal cashout has occurred:
-```diff
-- if (preferredToken != address(0) && address(this).balance >= creditBalance) {
--     return (creditBalance, preferredToken);
-- }
-+ // Only short-circuit if credits were actually cashed out via a terminal
-```
+Impact:
 
-admin not: make sure you're confident in the fix, fix it, make sure its well tested.
+- An attacker can JIT-fund or initialize a toxic hookless V4 pool with only slightly more in-range liquidity than the honest V3 pool and force outbound sends, inbound receives, and retry swaps through manipulable spot pricing.
+- Because the selected swap output sets the batch-wide bridge conversion rate, this is not just per-user slippage. One manipulated batch can haircut every claimer whose leaf settles through that bridge amount.
+- The dynamic slippage model still runs, but it runs on the manipulated spot baseline once the hookless V4 pool has won discovery.
 
-**Resolution:** FIXED — Gated the preferred-token short-circuit on `sourceProjectIdOverride == 0` at line 1182, matching the existing gate at line 1196. Test: `test/audit/CreditCashoutPreferredTokenBypass.t.sol`.
+Evidence:
 
----
+- Regression: [nana-suckers-v6/test/audit/HooklessV4LiquidityOverride.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/HooklessV4LiquidityOverride.t.sol:1)
 
-### M-27. Sell-Side Cash-Out Routing Bypasses Terminal Fee Meter — Accepted risk *(pass 3 nemesis)*
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-buyback-hook-v6 |
-| **File** | `src/JBBuybackHook.sol:747,751,777` |
-| **Auditor confidence** | MEDIUM (nemesis verified) |
-| **My confidence** | **Accepted — by design** |
-| **Known issue?** | By design |
+- Review and merge the local route-quality patch.
+- Keep hookless V4 spot fallback strictly behind TWAP-capable V3 and hooked V4 routes.
 
-**Description:** On the sell route, `beforeCashOutRecordedWith` hardcodes `hookSpecifications[0].amount = 0` and returns `effectiveSurplusValue = 0` with max tax rate. `JBMultiTerminal` only fees the direct `reclaimAmount` and forwarded hook amounts — both zero. The hook then remints project tokens, sells on AMM, and transfers proceeds directly to the beneficiary. `_takeFeeFrom(...)` sees nothing feeable. Holders can exit through the sell path without paying the normal cash-out fee.
+### 29. `nana-suckers-v6`: outbound snapshots trust `terminals[0]` as the aggregate treasury view, so a slot-zero forwarding terminal can zero later real surplus and balances
 
-**Recommended fix:** Set the hook specification amount to the expected sell output so the terminal can meter fees:
-```solidity
-hookSpecifications[0] = JBCashOutHookSpecification({
-    hook: IJBCashOutHook(address(this)),
-    noop: noop,
-    amount: minimumSwapAmountOut, // feed into fee meter
-    metadata: ...
-});
-```
-Alternatively, have the terminal receive swap proceeds and apply `_takeFeeFrom(...)` before forwarding to the beneficiary.
+Severity: `MED`
 
-admin note: ok, is there any tradeoff to the recommended fix? i wonder if this is related? https://github.com/Bananapus/version-6/issues/73
+Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSuckerLib.sol`; retained here until the patch is reviewed and merged.
 
-**Resolution:** Accepted — Fees apply only to actual terminal cashouts, not AMM swap proceeds. The hook's `amount: 0` intentionally avoids terminal fee metering on swap output. Documented in RISKS.md.
+Affected code:
 
----
+- [JBSuckerLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSuckerLib.sol:69)
+- [JBSuckerLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSuckerLib.sol:79)
+- [JBSuckerLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSuckerLib.sol:91)
+- [JBDirectory.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBDirectory.sol:212)
+- [JBDirectory.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBDirectory.sol:304)
+- [JBRouterTerminalRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminalRegistry.sol:159)
 
-### M-28. `deploySuckersFor` Unusable After Ownership Transfer — Accepted risk *(pass 3 nemesis, corroborated by pashov)*
+Why it is real:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | croptop-core-v6 |
-| **File** | `src/CTDeployer.sol:268,275,282` |
-| **Auditor confidence** | MEDIUM (nemesis verified, PoC) |
-| **My confidence** | **Accepted — by design** |
-| **Known issue?** | Promotes Lead 15 |
+- `JBSuckerLib._buildETHAggregateInternal(...)` asks `directory.terminalsOf(projectId)` for the raw terminal list, then treats `terminals[0]` as the project-wide aggregate source for surplus.
+- It next assumes that same `terminals[0]` is `JBMultiTerminal`-compatible and can provide a `STORE()` for price and balance reads. If that `STORE()` lookup fails, the function returns immediately with `(ethSurplus, 0)` before it ever inspects the later terminals in the list.
+- That assumption is false for valid forwarding wrappers. `JBRouterTerminalRegistry` is a live example: it is a valid terminal entry, but its `currentSurplusOf(...)` is an explicit zero stub because it only forwards, and it does not expose `STORE()`.
+- `JBDirectory.setTerminalsOf(...)` stores the project terminal list exactly as provided, and `terminalsOf(...)` returns that raw ordering. A project owner or controller can therefore put a forwarding layer first even while the real treasury terminal remains later in the list.
+- The live PoC proves the failure mode: with a zero-surplus forwarding terminal in slot zero and a real later terminal mocked to hold `40 ETH` surplus and `70 ETH` balance, `toRemote(...)` still exports `sourceSurplus = 0` and `sourceBalance = 0`.
 
-**Description:** `CTDeployer.deploySuckersFor` validates the external caller as project owner, then forwards to `JBSuckerRegistry.deploySuckersFor`. The registry re-checks `DEPLOY_SUCKERS` permission against its own `msg.sender` — which is `CTDeployer`, not the owner. Unless the project separately grants `DEPLOY_SUCKERS` to `CTDeployer`, the helper reverts.
+Impact:
 
-**PoC:** `test/audit/CodexNemesisPoCs.t.sol` — `test_deploySuckersHelperBreaksAfterOwnershipTransferBecauseRegistrySeesCtDeployerAsCaller` passes.
+- A project can send materially false outbound treasury snapshots even while later terminals hold real value.
+- On revnets, remote `REVOwner` and `REVLoans` consumers price omnichain cash-outs and loans from this exported remote state, so slot-zero forwarding terminals can economically grief remote holders by forcing undercounted remote surplus and balances into the curve.
+- The issue is distinct from stale-snapshot bugs: the bad state can be created immediately from terminal ordering alone and then propagated as the freshest snapshot.
 
-**Recommended fix:** Either (A) remove the wrapper and instruct owners to call the registry directly, (B) make the registry entrypoint accept an `onBehalfOf` caller parameter, or (C) have `CTDeployer` retain `DEPLOY_SUCKERS` permission and document this requirement.
+Evidence:
 
-admin note: this is ok, once ownership is transfered, the new owner is reponsible for deploySuckersFor on their own. make sure this is documented in the repo's relevant .md docs.
+- PoC: [nana-suckers-v6/test/audit/RegistryFirstTerminalSnapshotGap.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/RegistryFirstTerminalSnapshotGap.t.sol:1)
+- Regression: [nana-suckers-v6/test/unit/peer_chain_state.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/unit/peer_chain_state.t.sol:1) covers the normal outbound snapshot path after terminal scanning.
 
-**Resolution:** Accepted — After ownership transfer, the new owner calls JBSuckerRegistry.deploySuckersFor directly. Documented in RISKS.md.
+Recommended fix:
 
----
+- Review and merge the local terminal-scanning snapshot patch.
+- The patch aggregates surplus across the full terminal list and scans terminals for a usable `STORE()` / `PRICES()` source instead of early-returning on the first wrapper that lacks one.
+- If forwarding wrappers remain valid terminal entries, keep treating them as non-aggregate views rather than as the canonical snapshot anchor.
 
-### ~~M-29. Hardcoded `baseCurrency=ETH` Requires Undeclared Identity Price Feed~~ — NON-ISSUE *(pass 3 nemesis, re-opens H-9/M-13)*
+### 30. `nana-suckers-v6`: even hooked V4 pools can outrank live V3 TWAP pools and then silently fall back to spot when the oracle hook reverts or lacks history
 
-| Field | Value |
-|-------|-------|
-| **Repo** | croptop-core-v6 |
-| **File** | `src/CTDeployer.sol:171` / `script/ConfigureFeeProject.s.sol:231` |
-| **Auditor confidence** | HIGH (nemesis verified, PoC) |
-| **My confidence** | **NON-ISSUE — baseCurrency=1 is correct by design** |
-| **Known issue?** | H-9 and M-13 dismissed as FP |
+Severity: `MED`
 
-**Description:** `CTDeployer` hardcodes `baseCurrency = JBCurrencyIds.ETH` (value 1) while terminals use `currency = uint32(uint160(NATIVE_TOKEN))`. When `_computePayFrom` sees the mismatch, it calls `JBPrices.pricePerUnitOf`, which reverts with `PriceFeedNotFound` if no identity feed exists. Two vectors: (A) fresh Croptop deployments can't publish at all, (B) the fee-project script puts the system into permanent fee-refund mode because the fee-project payment reverts and `CTPublisher` catches the revert and refunds. H-9/M-13 were dismissed because "baseCurrency=1 is correct by design" — but the operational requirement for an identity feed was not addressed.
+Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`; retained here until the patch is reviewed and merged.
 
-**PoC:** `test/audit/CodexNemesisCurrencyPoCs.t.sol` — publishes revert until identity feed installed; fee project balance stays at zero.
+Affected code:
 
-**Recommended fix:** Match `baseCurrency` to the terminal accounting currency:
-```solidity
-rulesetConfigurations[0].metadata.baseCurrency = uint32(uint160(JBConstants.NATIVE_TOKEN));
-```
-If `baseCurrency = ETH (1)` is required by design, then the deployment script must install the identity price feed and fail closed if it's absent.
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:426)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:449)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:588)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:606)
+- [JBSwapCCIPSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSwapCCIPSucker.sol:582)
 
-admin note: we know that baseCurrency should always be a non-token currency, so 1 makes sense here. this is a non issue.
+Why it is real:
 
-**Resolution:** NON-ISSUE — baseCurrency should always be a general currency ID (ETH=1, USD=2), not a token address. Identity price feed handles the domain bridge.
+- V4 pool discovery does not distinguish between a pool that merely has a hook address and a pool whose hook can actually serve a safe TWAP. `_discoverV4Pool(...)` only ranks current liquidity and can therefore select a hooked V4 pool over a live V3 TWAP pool on a trivial liquidity edge.
+- `_getV4Quote(...)` then treats hook TWAP as best-effort. If `observe(...)` reverts because the hook is broken, misconfigured, or simply too new to have the required history, the error is swallowed and the code falls straight back to `poolManager.getSlot0(...)` spot pricing.
+- The live PoC proves the exact route: a hooked V4 pool with only `1 wei` more liquidity than the honest V3 pool wins discovery, its hook deliberately reverts on `observe(...)`, and the batch quote still gets derived from the toxic current spot tick.
+- This is distinct from the hookless-V4 finding. Even if you require a nonzero hook address before V4 can outrank V3, the current code still allows the winning hooked pool to degrade to spot silently.
+- The local patch preflights hooked V4 `observe(...)` during discovery, skips broken hooked V4 pools, and requires hooked V4 quoting to use the hook TWAP instead of silently degrading to spot.
 
----
+Impact:
 
-### ~~M-30. Preview Cash-Out Shortcut Diverges From Execution~~ — FIXED (`9768952`) *(pass 3 pashov)*
+- A project or attacker can bootstrap or temporarily break a V4 oracle hook, keep the hooked pool slightly ahead of V3 on current liquidity, and still force outbound sends, inbound receives, and retry swaps onto spot pricing.
+- Because the selected swap output becomes the batch-wide conversion rate, a single toxic spot fallback can haircut every claimer in that batch instead of only the caller who triggered the swap.
+- The most obvious window is immediately after pool creation, before a 120-second hook TWAP is reliably available, but the issue also applies to any hook outage or revert condition.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBRouterTerminal.sol` (_previewCashOutLoop) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+Evidence:
 
-**Description:** When `cashOutSource` forces a first cash-out hop but preview also sees a preferred destination token, `_previewCashOutLoop` can short-circuit before that hop while `_cashOutLoop` cannot. Route scoring may select a worse path than the user would have chosen with execution-faithful previews.
+- Regression: [nana-suckers-v6/test/audit/HookedV4SpotFallbackOverride.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/HookedV4SpotFallbackOverride.t.sol:1)
 
-**Recommended fix:** Apply the same `sourceProjectIdOverride` gate in `_previewCashOutLoop` as exists in `_cashOutLoop`, so the preview path mirrors execution semantics.
+Recommended fix:
 
-admin note: this seems worth fixing. any tradeoffs?
+- Review and merge the local route-quality patch.
+- Keep broken or too-fresh hooked V4 pools ineligible for TWAP-priority selection, and do not let them fall back to spot once selected as hooked routes.
 
-**Resolution:** FIXED — `_previewCashOutLoop` now gates the entire destination-terminal check behind `if (sourceProjectIdOverride == 0)`, mirroring `_cashOutLoop`. No tradeoffs — preview now matches execution. 3 new tests in `test/audit/PreviewCashOutShortcircuitDivergence.t.sol`. 194 tests pass.
+### 31. `nana-suckers-v6`: a fresh high-liquidity V3 pool can outrank a live fallback route and hard-revert the whole swap on missing TWAP history
 
----
+Severity: `MED`
 
-### ~~M-31. Mixed CREATE2/CREATE Deployments Misregister Hook Provenance~~ — INVALID (finding incorrect) *(pass 3 pashov)*
+Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`; retained here until the patch is reviewed and merged.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-lp-split-hook-v6 |
-| **File** | `src/JBUniswapV4LPSplitHookDeployer.sol` (deployHookFor) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+Affected code:
 
-**Description:** `_nonce` is incremented for both CREATE2 and CREATE deployment paths. After any deterministic (CREATE2) deployment, the first plain CREATE deployment is registered in the address registry under the wrong nonce, pointing to a different address than the actual hook.
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:323)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:361)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:530)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:540)
+- [JBSwapCCIPSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSwapCCIPSucker.sol:582)
 
-**Recommended fix:** Track separate nonces for CREATE and CREATE2 paths, or only increment `_nonce` on the CREATE path (CREATE2 addresses don't depend on nonce).
+Why it is real:
 
-admin note: so why do we need a separate CREATE2 nonce if it doesnt depend on one?
+- `_discoverPool(...)` and `_discoverV3Pool(...)` rank V3 candidates purely by current in-range liquidity across fee tiers. They do not check whether the winning V3 pool has enough oracle history to support `_getV3TwapQuote(...)`.
+- `_getV3TwapQuote(...)` later enforces a hard minimum history window of 120 seconds by calling `OracleLibrary.getOldestObservationSecondsAgo(...)` and reverting with `JBSwapPoolLib_InsufficientTwapHistory()` when the selected pool is too new.
+- The live PoC proves the route-level consequence: a freshly created V3 pool with only `1 wei` more liquidity than a live V4 route wins discovery, then hard-reverts the swap before the library ever considers the fallback pool. Once that tiny liquidity edge is removed, the same call succeeds through V4 immediately.
+- This is distinct from the spot-fallback findings. Here the problem is not pricing off a bad route; it is skipping a live route entirely and reverting because discovery committed to an unquotable V3 pool first.
+- The local patch disqualifies V3 pools that cannot serve the full default TWAP window before liquidity ranking can select them.
 
-**Resolution:** INVALID — Both CREATE and CREATE2 opcodes increment the sender's EVM nonce. The internal `_nonce` must advance for both paths to stay in sync with the actual EVM nonce, since `JBAddressRegistry.registerAddress` computes the expected CREATE address from `(deployer, nonce)`. Skipping the increment on CREATE2 paths causes subsequent CREATE registrations to use the wrong nonce. Added clarifying comment and regression test.
+Impact:
 
----
+- An attacker can bootstrap or temporarily JIT-fund a fresh V3 pool on any supported fee tier and block outbound swaps, inbound receive swaps, and `retrySwap(...)` executions for that pair during the oracle warm-up window.
+- On outbound sends this hard-reverts the bridge path. On inbound receives the CCIP message is accepted, but the batch gets pinned behind `pendingSwapOf` until the stale winner either ages into a usable TWAP or loses its liquidity edge.
+- Because the batch conversion rate is shared across all claimers, this is a cross-batch liveness problem rather than a single caller eating their own failed swap.
 
-### ~~M-32. Interrupted Deployments Griefed By Project-ID Squatting~~ — DUPLICATE of M-2 (already fixed) *(pass 3 pashov)*
+Evidence:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 |
-| **File** | `script/Deploy.s.sol` (_ensureProjectExists) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+- Regression: [nana-suckers-v6/test/audit/FreshV3LiquidityOverrideDoS.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/FreshV3LiquidityOverrideDoS.t.sol:1)
 
-**Description:** The rollout hard-codes canonical project IDs 1-4 but `JBProjects.createFor()` is permissionless. During a partial deployment, any user can mint the next IDs and permanently break `Resume.s.sol` or force the remaining topology onto wrong IDs.
+Recommended fix:
 
-**Recommended fix:** Reserve all canonical IDs atomically before any interruptible phase, or persist the returned IDs and look them up on resume instead of assuming fixed ordinals.
+- Review and merge the local V3 TWAP-readiness patch.
+- Keep unquotable fresh V3 pools out of discovery so live fallbacks remain reachable.
 
-admin note: ok, fix it. any tradeoffs?
+### 32. `nana-suckers-v6`: a fresh V3 pool that barely clears the minimum history threshold can still override a healthy route with an attacker-defined TWAP
 
-**Resolution:** DUPLICATE of M-2 — Already fixed by commit `62c0cc1`. `_ensureProjectExists` verifies ownership of existing IDs (reverts `Deploy_ProjectNotOwned` if squatted) and checks returned ID matches expected (reverts `Deploy_ProjectIdMismatch` if front-run). No additional changes needed.
+Severity: `MED`
 
----
+Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`; retained here until the patch is reviewed and merged.
 
-### M-33. Cross-Chain Surplus Staleness Inflates Omnichain Bonding Curve — Accepted risk *(GitHub #53)*
+Affected code:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVLoans.sol:376-387` (_borrowableAmountFrom), `src/REVOwner.sol:175-181` (beforeCashOutRecordedWith) |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **Accepted — design tradeoff** |
-| **Known issue?** | Partially — inherent to cross-chain design |
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:323)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:361)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:536)
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:543)
+- [JBSwapCCIPSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSwapCCIPSucker.sol:582)
 
-**Description:** `REVLoans._borrowableAmountFrom` and `REVOwner.beforeCashOutRecordedWith` add `remoteSurplusOf()` and `remoteTotalSupplyOf()` to local values for bonding curve calculations. These remote values are updated only when someone calls `toRemote()` on the peer chain — there is no heartbeat, no staleness check, and no expiry. Values can be arbitrarily old.
+Why it is real:
 
-An attacker who mints heavily on chain B (expanding remote supply) can immediately borrow on chain A at a more favorable rate because the local sucker still reports the old, lower remote supply. The bonding curve sees a smaller denominator, inflating the per-token borrowable amount.
+- Once a V3 pool has at least 120 seconds of history, `_getV3TwapQuote(...)` accepts it even if the pool is only 120 seconds old. When the pool is younger than the default 10-minute window, the code simply clamps the TWAP window down to the pool's entire lifetime.
+- `_discoverPool(...)` and `_discoverV3Pool(...)` still rank candidates purely by current liquidity first, so a newly created V3 pool with slightly more liquidity than an older honest route wins discovery before any quality check is applied to its price history.
+- That means the selected V3 pool can supply a fully attacker-defined "TWAP" for its whole short lifetime. The live PoC shows a freshly created V3 pool with exactly the minimum history and a toxic initial price winning discovery over a near-par V4 route, after which the batch swap settles at the toxic V3 price instead of the healthy fallback route.
+- This is distinct from finding 31. There the fresh pool hard-reverts before a fallback route is tried. Here the fresh pool is considered valid and actively sets the batch-wide conversion rate, even though its entire oracle history was attacker-controlled from pool birth.
 
-**Key mitigation already in code:** `REVLoans` caps borrowable at `localSurplus` (line 386-387: `return reclaimable > localSurplus ? localSurplus : reclaimable`). This prevents extracting more than the local terminal holds. The risk is bounded to a rate advantage, not a total surplus drain.
+Impact:
 
-**Recommended fix:** Add a staleness check or heartbeat requirement to sucker snapshot data. Alternatively, document the design tradeoff in RISKS.md with the local surplus cap as the primary safeguard.
+- An attacker can create or JIT-fund a new V3 pool on a supported fee tier, initialize it at a toxic price, wait until it barely satisfies the 120-second minimum, and then force outbound sends, inbound receive swaps, and `retrySwap(...)` calls to use that short-lived attacker-defined TWAP.
+- Because the chosen swap output becomes the batch-wide bridge conversion rate, the attack can haircut every claimer in the batch rather than only the trigger caller.
+- This bypasses the protocol's apparent preference for V3 "oracle-backed" routes. The chosen route is technically TWAP-backed, but the TWAP window is so short and fresh that it offers no meaningful protection when a healthier older route already exists.
+- The local patch requires V3 candidates to serve the full default 10-minute TWAP window instead of clamping to the pool's shorter lifetime.
 
-admin note: do you have any good ideas for where/how to implement a heartbeat or staleness check without undersired tradeoffs or costs? if not, document as design tradeoff. if yes, lets chat.
+Evidence:
 
-**Resolution:** Accepted — No clean heartbeat mechanism without undesirable tradeoffs (would require mandatory bridge messages, adding gas cost and liveness dependency). Local surplus cap (line 386-387) is the primary safeguard. Documented in RISKS.md.
+- Regression: [nana-suckers-v6/test/audit/FreshV3TwapOverride.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/FreshV3TwapOverride.t.sol:1)
 
----
+Recommended fix:
 
-### M-34. OMNICHAIN_RULESET_OPERATOR Can Queue Rulesets For Any Project — Accepted risk *(GitHub #61)*
+- Review and merge the local full-window V3 TWAP patch.
+- Do not restore short-window clamping unless route scoring explicitly treats fresh V3 pools as lower quality than established alternatives.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-core-v6 |
-| **File** | `src/JBController.sol:97-110,442-456,595-601` |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **Accepted — intentional, documented** |
-| **Known issue?** | Documented in code (lines 100-109) |
+### 33. `nana-suckers-v6`: destination-side peer-value conversion also trusts `terminals[0]`, so a forwarding wrapper can zero already-correct remote state
 
-**Description:** `OMNICHAIN_RULESET_OPERATOR` is a hardcoded immutable address that bypasses `JBPermissions` checks for `launchRulesetsFor`, `queueRulesetsOf`, and `setTerminalsOf` (during launch) for ANY project. This is documented extensively in inline NatSpec:
+Severity: `LOW`
 
-> "TRUST BOUNDARY: This hardcoded address can call `launchRulesetsFor` and `queueRulesetsOf` for ANY project, bypassing normal `JBPermissions` checks."
+Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSuckerLib.sol`; retained here until the patch is reviewed and merged.
 
-**Mitigating factors:**
-- Projects with approval hooks (e.g., `JBDeadline`) are protected: queued rulesets must pass the hook before activating
-- `launchRulesetsFor` reverts if rulesets already exist, limiting the `SET_TERMINALS` risk to project initialization
-- Address is immutable (set at deploy time), compromise requires compromising the specific deployed bytecode
-- Intentional design for cross-chain ruleset synchronization
+Affected code:
 
-**Recommended fix:** Document in RISKS.md. Projects concerned about this trust surface should configure approval hooks.
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:674)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:687)
+- [JBSuckerLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSuckerLib.sol:161)
+- [JBSuckerLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSuckerLib.sol:182)
+- [JBSuckerLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSuckerLib.sol:188)
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:201)
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:275)
 
-admin note: yes, document in RISKS. this should be the omnichain deployer set in the deploy script.
+Why it is real:
 
-**Resolution:** Accepted — Intentional design for cross-chain ruleset sync. Projects should use approval hooks. Documented in RISKS.md.
+- `peerChainBalanceOf(...)` and `peerChainSurplusOf(...)` both delegate to `JBSuckerLib.convertPeerValue(...)` when the stored remote snapshot currency differs from the local target currency.
+- `convertPeerValue(...)` looks up `directory.terminalsOf(projectId)` and only tries `IJBMultiTerminal(address(terminals[0])).STORE()` for prices. If that first terminal cannot provide a store or price oracle, the function silently returns zero instead of trying any later real terminal.
+- The live PoC shows the exact failure mode: a correct `10 ETH` remote snapshot converts to zero when a slot-zero forwarding wrapper reverts on `STORE()`, then converts back to the full value immediately once a real multi-terminal is moved into slot zero.
+- This is distinct from finding 29. There the outbound source snapshot itself is wrong. Here the stored remote snapshot is already correct, but the destination chain zeroes it at read time during currency conversion.
 
----
+Impact:
 
-### M-35. Duplicate Fund Access Limit Groups Cause Surplus Miscalculation — Accepted risk *(GitHub #74)*
+- A project owner or controller can suppress already-correct remote surplus and balance views on the destination chain simply by placing a forwarding wrapper first in the local terminal list.
+- `JBSuckerRegistry.remoteSurplusOf(...)` consumes these peer-chain conversion views, and `REVOwner` / `REVLoans` consume `remoteSurplusOf(...)` directly. That means cross-chain revnet cash-out and borrow curves can be depressed on the destination chain even while the peer snapshot itself remains correct.
+- I did not find a direct theft path from this undercount alone, so this is an economic-grief and accounting-quality issue rather than a drain.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-core-v6 |
-| **File** | `src/JBFundAccessLimits.sol:85-148` (setFundAccessLimitsFor) |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **Accepted — document constraint** |
-| **Known issue?** | No |
+Evidence:
 
-**Description:** `setFundAccessLimitsFor` enforces currency ordering within a single `fundAccessLimitGroup` but has no check across groups for duplicate `(terminal, token)` pairs. Passing two groups with identical terminal/token creates duplicate entries via `.push()`. `_tokenSurplusFrom` double-counts the payout limits, understating surplus and reducing cash-out value. `payoutLimitOf` returns the first match, silently ignoring duplicates.
+- PoC: [nana-suckers-v6/test/audit/FirstTerminalRemoteConversionGap.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/FirstTerminalRemoteConversionGap.t.sol:1)
+- Regression: [nana-suckers-v6/test/audit/FirstTerminalRemoteConversionGap.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/audit/FirstTerminalRemoteConversionGap.t.sol:1) now asserts the later live store is used even when the forwarding wrapper is first.
 
-**Mitigating factors:** Only callable by the project's controller (`onlyControllerOf`). Self-inflicted misconfiguration — no cross-project attack vector. No fund theft — worst case is unexpected access limit behavior.
+Recommended fix:
 
-**Recommended fix:** Add a duplicate `(terminal, token)` check across groups, or document the constraint for frontends/deployers.
+- Review and merge the local terminal-scanning conversion patch.
+- `convertPeerValue(...)` now scans for the first terminal that can actually provide `STORE()` / `PRICES()` instead of letting a slot-zero forwarding wrapper zero remote state conversion by position alone.
 
-admin note: document the constraint for frontends/deployers.
+### 34. `univ4-router-v6` + `nana-buyback-hook-v6`: V4 routing ignores metadata-only buyback previews and can reject executable JB buy paths
 
-**Resolution:** Accepted — Constraint documented in RISKS.md for frontends/deployers.
+Severity: `MED`
 
----
+Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
 
-### ~~M-36. JBDistributor Zero totalStake Causes beginVesting Revert~~ — FIXED (`fda4e33`) *(GitHub #77)*
+Affected code:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JBDistributor.sol:315` (beginVesting → _vestTokenIds) |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **HIGH — VERIFIED** |
-| **Known issue?** | No |
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:708)
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:717)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:895)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:903)
 
-**Description:** `beginVesting` does not guard against `totalStakeAmount == 0`. When a hook has been funded (`_balanceOf > 0`) but all staking power is zero (all NFTs burned or delegation removed), `_vestTokenIds` calls `mulDiv(distributable, _tokenStake(...), 0)` which reverts with a PRBMath division-by-zero panic. Funds are not lost but `beginVesting` is permanently bricked for that round.
+Why it is real:
 
-**Inconsistency:** `collectVestedRewards` (line 357) correctly guards with `if (distributable > 0 && totalStakeAmount > 0)`. `beginVesting` is missing the equivalent guard.
+- `JBBuybackHook.beforePayRecordedWith(...)` can return `weight = 0` and expose the real expected beneficiary output only through pay-hook metadata (`minimumBeneficiaryTokenCount` / `minimumReservedTokenCount`), because the live output may come from the AMM path rather than from direct minting.
+- `JBRouterTerminal` already handles this preview shape and normalizes it in [JBPayRouteResolver.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBPayRouteResolver.sol:245).
+- `JBUniswapV4Hook._beforeSwap(...)` does not. It reads only the raw `beneficiaryTokenCount` from `previewPayFor(...)` and ignores `hookSpecifications`. When the raw count is zero, the JB buy path becomes ineligible even if the hook metadata promises a much larger live output.
+- The live PoC shows the route consequence. A metadata-only preview promising `5000e18` project tokens is ignored, so the hook falls back to the V4 pool and gives the user only the AMM output. Tightening `amountOutMin` to `1000e18` then makes the same swap revert, even though a direct JB pay would have satisfied that floor.
+- The local patch normalizes metadata-only pay-hook previews that use the buyback hook metadata shape and scores `minimumBeneficiaryTokenCount` as the executable JB buy output.
 
-**Recommended fix:** Add `if (totalStakeAmount == 0) revert JBDistributor_NoStakers();` at the top of `beginVesting`, or skip vesting when totalStake is zero (consistent with `collectVestedRewards`).
+Impact:
 
-admin note: skip evsting when totalStake is zero.
+- Users swapping into buyback-hooked project tokens through `JBUniswapV4Hook` can receive materially worse execution than the live JB path would provide.
+- Orders can also revert unnecessarily when the requested minimum is above the V4 output but below the real buyback-hook-backed JB output.
+- For immutable deployments that expect this hook to provide best execution into canonical buyback-hooked projects, this is a real routing-correctness gap rather than a cosmetic preview mismatch.
 
-**Resolution:** FIXED — `beginVesting` now returns early when `totalStakeAmount == 0`, carrying funds to the next round. Tested in `test/AuditFixes.t.sol`. 106 tests pass.
+Evidence:
 
----
+- Regression: [univ4-router-v6/test/audit/BuybackMetadataPreviewIgnored.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/test/audit/BuybackMetadataPreviewIgnored.t.sol:1)
 
-### M-37. Pay/Cash-Out Hooks Lack try-catch Isolation — Accepted risk *(GitHub #79)*
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-core-v6 |
-| **File** | `src/JBMultiTerminal.sol:1466,1553` (_fulfillCashOutHookSpecificationsFor, _fulfillPayHookSpecificationsFor) |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **Accepted — intentional** |
-| **Known issue?** | By design |
+- Review and merge the local metadata-only buyback pay-preview patch.
+- Keep the realized-output check from finding 2 in place so a terminal that overstates metadata cannot underfill user minima.
 
-**Description:** Pay hooks (`afterPayRecordedWith`) and cash-out hooks (`afterCashOutRecordedWith`) are called without try-catch. A single reverting hook blocks the entire payment or cash-out. This is inconsistent with payout splits, fee processing, and owner transfers — all of which use try-catch with DoS-prevention comments.
+### 35. `nana-router-terminal-v6` + `nana-buyback-hook-v6`: best-route scoring uses optimistic raw buyback sell quotes and can choose a worse live candidate
 
-| Call Site | try-catch? |
-|-----------|------------|
-| Split payouts (`_processSplitWith`) | Yes |
-| Fee processing (`executeProcessFee`) | Yes |
-| Owner transfers (`executeTransferTo`) | Yes |
-| Pay hooks (`afterPayRecordedWith`) | **No** |
-| Cash-out hooks (`afterCashOutRecordedWith`) | **No** |
+Severity: `LOW`
 
-**Mitigating factors:** The hook address is set by the project's data hook (project-owner-configured), so the risk is primarily self-inflicted. A project cannot grief other projects since hooks are project-scoped. Transaction reverts are atomic — no stuck state.
+Status: locally mitigated in `nana-router-terminal-v6/src/JBRouterTerminal.sol`; retained here until the patch is reviewed and merged.
 
-**Recommended fix:** Wrap hook calls in try-catch with event emission on failure, matching the payout split pattern. Alternatively, document this as intentional (hook failure = transaction failure, letting the project owner decide their own risk).
+Affected code:
 
-admin note: document as intentional.
+- [JBRouterTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminal.sol:785)
+- [JBRouterTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminal.sol:806)
+- [JBRouterTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminal.sol:2616)
+- [JBRouterTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminal.sol:2625)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:777)
 
-**Resolution:** Accepted — Hook failure = transaction failure is intentional. Projects control their own risk via hook selection. Documented in RISKS.md.
+Why it is real:
 
----
+- Buyback sell-side preview metadata carries both a conservative executable floor (`minimumSwapAmountOut`) and an optimistic `rawSwapQuote`.
+- `JBRouterTerminal._effectivePreviewCashOutAmount(...)` explicitly prefers `rawSwapQuote` whenever it is nonzero.
+- Execution does not receive that optimistic amount. `_cashOutLoop(...)` measures the real post-hook balance delta returned by `cashOutTokensOf(...)`, which can be materially lower than the raw quote because of slippage buffers or taxed output delivery.
+- The live PoC sets up two simultaneously valid destination-token routes. The native route previews and settles at `60`, while the token-B route previews at `75` only because of the optimistic raw buyback quote but actually settles at `40`. The router chooses token B, settles `40`, and does worse than a forced native route that was live the whole time.
+- The local patch treats `rawSwapQuote` as diagnostic only and scores sell-side buyback hook metadata by `minimumSwapAmountOut`, the executable floor the hook enforces.
 
-## Low
+Impact:
 
-### L-1. Canonical Deployment Leaves Non-Native REV Fees Uncollectable
+- Best-route selection across accepted destination tokens can be wrong whenever a buyback-hook sell-side preview overstates executable delivery.
+- Users paying with JB project tokens through `JBRouterTerminal` can receive fewer destination project tokens than another currently available route would have produced, even without any attack on the destination terminal.
+- If downstream minimums are calibrated off the optimistic preview path, the same bug can also turn into unnecessary route failure instead of just underdelivery.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `script/Deploy.s.sol` (getFeeProjectConfig) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **65** |
-| **Known issue?** | No |
+Evidence:
 
-**Description:** The deployment script only registers the fee revnet for the native token. Non-native borrows/cash-outs resolve `primaryTerminalOf(FEE_REVNET_ID, token)` to zero and silently skip the fee path.
+- Regression: [nana-router-terminal-v6/test/audit/RawBuybackQuoteRouteMisrank.t.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/test/audit/RawBuybackQuoteRouteMisrank.t.sol:1)
 
-**Mitigation:** Register the fee revnet for all expected ERC-20 tokens at deployment time.
+Recommended fix:
 
-Admin note: CONFIRMED NOT AN ISSUE — fee project uses a router terminal which handles routing non-native tokens to the correct underlying terminal. No fix needed.
+- Review and merge the local buyback sell-side executable-floor scoring patch.
+- If the optimistic raw quote is still useful for UX, keep it informational and separate from route selection.
+- Keep `routeTokenOut` override as an escape hatch, but do not rely on users to manually work around an incorrect default best-route scorer.
 
----
+### 36. `univ4-router-v6` + `nana-buyback-hook-v6`: V4 routing ignores metadata-only buyback cash-out previews and can reject executable JB sell paths
 
-### L-2. Constructor Accepts Unminted Project Ownership *(nemesis corroborates — rated HIGH)*
+Severity: `MED`
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-ownable-v6 |
-| **File** | `src/JBOwnableOverrides.sol:57-87` (constructor) |
-| **Auditor confidence** | 75 (Pashov) / HIGH (nemesis) |
-| **My confidence** | **65** |
-| **Known issue?** | No |
+Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
 
-**Description:** Binding ownership to an unminted `initialProjectIdOwner` lets the first account that mints that sequential project ID become the effective owner. Nemesis confirmed with PoC: deploying with `initialOwner = address(0)` and `initialProjectIdOwner = N` (unminted) gives the first minter of project N full `onlyOwner` authority.
+Affected code:
 
-**Mitigation:** Validate that the project ID is already minted in the constructor, or document the deployment ordering requirement.
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:217)
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:241)
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:739)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:759)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:777)
 
-admin note: this is ok, make sure documented in the repo's RISKS.
+Why it is real:
 
-*Re-confirmed by Nemesis pass 2 (20260421) — NM-001 rated HIGH with PoC at `test/CodexUnmintedProjectHijack.t.sol`. Also re-confirmed by Pashov pass 2 [75] "Future Project Prebinding Can Hand Ownership To The First Minter". Note severity disagreement: Nemesis rates HIGH, existing report rates LOW. The finding is real but requires non-atomic deployment, which is the documented prerequisite.*
+- `JBUniswapV4Hook.calculateExpectedOutputFromSelling(...)` trusts only the raw `grossReclaim` returned by `previewCashOutFrom(...)`.
+- `JBBuybackHook.beforeCashOutRecordedWith(...)` can instead express the meaningful sell-side output through cash-out-hook metadata while returning `reclaimAmount = 0`, because the live payout is coming from the AMM path instead of the terminal's direct reclaim amount.
+- `JBUniswapV4Hook` does not normalize that metadata before ranking the JB sell route. When the raw reclaim amount is zero, the hook collapses the JB sell path to `0` and lets V4 win by default.
+- The live PoC shows the full consequence. A metadata-only preview carrying `2 ether` of executable sell-side output is ignored, so the hook falls back to the V4 pool and settles for less. Tightening `amountOutMin` to `1.5 ether` then makes the same swap revert, even though a direct JB cash-out would have satisfied that floor.
+- The local patch normalizes metadata-only cash-out hook previews that use the buyback hook metadata shape and scores `minimumSwapAmountOut` as the executable JB sell output.
 
----
+Impact:
 
-### L-3. Discounted Credit Mints Retain Full-Price Cash-Out Weight
+- Users selling buyback-hooked project tokens through `JBUniswapV4Hook` can receive materially worse execution than the live JB sell path would provide.
+- Orders can also revert unnecessarily when the requested minimum is above the V4 output but below the real buyback-hook-backed JB cash-out output.
+- This is the sell-side analogue of finding 34, and it matters for the same reason: an immutable best-execution router should not silently disregard the live output surface of the protocols it is comparing.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-721-hook-v6 |
-| **File** | `src/JB721TiersHook.sol` (_mintAndUpdateCredits) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **65** |
-| **Known issue?** | No |
+Evidence:
 
-**Description:** Credits can buy discounted tiers at the reduced price while cash-out math still uses the tier's full configured price, leaving residual credits after a full-price treasury reclaim.
+- Regression: [univ4-router-v6/test/audit/BuybackCashOutMetadataIgnored.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/test/audit/BuybackCashOutMetadataIgnored.t.sol:1)
 
-**Mitigation:** Use the discounted price (or effective cost) for cash-out weight calculation when a discount was applied at mint time.
+Recommended fix:
 
-admin note: this is ok since discounted price can change, make sure to document in the repo's RISKS, project owners should know what they're doing.
+- Review and merge the local metadata-only buyback cash-out preview patch.
+- Keep enforcing realized output after `cashOutTokensOf(...)` so metadata remains a route-scoring hint, not a substitute for actual delivery.
 
----
+### 37. `nana-router-terminal-v6` + `nana-buyback-hook-v6`: best-route scoring uses conservative buyback buy minima and can choose a worse live candidate
 
-### L-4. ~~Zero-Balance Rounds Front-Run Into Vesting Lockout~~ *(nemesis corroborates)* — FIXED (`9918cd6`)
+Severity: `LOW`
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JBDistributor.sol` (beginVesting) |
-| **Auditor confidence** | 75 (Pashov) / MEDIUM (nemesis) |
-| **My confidence** | **75 — confirmed by nemesis PoC** |
-| **Known issue?** | No |
+Status: locally mitigated in `nana-router-terminal-v6/src/JBPayRouteResolver.sol`; retained here until the patch is reviewed and merged.
 
-**Description:** When a round starts with 0 distributable balance, `beginVesting` records zero-amount vesting entries. The same tokenId later reverts with `JBDistributor_AlreadyVesting()` after funds arrive, locking that tokenId out of the round. Nemesis confirmed: `_takeSnapshotOf()` treats zero-balance snapshots as absent, but `_vestTokenIds()` still writes irreversible vesting entries.
+Affected code:
 
-**Mitigation:** Reject `beginVesting` when `distributableBalance == 0`, or allow re-vesting when the prior entry has zero amount.
+- [JBPayRouteResolver.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBPayRouteResolver.sol:246)
+- [JBPayRouteResolver.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBPayRouteResolver.sol:355)
+- [JBPayRouteResolver.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBPayRouteResolver.sol:378)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:894)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:911)
 
-admin note: fix, make sure well tested.
+Why it is real:
 
----
+- Buyback buy-side preview metadata carries both a conservative route floor (`minimumBeneficiaryTokenCount` / `minimumReservedTokenCount`) and the higher live AMM quote (`rawSwapQuote`).
+- Before the local patch, `JBPayRouteResolver._effectivePreviewPayTokenCounts(...)` only normalized the conservative minimum token counts. It ignored the higher live output implied by the raw quote, even though execution could still mint materially more than that minimum.
+- The live PoC sets up two simultaneously valid destination-token routes. The native route previews and settles at `60`. The token-B route previews at only `50` because the router scores the conservative buyback minimum, but the same live pay path actually mints `100`. The router chooses the native route and gives the user `60`, while a forced token-B route in the same setup returns `100`.
+- The local patch decodes the canonical buyback-hook raw swap quote, adds any direct-mint amount, scales the beneficiary/reserved split to the stronger expected live output, and still preserves the conservative floor for metadata that lacks a stronger raw quote.
 
-### L-5. CroptopDeployer Scripts Cannot Bootstrap Fee Project *(nemesis)*
+Impact:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | croptop-core-v6 |
-| **File** | `script/Deploy.s.sol` |
-| **Auditor confidence** | LOW (nemesis verified) |
-| **My confidence** | **20 — not actionable** |
-| **Known issue?** | No |
+- Best-route selection across accepted destination tokens can underrank a live buyback-hooked candidate and send users to a worse route.
+- Users paying with JB project tokens through `JBRouterTerminal` can receive fewer destination project tokens than another currently executable route would have produced, even without any failure in the destination terminal.
+- This is the buy-side counterpart to finding 35. There the router overvalued a sell-side route using optimistic raw output; here it undervalues a buy-side route by scoring only the conservative minimum.
 
-**Description:** The deployment script assumes the fee project (project #1) already exists and is configured. If running the croptop deployer standalone before the fee project is set up, the script has no bootstrap path and silently misconfigures or fails.
+Evidence:
 
-**Mitigation:** Add a fee-project existence check in the script, or document the deployment ordering dependency.
+- Regression: [nana-router-terminal-v6/test/audit/ConservativeBuybackPreviewRouteMisrank.t.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/test/audit/ConservativeBuybackPreviewRouteMisrank.t.sol:136)
 
-admin note: it can safely assume fee project exists.
+Recommended fix:
 
----
+- Review and merge the local `JBPayRouteResolver` buy-side raw-buyback-quote scoring patch.
+- Keep the route-ranking policy explicit: conservative floors remain settlement guarantees, while best-route comparison should use the understood live quote when the canonical buyback hook supplies it.
 
-### L-6. ~~Fallback Tick Reconstruction Not Re-Clamped After Emergency Path~~ *(lead investigation — promotes Lead 3)* — FIXED (`a3e5e4a`)
+### 38. `nana-router-terminal-v6` + `nana-buyback-hook-v6`: source-project buyback sell fallback can strand source tokens on the router and forward zero value
 
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-lp-split-hook-v6 |
-| **File** | `src/JBUniswapV4LPSplitHook.sol:1223-1235` |
-| **Auditor confidence** | Lead (promoted after investigation) |
-| **My confidence** | **45** |
-| **Known issue?** | Flagged as lead |
+Severity: `MED`
 
-**Description:** When the primary tick calculation in `_mintLiquidity` reverts (out-of-range pool state), the fallback path computes ticks from `slot0.sqrtPriceX96` but does not re-clamp them to the valid TickMath range (`[-887272, 887272]`). For extreme pricing at the edges of tick space (~0.015% of total range), the resulting ticks could exceed `TickMath.MAX_TICK`, causing the Uniswap `pool.mint()` call to revert. This is DoS only — no fund loss, and only affects split hook operations during extreme market conditions.
+Status: locally mitigated in `nana-router-terminal-v6/src/JBRouterTerminal.sol`; retained here until the patch is reviewed and merged.
 
-**Mitigation:** Add `tick = bound(tick, TickMath.MIN_TICK, TickMath.MAX_TICK)` after the fallback tick computation.
+Affected code:
 
----
+- [JBRouterTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminal.sol:1209)
+- [JBRouterTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminal.sol:1218)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:250)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:253)
 
-### L-7. ~~`mapToken(s)` Can Permanently Retain Unrelated ETH~~ *(Nemesis pass 2)* — FIXED (`d8018a4`)
+Why it is real:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/JBSucker.sol:427-449` |
-| **Auditor confidence** | LOW (nemesis verified) |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+- `JBRouterTerminal._cashOutLoop(...)` cashes out source project tokens with `holder: address(this)` and `beneficiary: address(this)`, then treats the reclaim token's post-call balance delta as the routed amount.
+- On buyback-hook sell fallback, `JBBuybackHook.afterCashOutRecordedWith(...)` remints the project tokens back to `context.holder` and returns without transferring the reclaim token.
+- When the holder is the router itself, the source project tokens come back to the router, the reclaim-token delta stays `0`, and the router continues the route as though a zero-output cash-out succeeded.
+- The local patch makes any nonzero source cash-out that delivers zero reclaim tokens fail closed before forwarding value downstream.
 
-**Description:** `mapToken` and `mapTokens` are `payable` and accept `msg.value` as `transportPaymentValue`, but only the disable-with-unsent-claims branch in `_mapToken` actually consumes it via `_sendRoot`. When enabling or updating mappings, the ETH is silently retained in the sucker's balance with no refund path. The trapped ETH becomes part of `amountToAddToBalanceOf(NATIVE_TOKEN)`, effectively donating caller funds to the project.
+Impact:
 
-**Mitigation:** Revert on unexpected `msg.value` when the transport payment path won't be taken:
-```solidity
-if (!needsTransportPayment && msg.value != 0) revert JBSucker_UnexpectedMsgValue(msg.value);
-```
+- A routed `pay(...)` can settle zero value into the chosen destination terminal while the sold source project tokens remain stranded on `JBRouterTerminal`.
+- The router does not keep per-user recovery accounting for those returned source project tokens, so the affected value is effectively stuck unless a manual rescue path exists.
+- Metadata `cashOutMinReclaimed` only protects callers who explicitly set it. Programmatic routes that use `0` can silently hit this failure mode.
 
----
+Evidence:
 
-### L-8. ~~`SuckerDeploymentLib` Omits Sepolia L1 Deployers~~ *(Nemesis pass 2)* — FIXED (`000267b`)
+- Regression: [nana-router-terminal-v6/test/audit/BuybackSellFallbackStrandsSourceTokens.t.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/test/audit/BuybackSellFallbackStrandsSourceTokens.t.sol:1)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `script/helpers/SuckerDeploymentLib.sol:54-75` |
-| **Auditor confidence** | LOW (nemesis verified) |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+Recommended fix:
 
-**Description:** The deployment helper checks `_isMainnet` to decide whether to populate L1 deployer handles, but the classification checks for `"sepolia"` while the deployment stack uses `"ethereum_sepolia"` as the network name. Sepolia L1 workflows get `getDeployment` calls that return zero deployer addresses, causing mishandled L1 deployment state.
+- Review and merge the local zero-delivery source cash-out guard.
+- At minimum, after a source-project cash-out, reject the case where reclaim-token output is zero but the router's source-project-token balance did not decrease as expected.
+- If fallback delivery of source project tokens is meant to be supported, route them back to the original payer rather than leaving them on the router.
 
-**Mitigation:** Include Sepolia in the L1 classification:
-```solidity
-bool _isMainnet = _network == keccak256("ethereum") || _network == keccak256("ethereum_sepolia");
-```
+### 39. `nana-router-terminal-v6`: source-project cashout previews use gross reclaim before terminal fees and can pick a worse live candidate
 
----
+Severity: `LOW`
 
-### ~~L-9. Banny Resolver Metadata Not Re-Initialized on Deployment Resume~~ — FIXED (`4f1eda2`) *(promotes Lead 38)*
+Status: locally mitigated in `nana-router-terminal-v6/src/JBRouterTerminal.sol`; retained here until the patch is reviewed and merged.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 (banny-retail-v6 integration) |
-| **File** | `script/Deploy.s.sol` / `script/Resume.s.sol` |
-| **Auditor confidence** | 90 (Pashov) |
-| **My confidence** | **85 — VERIFIED** |
-| **Known issue?** | No |
+Affected code:
 
-**Description:** When `Deploy.s.sol` is interrupted after creating the `Banny721TokenUriResolver` but before calling `setMetadata(...)`, the `Resume.s.sol` script does not re-invoke the metadata initialization. The resolver is deployed but returns empty/default metadata for all token URIs, breaking NFT display for the entire collection until manually repaired.
+- [JBRouterTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminal.sol:2523)
+- [JBRouterTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminal.sol:2617)
+- [JBMultiTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBMultiTerminal.sol:883)
+- [JBMultiTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBMultiTerminal.sol:1178)
 
-**Mitigation:** Add metadata re-initialization to the Resume script's Banny recovery path, mirroring the Deploy script's post-creation flow.
+Why it is real:
 
-admin note: fix if there are no tradeoffs.
+- `JBRouterTerminal._previewCashOutStep(...)` ranks source-project cashout candidates using `previewCashOutFrom(...)`'s `reclaimAmount`.
+- In core, that preview is a gross reclaim amount before the terminal's own protocol fee is subtracted during `cashOutTokensOf(...)`.
+- The live PoC sets up two valid source-cashout candidates. The native route previews at `100` but only transfers `97` after the terminal haircut. The token-B route previews at `99` and transfers `99`. The router chooses the native route on preview and mints `97`, while a forced token-B route in the same setup mints `99`.
+- The local patch detects Juicebox fee terminals through `FEE()` / `FEELESS_ADDRESSES()` and scores source cash-out previews on the fee-adjusted amount that the router would receive as beneficiary.
 
-**Resolution:** FIXED — Added `svgDescription()` length check in `Resume.s.sol` to re-initialize metadata when resolver was deployed but `setMetadata` was interrupted.
+Impact:
 
----
+- Best-route preview and execution can choose a worse live destination-token route whenever competing source-project cashout candidates have different preview-to-delivery haircuts.
+- Users paying with JB project tokens can mint fewer destination project tokens than another simultaneously executable route would have produced.
 
-### ~~L-10. Mainnet Oracle Provenance Verification Compares Wrapper to Raw Aggregator~~ — FIXED (`4f1eda2`) *(promotes Lead 39)*
+Evidence:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | deploy-all-v6 |
-| **File** | `script/Verify.s.sol` |
-| **Auditor confidence** | 90 (Pashov) |
-| **My confidence** | **85 — VERIFIED** |
-| **Known issue?** | No |
+- Regression: [nana-router-terminal-v6/test/audit/GrossCashOutPreviewRouteMisrank.t.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/test/audit/GrossCashOutPreviewRouteMisrank.t.sol:1)
 
-**Description:** `Verify.s.sol` reads the on-chain `priceFeedFor(...)` return value (a `JBChainlinkV3PriceFeed` wrapper contract) and compares it directly against the raw Chainlink aggregator address (e.g., `0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419`). Since the wrapper is a different contract than the aggregator, the comparison always fails, causing the verification script to report a false negative. This masks real feed drift if the check is ever relied upon for operational safety.
+Recommended fix:
 
-**Mitigation:** Compare the wrapper's inner `FEED` address against the expected aggregator, not the wrapper address itself:
-```solidity
-IJBChainlinkV3PriceFeed wrapper = IJBChainlinkV3PriceFeed(address(prices.priceFeedFor(...)));
-require(address(wrapper.FEED()) == EXPECTED_AGGREGATOR, "Feed drift detected");
-```
+- Review and merge the local fee-aware cash-out preview scoring patch.
+- If the router is intentionally ranking gross reclaim rather than delivered reclaim, document that clearly and do not present the result as best executable routing.
 
-admin note: make sure you're confident in the finding. if so, fix.
+### 40. `univ4-router-v6` + `nana-buyback-hook-v6`: sell-side buyback fallback can settle zero output and strand sold project tokens on the hook
 
-**Resolution:** FIXED — Dereferences through `JBChainlinkV3PriceFeed(address(feed)).FEED()` to compare the inner aggregator address, not the wrapper. Uses try/catch for graceful fallback.
+Severity: `MED`
 
----
+Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
 
-### ~~L-11. Empty Claim Arrays Freeze Round Snapshot Early~~ — FIXED (`fda4e33`) *(pass 3 pashov)*
+Affected code:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JBDistributor.sol` (beginVesting / collectVestedRewards) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **pending** |
-| **Known issue?** | No |
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:1111)
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:1125)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:250)
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:253)
 
-**Description:** Both `beginVesting` and `collectVestedRewards` accept empty `tokenIds` arrays. Any caller can lock the round snapshot before later same-round funding arrives, shifting that funding into a future round with different stake ownership.
+Why it is real:
 
-**Recommended fix:** Require `tokenIds.length > 0` in both `beginVesting` and `collectVestedRewards`:
-```solidity
-if (tokenIds.length == 0) revert JBDistributor_EmptyTokenIds();
-```
+- `JBUniswapV4Hook._routeThroughJuicebox(...)` sells JB tokens by cashing out with `holder: address(this)` and `beneficiary: address(this)`, then measures output only as the reclaim-token balance delta.
+- On buyback-hook sell fallback, the hook remints the sold project tokens back to `context.holder` and does not transfer the reclaim token.
+- When the holder is `JBUniswapV4Hook` itself, the input project tokens remain on the hook, `outputReceived` becomes `0`, and the swap can still succeed when `amountOutMin == 0`.
+- The local patch makes nonzero JB sell routes that deliver zero reclaim output fail closed before settling back to the PoolManager.
 
-admin note: ok, fix. make sure well tested.
+Impact:
 
-**Resolution:** FIXED — Both `beginVesting` and `collectVestedRewards` now revert with `JBDistributor_EmptyTokenIds()` when passed empty arrays. Tested in `test/AuditFixes.t.sol`. 106 tests pass.
+- A JB-routed sell can consume the user's input project tokens, return zero output tokens, and leave the sold project tokens stranded on `JBUniswapV4Hook`.
+- This is especially dangerous for programmatic or router-driven orders that pass `amountOutMin = 0`, because the failure mode does not revert by default.
 
----
+Evidence:
 
-### L-12. REVLoans totalCollateralOf CEI Violation *(GitHub #56)*
+- Regression: [univ4-router-v6/test/audit/BuybackSellFallbackStrandsProjectTokens.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/test/audit/BuybackSellFallbackStrandsProjectTokens.t.sol:1)
 
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVLoans.sol:1141-1213` (_adjust), `src/REVLoans.sol:1036-1041` (_addCollateralTo) |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **HIGH — VERIFIED, documented known issue** |
-| **Known issue?** | Yes — documented inline at lines 1128-1132 |
+Recommended fix:
 
-**Description:** In `_adjust`, individual loan state (`loan.amount`, `loan.collateral`) is written before external calls (correct CEI). But `totalCollateralOf[revnetId]` is only incremented inside `_addCollateralTo`, which executes AFTER `_addTo` makes external calls via `useAllowanceOf` → fee payment → pay hooks. A reentrant `borrowFrom` during those calls would see a lower `totalCollateralOf`, computing a higher borrowable amount per collateral unit.
+- Review and merge the local zero-delivery JB sell guard.
+- At minimum, after a JB sell path, reject cases where reclaim-token output is zero but the hook's input project-token balance rebounded to its pre-cash-out level.
+- If fallback delivery of project tokens is meant to be supported, route those tokens back to the swap initiator rather than leaving them on the hook.
 
-The inline comment documents this precisely:
-> "CEI ordering note: `totalCollateralOf` is not incremented until `_addCollateralTo` executes... Practically infeasible — requires an adversarial pay hook on the revnet's own terminal..."
+### 41. `univ4-router-v6`: sell quotes hard-deduct terminal fees even when the live hook beneficiary can be feeless, so better JB cash-outs can be bypassed
 
-**Why LOW:** Requires control of a pay hook on the REV project terminal or the revnet's terminal — effectively trust-level access. Neither REV project #1 nor a correctly-deployed revnet would have such a hook. No ReentrancyGuard exists, but the precondition is unrealistic.
+Severity: `LOW`
 
-**Recommended fix:** Document in RISKS.md. Optionally add ReentrancyGuard to `borrowFrom`.
+Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
 
-admin note: ok, skip, unless we have a clean way to reorganize the fn calls. i do not want to add ReentrencyGuard.
+Affected code:
 
-**Resolution:** Accepted — Documented in RISKS.md. No clean reorganization available without ReentrancyGuard.
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:217)
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:246)
+- [JBMultiTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBMultiTerminal.sol:883)
+- [JBMultiTerminal.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBMultiTerminal.sol:1178)
 
----
+Why it is real:
 
-### L-13. ERC-2771 Trusted Forwarder Architectural Trust Boundary — Accepted risk *(GitHub #57)*
+- `JBUniswapV4Hook.calculateExpectedOutputFromSelling(...)` always subtracts `terminal.FEE()` from the previewed reclaim amount.
+- The live sell beneficiary is the hook itself. A terminal can configure that address as feeless, in which case execution skips the fee while the route quote still deducts it.
+- The live PoC sets the terminal's actual cash-out slightly above the V4 quote and relies on the hook's unconditional fee deduction to push the JB estimate just below V4. The router falls back to V4 even though the live JB sell path would have returned more.
+- The local patch probes `FEELESS_ADDRESSES().isFeeless(address(this))` and skips the preview haircut when the hook is fee-exempt as the cash-out beneficiary.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-core-v6 |
-| **File** | `src/JBPermissions.sol:52,74` (constructor, setPermissionsFor), `src/JBController.sol:152,1282-1284` |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **Accepted — not exploitable as deployed** |
-| **Known issue?** | Accepted design (ERC-2771 trust model) |
+Impact:
 
-**Description:** `JBPermissions` and `JBController` inherit `ERC2771Context` and use `_msgSender()` for all identity checks. If a trusted forwarder is compromised, it could spoof any `msg.sender` for permission operations, enabling ecosystem-wide takeover.
+- Best-route selection can bypass a better live JB sell path and send the trade through a worse V4 swap.
+- This is configuration-sensitive rather than universal, but it matters if projects or protocol operators ever mark the routing hook as feeless.
 
-**Why LOW (not HIGH):** The deployed forwarder is OpenZeppelin's `ERC2771Forwarder` (v5.6.0) which:
-- Is not upgradeable and has no owner/admin functions
-- Enforces EIP-712 signature verification before forwarding (recovers signer, checks `recovered == request.from`)
-- Cannot spoof arbitrary addresses without the target's private key signature
-- Address is immutable in `ERC2771Context` — cannot be replaced
+Evidence:
 
-The attack requires compromising the OZ ERC2771Forwarder contract itself, which has no known path.
+- Regression: [univ4-router-v6/test/audit/FeelessSellQuoteUnderranksJB.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/test/audit/FeelessSellQuoteUnderranksJB.t.sol:1)
 
-**Recommended fix:** Document the ERC-2771 trust assumption in RISKS.md. No code change needed.
+Recommended fix:
 
-admin note: document the trust assumption in RISKS.md.
+- Review and merge the local feeless-beneficiary sell-quote patch.
+- Otherwise, explicitly enforce or document that the routing hook must never be configured as feeless.
 
-**Resolution:** Accepted — Trust assumption documented in RISKS.md.
+### 42. `univ4-lp-split-hook-v6`: fee routing can over-credit impossible fee-token claims when the fee project token is delivered lossily
 
----
+Severity: `LOW`
 
-### L-14. TWAP Warmup Spot-Price Fallback Window — Accepted risk *(GitHub #59)*
+Status: locally mitigated in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`; retained here until the patch is reviewed and merged.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-router-v6 |
-| **File** | `src/JBUniswapV4Hook.sol:384-392` (estimateUniswapOutput), `src/JBUniswapV4Hook.sol:884-931` (_getTWAPSqrtPrice) |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **Accepted — bounded startup condition** |
-| **Known issue?** | Documented in code comment |
+Affected code:
 
-**Description:** When the TWAP oracle has insufficient history (newly created pools), `_getTWAPSqrtPrice` returns 0 and `estimateUniswapOutput` falls back to the manipulable spot price (`getSlot0`). During the first ~30 minutes of a pool's life, a manipulator can inflate the spot price to make V4 appear more attractive, causing suboptimal routing.
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1986)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1992)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:2040)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:813)
 
-Code comment documents this:
-> "NOTE: Spot price is used as a fallback for newly created pools that lack sufficient TWAP history. In this state, the estimate is susceptible to spot-price manipulation."
+Why it is real:
 
-**Mitigating factors:** Window is bounded (~30 min), slippage protection (`amountOutMin`) prevents worst-case execution, documented in code.
+- Before the local patch, `_routeFeesToProject(...)` reconciled fee claims from `terminal.pay(...)` using the returned `beneficiaryTokenCount`, then wrote that count into both `_totalOutstandingFeeTokenClaims` and `claimableFeeTokens[projectId]`.
+- It did not re-measure the actual fee-project-token balance the hook received.
+- The regression swaps in a fee project terminal that returns `amount` but transfers a fee-on-transfer fee token to the hook. The patched hook credits only the balance actually received.
 
-**Recommended fix:** Document in RISKS.md. Consider rejecting the V4 path entirely when TWAP is unavailable.
+Impact:
 
-admin note: documment in RISKS.
+- `claimableFeeTokens[projectId]` can exceed the hook's real fee-token balance.
+- Later `claimFeeTokensFor(...)` calls revert because the hook attempts to transfer more fee tokens than it actually owns, leaving the impossible claim stuck in storage.
+- Because `_totalOutstandingFeeTokenClaims` is also overstated, any logic that treats those claims as reserved balance inherits the same impossible accounting.
 
-**Resolution:** Accepted — Documented in RISKS.md.
+Evidence:
 
----
+- Regression: [univ4-lp-split-hook-v6/test/audit/FeeClaimTokenFOTAccounting.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/test/audit/FeeClaimTokenFOTAccounting.t.sol:1)
 
-### L-15. Failed Split Payouts Consume Payout Limit Permanently — Accepted risk *(GitHub #64)*
+Recommended fix:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-core-v6 |
-| **File** | `src/libraries/JBPayoutSplitGroupLib.sol:136-159` |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **Accepted — deliberate design** |
-| **Known issue?** | Yes — documented in code comment |
+- Review and merge the local actual-receipt accounting patch.
+- If non-standard fee-project tokens are out of scope, explicitly enforce that the fee project token and fee terminal must deliver standard exact-balance semantics before allowing fee routing.
 
-**Description:** When a split payout fails via try-catch, `recordPayoutFor` has already consumed the payout limit and `recordAddedBalanceFor` restores the funds, but `usedPayoutLimitOf` is not decremented. The payout limit is permanently consumed even though no funds left the project.
+### 43. `univ4-lp-split-hook-v6`: non-primary terminal balances can select an unusable terminal token and block deployment
 
-The code explicitly documents this as intentional:
-> "Failed split payouts consume the payout limit by design. The try-catch prevents a single split from DoS-ing the entire payout."
+Severity: `MED`
 
-**Why LOW:** Funds are never lost (`recordAddedBalanceFor` restores balance). The project recovers in the next ruleset cycle. The design prevents DoS against the overall payout flow.
+Status: locally mitigated in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`; retained here until the patch is reviewed and merged.
 
-**Recommended fix:** Document in RISKS.md. No code change — this is a deliberate design choice.
+Affected code:
 
-admin note: Document in RISKS, this is deliberate.
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:331)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:376)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:899)
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1093)
 
-**Resolution:** Accepted — Documented in RISKS.md.
+Why it is real:
 
----
+- Before the local patch, `_findHighestValueTerminalTokenOf(...)` scored candidate terminal tokens by scanning every terminal returned by `terminalsOf(projectId)` and reading raw balances from each terminal's store.
+- `deployPool(...)` then treats the winning token as if its funds are reachable through `primaryTerminalOf(projectId, token)`, and the later cash-out path uses only that primary terminal.
+- Those two notions are not equivalent. A secondary terminal can hold the largest balance for token `A` even when the primary terminal for token `A` has zero reachable balance.
+- The regression sets exactly that shape: a non-primary terminal reports the largest balance for `terminalToken`, but the primary terminal for `terminalToken` has none. The patched selector ignores the non-primary balance and picks the actually reachable token.
 
-### ~~L-16. Chainlink Staleness Threshold Configuration Risk~~ — Skipped *(GitHub #66)*
+Impact:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-core-v6 |
-| **File** | `src/JBChainlinkV3PriceFeed.sol:29-65`, `src/JBPrices.sol:118-144` |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **Skipped — deployment-time concern only** |
-| **Known issue?** | Partially — documented design constraint |
+- Projects with multiple terminals can have deployment blocked even though a usable primary-terminal path exists for another accepted token.
+- Because the hook only supports one terminal token per project, the selection bug affects the only deployment attempt that matters: the project cannot launch its LP position until the misleading non-primary balance disappears or the terminal topology is cleaned up.
+- This is especially sharp once deployment becomes permissionless after weight decay, because anyone can trigger the bad selection as soon as the stale or secondary balance is present.
 
-**Description:** `JBChainlinkV3PriceFeed` accepts a `THRESHOLD` in the constructor with no bounds check — it can be set to `type(uint256).max` (effectively disabled) or to a generous value (days/weeks). A misconfigured threshold accepts stale prices. Since feeds are immutable in `JBPrices` (cannot be replaced once set), a misconfigured threshold is permanent.
+Evidence:
 
-**Additional safety checks still active:** `updatedAt == 0` (incomplete round), `answeredInRound < roundId` (stale round), `price <= 0` (invalid price) — these catch some pathological cases regardless of threshold.
+- Regression: [univ4-lp-split-hook-v6/test/audit/NonPrimaryBalanceSelectionDoS.t.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/test/audit/NonPrimaryBalanceSelectionDoS.t.sol:1)
 
-**Recommended fix:** Add an upper-bound sanity check on `THRESHOLD` in the constructor (e.g., `require(threshold <= 3 hours)`). Document the deployment risk in RISKS.md.
+Recommended fix:
 
-admin note: nah, skip.
+- Review and merge the local primary-terminal auto-selection patch.
+- Keep the deployment docs clear that only primary-terminal balances are considered for automatic LP-pair selection.
 
-**Resolution:** Skipped per admin.
+### 44. `nana-router-terminal-v6`: projects can irreversibly lock the registry itself as their terminal and brick routing
 
----
+Severity: `LOW`
 
-### ~~L-17. REVOwner.supportsInterface Omits IERC165~~ — FIXED (`063f914`) *(GitHub #80)*
+Status: locally mitigated in `nana-router-terminal-v6/src/JBRouterTerminalRegistry.sol`; retained here until the patch is reviewed and merged.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVOwner.sol:460-462` |
-| **Auditor confidence** | HIGH (code-verified) |
-| **My confidence** | **HIGH — VERIFIED** |
-| **Known issue?** | No |
+Affected code:
 
-**Description:** `REVOwner.supportsInterface` checks for `IJBRulesetDataHook` and `IJBCashOutHook` interface IDs but omits the mandatory `IERC165.interfaceId` (`0x01ffc9a7`). Per ERC-165 spec, any contract implementing `supportsInterface` MUST return `true` for `0x01ffc9a7`.
+- [JBRouterTerminalRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminalRegistry.sol:366)
+- [JBRouterTerminalRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminalRegistry.sol:381)
+- [JBRouterTerminalRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/src/JBRouterTerminalRegistry.sol:452)
 
-**Recommended fix:** One-liner:
-```solidity
-return interfaceId == type(IERC165).interfaceId
-    || interfaceId == type(IJBRulesetDataHook).interfaceId
-    || interfaceId == type(IJBCashOutHook).interfaceId;
-```
+Why it is real:
 
-admin note: fix it if the contract does in fact use IERC165
+- `lockTerminalFor(...)` snapshots whatever terminal currently resolves for the project, but it does not validate that the locked target is non-circular.
+- If the registry owner ever sets `defaultTerminal = address(this)`, a project owner can call `lockTerminalFor(projectId, registry)` and permanently pin the registry itself as the project's terminal.
+- The first routed `pay(...)` or `addToBalanceOf(...)` then hits `_enforceNoCircularForward(...)` and reverts with `CircularForward`, but the project can no longer recover because `hasLockedTerminal[projectId]` blocks later `setTerminalFor(...)` updates.
 
-**Resolution:** FIXED — Added `type(IERC165).interfaceId` check. REVOwner declares `supportsInterface` as an override of IERC165, so per the ERC-165 spec it must return `true` for `0x01ffc9a7`. 4 new tests in `test/audit/AuditFixL17Test.t.sol`. 269 tests pass.
+Impact:
 
----
+- A single bad lock can permanently brick routed payments for that project until the registry is replaced at a higher layer.
+- This is a configuration / operator footgun rather than a permissionless theft path, but the lock is irreversible and the live failure only appears after the project is already committed.
 
-## Leads
+Evidence:
 
-### Pass 1 Leads (All Investigated)
+- Regression: [nana-router-terminal-v6/test/audit/RegistrySelfLockDoS.t.sol](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/test/audit/RegistrySelfLockDoS.t.sol:1)
 
-These are high-signal vulnerability trails from initial analysis. All 25 leads have now been investigated. 17 were promoted to numbered findings. Remaining 8 are resolved as FP, informational, or accepted risk.
+Recommended fix:
 
-| # | Repo | Lead | Risk Surface | Status |
-|---|------|------|--------------|--------|
-| 1 | nana-core-v6 | Non-ETH chain deployment installs incorrect native/ETH oracle assumptions | Deployment script | Informational — script guards against non-ETH chains, inline warnings present |
-| 2 | univ4-lp-split-hook-v6 | Sphinx reruns may bypass deploy script existence check | Deployment | FP — EVM CREATE2 prevents duplicate deployments |
-| 3 | univ4-lp-split-hook-v6 | Fallback tick reconstruction not re-clamped after emergency path | Edge-state revert | **PROMOTED → L-6** |
-| 4 | revnet-core-v6 | Registered phantom terminal can inflate borrow capacity | Privileged config | **PROMOTED → H-8** |
-| 5 | nana-router-terminal-v6 | Nested forwarders lose root payer breadcrumb | Multi-hop refunds | LOW — requires non-canonical multi-hop topology |
-| 6 | nana-721-hook-v6 | Retroactive default reserve beneficiary rebinding | Owner-gated economics change | **PROMOTED → M-10** |
-| 7 | nana-721-hook-v6 | Split fallback double-failure strands funds in hook | Stuck funds | FP — revert is atomic, whole pay() transaction reverts, no funds stuck |
-| 8 | univ4-router-v6 | 32-bit currency ID truncation misquotes helper output | Vanity token collision | FP (for fund loss) — truncation in view helper only, not on value-moving path |
-| 9 | nana-buyback-hook-v6 | Fee-on-transfer output tokens break swap settlement | Liveness failure | **PROMOTED → M-12** |
-| 10 | nana-suckers-v6 | Deterministic peer assumption is deployment-topology-sensitive | Cross-chain wiring | Informational — documented design constraint (CREATE2 same-address) |
-| 11 | nana-suckers-v6 | Destination-side controller/terminal wiring is hard liveness dependency | Claim finalization | Informational — documented known limitation |
-| 12 | nana-suckers-v6 | Zero-output inbound swap finalizes zero-backed batch | Dust-amount bridge | LOW — explicitly handled in code, stores localTotal:0 to prevent worse bug |
-| 13 | defifa | Concurrent project count race can revert launches | Tx-level liveness | LOW — safe revert, documented pattern |
-| 14 | croptop-core-v6 | Native/ETH currency mismatch on fresh deployments | Feed integration | **PROMOTED → M-13** |
-| 15 | croptop-core-v6 | Post-launch sucker deployment helper re-authorizes wrong caller | Permission mismatch | Related to M-15 |
-| 16 | croptop-core-v6 | Receiver-dependent ownership bootstrapping can be skipped | Misconfiguration | LOW — user misconfiguration, no fund loss |
-| 17 | banny-retail-v6 | Fallback-resolver balance suppresses whole-tier migration verification | Migration safety | **PROMOTED → M-22** (nemesis confirmed with PoC) |
-| 18 | nana-omnichain-deployers-v6 | Ruleset ID prediction can temporarily block wrapper queueing | Availability | LOW/Informational — intentional safety revert, 1-block availability gap |
-| 19 | nana-fee-project-deployer-v6 | Deployment artifact trust can silently miswire the fee project | Operational | Related to H-10 |
-| 20 | nana-fee-project-deployer-v6 | Terminal routing remains mutable after deployment | Governance risk | Related to H-10 |
-| 21 | deploy-all-v6 | Tempo deploy/resume/verify logic diverges | Unrecoverable deployment | **PROMOTED → H-11, M-18** |
-| 22 | deploy-all-v6 | Tempo Moderato USDC feed placeholder can brick deployment | address(0) | **PROMOTED → M-20** |
-| 23 | deploy-all-v6 | Defifa metadata on Tempo depends on zero typeface | tokenURI reverts | **PROMOTED → M-19** |
-| 24 | nana-distributor-v6 | Controller pre-send accounting can over-credit deflationary tokens | Phantom rewards | **PROMOTED → M-17** |
-| 25 | nana-distributor-v6 | 721 round allocation based on live supply, not claimed round boundary | Reward capture | **PROMOTED → H-12** |
+- Review and merge the local circular-lock guard.
+- Keep validating the resolved terminal inside `lockTerminalFor(...)` with the same circular-forwarding checks that runtime routing relies on.
 
-*All leads investigated. 17 promoted, 4 FP, 4 informational/low.*
+### 45. `croptop-core-v6` + `nana-suckers-v6`: Croptop's documented "launch now, add suckers later" path is broken
 
----
+Severity: `MED`
 
-### Pass 2 Leads (20260421)
+Status: locally mitigated in `croptop-core-v6/src/CTDeployer.sol` and `nana-suckers-v6/src/JBSucker.sol`; retained here until the cross-repo patches are reviewed and merged.
 
-New leads from the second audit pass. All 14 investigated. 4 promoted to findings (H-15, M-26, L-9, L-10), 1 fixed (Lead 32), 3 informational, 6 corroborate existing findings.
+Affected code:
 
-| # | Repo | Lead | Risk Surface | Verdict |
-|---|------|------|--------------|---------|
-| 26 | revnet-core-v6 | External accounting surfaces can skew borrowability and reclaim math | Surplus trust | Corroborates H-8 — accepted risk, privileged configuration |
-| 27 | nana-buyback-hook-v6 | Fee-on-transfer tokens can break sell-side buyback cash-outs | Liveness | Corroborates M-12 — should be fixed via M-12 fix |
-| 28 | nana-721-hook-v6 | Tier-count gas ceiling can degrade cash-out and balance liveness | Gas DoS | Informational — documented in RISKS.md §4, gas tests confirm 30 tiers = 11M gas. Recommend practical tier cap in documentation. |
-| 29 | nana-router-terminal-v6 | Credit cashout preferred-token short-circuit spends stray balances | Stuck funds | **PROMOTED → M-26** |
-| 30 | nana-suckers-v6 | CCIP native-token mapping can encode a token the receiver never unwraps | Bridge lockup | **PROMOTED → H-15** |
-| 31 | nana-suckers-v6 | OR-based deployer configuration checks can finalize broken bridge singletons | Deployment | Corroborates M-25 |
-| 32 | banny-retail-v6 | Removed retained outfits can collide on synthetic category 0 and brick redecorations | Lifecycle trap | **FIXED** — commit a73734c added post-sort duplicate-category validation |
-| 33 | defifa | Launch-time validation gaps permit unfinishable games (1 tier + no timeout) | Fund lockup | Corroborates M-21 |
-| 34 | defifa | Predicted game ID can be mempool-griefed during launch | Tx-level liveness | Corroborates Lead 13 — same pattern, safe revert |
-| 35 | univ4-lp-split-hook-v6 | Out-of-band pre-initialized pool prices accepted without validation | Price manipulation | Informational — valid but mitigated by design (code comments note pre-initialization path), RISKS.md §7.4 inaccurately claims validation exists |
-| 36 | univ4-router-v6 | Preview failure forces conservative but worse sell routing | Routing quality | Informational — documented intentional behavior, `amountOutMin` protects against worse execution |
-| 37 | deploy-all-v6 | Tempo chain support internally inconsistent across deploy/resume/verify | Deployment | Corroborates H-11, M-18 — **Resume.s.sol still missing Tempo branches, prior fix may be incomplete** |
-| 38 | deploy-all-v6 | Banny resolver metadata handoff not repaired on resume | Deployment | **PROMOTED → L-9** |
-| 39 | deploy-all-v6 | Mainnet oracle provenance verification compares wrapper slot to raw aggregator | Verification | **PROMOTED → L-10** |
+- [CTDeployer.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTDeployer.sol:100)
+- [CTDeployer.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTDeployer.sol:225)
+- [CTDeployer.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTDeployer.sol:268)
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:480)
+- [JBSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSucker.sol:1022)
 
----
+Why it is real:
 
-### Pass 3 Leads (20260421-130747 / 20260421-130750)
+- `CTDeployer`'s launch path explicitly says sucker deployment is fail-open and that unsupported chains can be fixed later with manual sucker setup.
+- Before the local patch, [CTDeployer.deployProjectFor(...)](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/src/CTDeployer.sol:229) called `SUCKER_REGISTRY.deploySuckersFor(...)` directly, so any registry or deployer failure bubbled up and reverted the whole launch.
+- The supposed later recovery path was also broken by permissions. [JBSuckerRegistry.deploySuckersFor(...)](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:487) requires its caller to have `DEPLOY_SUCKERS` from the current project owner, then immediately calls `sucker.mapTokens(...)`, which only worked if the registry itself also had `MAP_SUCKER_TOKEN` for that owner.
+- `CTDeployer` only grants `MAP_SUCKER_TOKEN` to the registry from `CTDeployer`'s own account during construction. That is enough while `CTDeployer` temporarily owns a freshly launched project, but it does not help after the project NFT has been transferred to the real owner.
+- The local patch makes initial Croptop sucker deployment fail open, lets the registry map tokens during an authorized sucker deployment, and makes the CTDeployer wrapper fail early with an explicit missing-delegation error unless the owner has granted the wrapper `DEPLOY_SUCKERS`.
 
-New leads from the third audit pass. Pending full investigation.
+Impact:
 
-| # | Repo | Lead | Risk Surface | Verdict |
-|---|------|------|--------------|---------|
-| 40 | nana-router-terminal-v6 | Credit-cashout registry pre-accepts ERC20 input that the router never consumes | Fund trapping | Pending |
-| 41 | nana-router-terminal-v6 | Forwarding detection suppresses final-hop receipt checks for privileged terminal configs | Receipt bypass | Pending |
-| 42 | nana-router-terminal-v6 | Deployed registry default can become circular if directory resolves back to registry | Routing DoS | Corroborates Pashov finding on default topology |
-| 43 | univ4-lp-split-hook-v6 | Attacker-seeded pool price accepted during first deployment | Price manipulation | Corroborates Lead 35 |
-| 44 | univ4-lp-split-hook-v6 | Narrow zero-cashout tick fallback lacks boundary clamping | Edge-state revert | Pending |
-| 45 | nana-buyback-hook-v6 | Fee-on-transfer tokens can break sell-side buyback cash-outs | Liveness | Corroborates M-12 / Lead 27 |
-| 46 | nana-suckers-v6 | CCIP native-token mapping encodes token the receiver never unwraps | Bridge lockup | Corroborates H-15 |
-| 47 | nana-suckers-v6 | OR-based deployer configuration checks can finalize broken bridge singletons | Deployment | Corroborates M-25 |
-| 48 | revnet-core-v6 | External accounting surfaces can skew borrowability and reclaim math | Surplus trust | Corroborates H-8 |
-| 49 | croptop-core-v6 | Deploy-time handoff to CTProjectOwner skips permission-grant callback | Permission gap | Pending |
-| 50 | nana-distributor-v6 | Elastic-supply reward tokens desynchronize accounting | Phantom rewards | Pending |
-| 51 | nana-distributor-v6 | Blacklistable reward tokens can stall beneficiary claims | DoS | Pending |
-| 52 | nana-fee-project-deployer-v6 | Skip-on-controller can mask unintended project #1 rollout | Deployment | Pending |
-| 53 | deploy-all-v6 | Tempo chain support inconsistent across deploy/resume/verify | Deployment | Corroborates H-11/M-18/Lead 37 |
+- A configured sucker deployment failure bricks Croptop project launch instead of degrading cleanly.
+- Projects launched without suckers do not have a working later-setup path through the provided `CTDeployer` / registry surfaces.
+- On an immutable rollout, that means unsupported-chain or temporary sucker-deployer failures require manual permission surgery or redeployment, contrary to the documented operating model.
 
----
+Evidence:
 
-### Pass 3 Corroborations
+- Regression: [croptop-core-v6/test/audit/CodexNemesisFreshRound.t.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/test/audit/CodexNemesisFreshRound.t.sol:319)
+- Regression: [croptop-core-v6/test/audit/CodexNemesisSuckerWrapper.t.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/test/audit/CodexNemesisSuckerWrapper.t.sol:124)
 
-Pass 3 independently re-discovered 7 findings from passes 1-2:
+Recommended fix:
 
-| Source | Repo | Corroborates |
-|--------|------|-------------|
-| Pashov pass 3 | nana-buyback-hook-v6 | C-3 (cashout fallback zeros surplus) |
-| Pashov pass 3 | univ4-lp-split-hook-v6 | H-2 (permissionless LP deployment) |
-| Pashov pass 3 | nana-distributor-v6 | H-12 (721 distributor live state allocation) |
-| Pashov pass 3 | nana-suckers-v6 | H-13 (out-of-order root delivery) |
-| Pashov pass 3 | nana-suckers-v6 | H-14 (unsynchronized deprecation blackholes) |
-| Pashov pass 3 | croptop-core-v6 | M-24 (empty-post metadata shadowing) |
-| Pashov pass 3 | nana-ownable-v6 | L-2 (future project prebinding) |
+- Review and merge the local Croptop fail-open launch patch and Sucker registry-mapping patch together.
+- Keep post-launch docs explicit: owners can call the registry directly after granting `DEPLOY_SUCKERS`, while CTDeployer's wrapper also requires the owner to delegate `DEPLOY_SUCKERS` to the wrapper.
 
----
+### 46. `nana-721-hook-v6`: existing-project ruleset helper reverts unless the helper contract itself is separately permissioned
 
-## Cross-Reference With Per-Repo RISKS.md
+Severity: `LOW`
 
-Known issues and accepted risks belong in each repo's `RISKS.md` file. This report's findings were checked against those files. Relevant matches:
+Status: locally mitigated in `nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol`; retained here until the patch is reviewed and merged.
 
-- **C-1, C-2, H-3:** Fall under the cross-boundary pricing risk category documented in the top-level `RISKS.md`
-- **M-2:** Falls under the deployment/project-ID drift risk documented in the top-level `RISKS.md`
-- **H-7, L-2, L-3:** Accepted risks — should be documented in their respective repo RISKS.md files if not already
-- **H-2, H-4, H-9:** Downgraded after verification (H-2: project-approved tokens only, H-4: permissions follow ownership, H-9: no payout limits exist)
-- **M-8, M-9, M-11, M-13:** Downgraded to informational/FP (M-8: downstream self-corrects, M-9: self-inflicted DoS, M-11: already mitigated by amountOutMin, M-13: baseCurrency=1 is by design)
-- **M-7:** Downgraded to LOW — residual recoverable, fix has fee-avoidance tradeoff
-- **H-8, M-10, M-15:** Accepted risks / expected behavior — document in RISKS.md / USER_JOURNEYS
-- **H-10, M-16:** Fee-project deployer script issues — operational, not on-chain
-- **H-11, M-3, M-18, M-19, M-20:** Tempo-specific — not yet deployed, time to fix before launch. Lead 37 indicates Resume.s.sol fix for H-11 may be incomplete.
-- **H-15:** CCIP native-token mapping — bridge-specific, requires CCIP sucker fix before deployment
-- **M-21:** Defifa governance config — reject one-tier games at launch
-- **M-22:** Banny migration helper — deployment/migration integrity, not live runtime
-- **M-26:** Router terminal credit cashout — conditional on stray balance, low likelihood but real
-- **L-6:** Edge-case DoS in LP split hook fallback path — easy fix, low urgency
-- **L-9, L-10:** Deploy-all-v6 script issues — operational, fix before next deployment run
-- **H-16:** Defifa ERC-20 currency mismatch — game launch configuration validation needed
-- **H-17:** Buyback hook registry default — mutable global trust anchor for unlocked projects
-- **H-18:** CCIP swap zero-output — cross-chain solvency, requires gating unbacked claims
-- **H-19:** Deprecated sucker removal — downstream aggregate views lose chain data
-- **H-20:** Address registry provenance — informational infrastructure integrity, front-running risk
-- **H-21:** V4 router price impact — routing quality degradation for large trades
-- **H-22:** Distributor ERC20 prepaid path — split funds permanently stranded
-- **M-27:** Buyback hook sell-side fee bypass — protocol fee revenue loss
-- **M-28:** Croptop deploySuckersFor — post-launch helper broken, workaround exists (direct registry call)
-- **M-29:** Croptop baseCurrency identity feed — operational deployment dependency, re-opens H-9/M-13
-- **M-30:** Router terminal preview divergence — routing quality for cashout source paths
-- **M-31:** LP split hook nonce desync — provenance misregistration after mixed deploys
-- **M-32:** Deploy-all-v6 project ID squatting — operational, partial deployment griefing
-- **L-11:** Distributor empty claim arrays — early round snapshot locking
-- **H-23:** Buyback hook sell-side swap failure — cash-out DoS when pool reverts (GitHub #75)
-- **M-33:** Cross-chain surplus staleness — bonding curve inflation, mitigated by local surplus cap (GitHub #53)
-- **M-34:** OMNICHAIN_RULESET_OPERATOR bypass — documented trust boundary, projects should use approval hooks (GitHub #61)
-- **M-35:** Duplicate fund access limit groups — self-inflicted surplus miscalculation (GitHub #74)
-- **M-36:** JBDistributor zero totalStake — beginVesting reverts, inconsistent with collectVestedRewards guard (GitHub #77)
-- **M-37:** Pay/cash-out hooks no try-catch — inconsistent with payout splits pattern, self-inflicted DoS (GitHub #79)
-- **L-12:** REVLoans CEI violation — documented known issue, unrealistic precondition (GitHub #56)
-- **L-13:** ERC-2771 forwarder trust boundary — not exploitable with OZ v5.6.0 (GitHub #57)
-- **L-14:** TWAP warmup spot-price fallback — bounded 30-min window, documented (GitHub #59)
-- **L-15:** Failed split payout limit consumption — intentional design, documented (GitHub #64)
-- **L-16:** Chainlink staleness threshold — deployment-time configuration risk (GitHub #66)
-- **L-17:** REVOwner.supportsInterface — ERC-165 spec violation, one-liner fix (GitHub #80)
-- **H-24:** ~~Router terminal credit theft — FIXED: use `sender` directly as holder instead of `_resolveOriginalPayer(sender)`. Credit-cashout only works via direct calls, documented in RISKS.md §8.7~~
-- **H-25:** ~~Distributor snapshot manipulation — FIXED: eagerly lock next-round snapshot block at round boundary~~
-- **H-26:** ~~Distributor post-snapshot NFT overbooking — FIXED: per-owner voting power cap deducted across tokenIds~~
-- **M-38:** LP split hook pre-initialized pool price — ACCEPTED BY DESIGN: arbitrageurs naturally correct out-of-range prices. Reverting would create a deployment-blocking DoS vector. Documented in RISKS.md §7.4.
-- **L-18:** ~~Project payer `tx.origin` fallback — FIXED: replaced `tx.origin` with `msg.sender`~~
-- **L-19:** ~~Project payer deploy script lacks directory validation — FIXED: added `code.length != 0` validation~~
-- **M-39:** ~~ROOT permission bypasses `permissionId=0` — FIXED: bypass permission system entirely when `permissionId == 0`, requiring direct owner match~~
-- **M-40:** ~~Deployment helper accepts non-contract registry addresses — FIXED: added `code.length != 0` validation in deployment helper~~
+Affected code:
 
----
+- [IJB721TiersHookProjectDeployer.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/interfaces/IJB721TiersHookProjectDeployer.sol:41)
+- [JB721TiersHookProjectDeployer.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol:115)
+- [JB721TiersHookProjectDeployer.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol:164)
+- [JBController.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBController.sol:426)
+- [JBController.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBController.sol:586)
 
-## Repos With No Findings (Passes 1-2)
+Why it is real:
 
-- ~~nana-address-registry-v6 (nemesis: all false positives)~~ — Pass 3 found H-20
-- nana-project-handles-v6 (nemesis: all false positives)
-- nana-permission-ids-v6 (nemesis: no findings, pass 3 confirmed)
-- ~~nana-suckers-v6 (nemesis: all false positives)~~ — Pass 3 found H-18, H-19
+- `JB721TiersHookProjectDeployer.launchRulesetsFor(...)` and `queueRulesetsOf(...)` locally verify that the external caller is the project owner or has the expected project permissions.
+- After those checks pass, both helper functions forward into `JBController` from the helper contract itself.
+- `JBController.launchRulesetsFor(...)` and `queueRulesetsOf(...)` then re-check permissions against their own `_msgSender()`, which is now the helper contract rather than the original owner/operator.
+- The result is a misleading public API: owner/operator permissions alone are not enough. The helper contract itself must also be separately permissioned on the target project for these existing-project flows to succeed.
 
-## Nemesis Duplicates (Corroborate Existing Pashov Findings)
+Impact:
 
-The following nemesis findings confirmed existing Pashov findings (not added as separate entries):
+- Existing projects trying to attach a new 721 hook or queue hook-backed rulesets through this helper can fail after passing all local authorization checks.
+- Integrators may believe they have delegated the right permissions to an operator, but still need extra out-of-band controller permissions for the helper contract itself.
+- Transactions revert atomically, so this is an operational failure rather than a partial-state bug, but it breaks the advertised helper workflow.
 
-| Nemesis ID | Repo | Corroborates |
-|------------|------|-------------|
-| univ4-lp-split-hook-v6 NM-001 | univ4-lp-split-hook-v6 | H-2 |
-| revnet-core-v6 NM-002 | revnet-core-v6 | H-3 |
-| nana-721-hook-v6 NM-001 | nana-721-hook-v6 | H-7 |
-| nana-buyback-hook-v6 NM-001 | nana-buyback-hook-v6 | M-5 |
-| defifa NM-001 | defifa | H-5 |
-| nana-ownable-v6 NM-001 | nana-ownable-v6 | L-2 (nemesis rates HIGH) |
-| nana-distributor-v6 NM-003 | nana-distributor-v6 | L-4 (nemesis rates MEDIUM) |
+Evidence:
 
----
+- Regression: [nana-721-hook-v6/test/audit/ProjectDeployerAuth.t.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/test/audit/ProjectDeployerAuth.t.sol:1)
 
-## Pass 4 Findings (20260421-203404 / 20260421-203407)
+Recommended fix:
 
-Source: Nemesis Auditor (Codex) run `20260421-203404` + Pashov Solidity Auditor (Codex) run `20260421-203407`. All findings verified against current source code.
+- Review and merge the local downstream-permission preflight.
+- Alternatively, narrow the documented operating model and require explicit permissioning of the helper contract before using these existing-project helper flows.
 
-### ~~H-24. Spoofed `originalPayer()` Enables Delegated Credit Theft *(pass 4 pashov + nemesis)* — FIXED~~
+## No-Action / Accepted Items
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBRouterTerminal.sol:725-733,1042-1066` |
-| **Auditor confidence** | 90 |
-| **My confidence** | **95 — VERIFIED (test suite confirms)** |
-| **Known issue?** | Partially acknowledged in RISKS.md §3, §8.2 but mischaracterized |
-| **Status** | **FIXED** — `holder = sender` instead of `_resolveOriginalPayer(sender)`. Credit-cashout now only works via direct calls. Documented in RISKS.md §8.7. |
+These were reviewed and intentionally dropped.
 
-**Description:** `_resolveOriginalPayer()` calls `IJBPayerTracker(msg.sender).originalPayer()` on **any** contract-type caller without verifying `msg.sender` is a trusted registry. Any contract implementing `IJBPayerTracker` can return a victim's address as the "original payer." The router then calls `controller.transferCreditsFrom(victim, ...)` — which succeeds because the victim previously granted the router `TRANSFER_CREDITS` permission (required for normal credit-cashout usage). The victim's credits are cashed out and proceeds routed to the attacker's chosen destination.
+### Trust-boundary items
 
-The test file `test/RouterTerminalCreditCashout.t.sol:409-486` contains `test_creditCashout_usesTrackedOriginalPayerAsHolder` which explicitly demonstrates the spoofing vector with a `CreditCashoutSpoofingIntermediary` contract.
+- `revnet-core-v6`: borrowability trusting all registered terminals.
+  Dropped because projects are allowed to bring their own terminals and inherit that risk.
 
-RISKS.md §8.2 states "the caller already supplied the funds being routed" but this is incorrect for the credit-cashout path: `msg.value` must be 0 (enforced at line 1051), and no ERC-20 transfer occurs — the "funds" are entirely the victim's credits.
+- `nana-router-terminal-v6`: forwarding terminals bypassing exact receipt enforcement.
+  Dropped as an accepted owner-chosen forwarding trust boundary.
 
-**Mitigation:** Only resolve `originalPayer()` when `msg.sender` is the trusted `JBRouterTerminalRegistry` contract, or require the victim to sign an authorization for each credit-cashout operation.
+### Explicitly accepted economic / liveness tradeoffs
 
-**Resolution:** Used `holder = sender` (the direct `_msgSender()`) for the credit-cashout path instead of resolving via `_resolveOriginalPayer()`. This means credit-cashout only works when calling the router terminal directly, not through the registry. The tradeoff (no registry-mediated credit-cashout) is documented in RISKS.md §8.7.
+- `deploy-all-v6` + revnets: canonical revnets intentionally follow admin-controlled router / buyback registry defaults.
+  Dropped because this shared-default behavior is part of the accepted deployment model, not a bug to remove.
 
----
+- `nana-core-v6`: migration-fee fail-open / stranded-value accounting oddities.
+  Dropped because liveness is preferred and this behavior is accepted.
 
-### ~~H-25. Distributor Snapshot Block Manipulable by First Round Caller *(pass 4 pashov)* — FIXED~~
+- `nana-core-v6`: fee-free surplus persistence across rulesets.
+  Dropped as documented behavior, not a bug requiring action.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JBDistributor.sol:395-399` |
-| **Auditor confidence** | 90 |
-| **My confidence** | **88 — VERIFIED** |
-| **Known issue?** | No |
-| **Status** | **FIXED** — eagerly lock next-round snapshot block at round boundary |
+- `nana-core-v6`: migration resetting payout-limit / surplus-allowance usage.
+  Dropped as documented accepted risk.
 
-**Description:** `_ensureSnapshotBlock(round)` sets `roundSnapshotBlock[round] = block.number - 1` on the first call for a given round. This function is called from three permissionless entry points: `beginVesting()`, `collectVestedRewards()`, and `poke()`. An attacker who temporarily borrows tokens and delegates voting power in block N can be the first to call `poke()` or `beginVesting()` in block N+1, locking the snapshot to block N where they had inflated voting power. The `poke()` keeper function offers partial mitigation but cannot prevent front-running.
+- `nana-core-v6`: data hooks controlling cash-out pricing.
+  Dropped as an intentional trust boundary.
 
-This is distinct from H-12 (which was about `_tokenStake` using live state instead of snapshot state). H-12 was fixed in `9918cd6`, but this vector (controlling which block IS the snapshot) remains open.
+- `nana-721-hook-v6`: pay credits underfunding split obligations.
+  Dropped because this is already documented and the intended mitigation is tier configuration.
 
-**Mitigation:** Preset the snapshot block at round boundaries rather than auto-assigning on first interaction, or use a commit-reveal scheme for snapshot selection.
+- `univ4-lp-split-hook-v6`: LP math using raw cash-out and raw issuance rates instead of hook-adjusted execution previews.
+  Dropped because the hook should intentionally read raw rates only.
 
-**Resolution:** Snapshot block for the next round is now eagerly locked at round boundary time, preventing first-caller manipulation.
+### Not part of the real deploy path
 
----
+- `nana-core-v6`: `DeployPeriphery.s.sol` bootstrap/controller artifact ordering.
+  Dropped because production deploys go through `deploy-all-v6`, which deploys `JBController` directly in Phase 05.
 
-### ~~H-26. Post-Snapshot NFT Mints Can Overbook Distribution Rounds *(pass 4 pashov)* — FIXED~~
+### Fixed
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-distributor-v6 |
-| **File** | `src/JB721Distributor.sol:153-170` |
-| **Auditor confidence** | 90 |
-| **My confidence** | **90 — VERIFIED** |
-| **Known issue?** | No |
-| **Status** | **FIXED** — per-owner voting power cap deducted across tokenIds |
+- `univ4-router-v6` + `univ4-lp-split-hook-v6`: shared hooks no longer leave terminal pull approvals alive after external terminal calls.
+  Local patch: both hooks now revert if a directory-selected terminal or fee terminal returns without fully consuming the temporary ERC-20 allowance; the prior PoCs have been converted into regressions for the new fail-closed behavior.
 
-**Description:** `_tokenStake` in `JB721Distributor` checks the current `ownerOf(tokenId)` and that owner's `getPastVotes` at the snapshot block, but never verifies the specific NFT existed at the snapshot. The `min(votingUnits, pastVotes)` cap reuses the owner's **total** historical voting power for every NFT presented — there is no deduction mechanism across tokenIds.
+- `univ4-router-v6`: JB-routed swaps now enforce realized `amountOutMin` locally.
+  Local patch: `_routeThroughJuicebox(...)` reverts when the measured output balance delta is below `amountOutMin`, so callers are no longer relying on every directory-selected terminal to enforce slippage correctly.
 
-**Attack path:** Alice owns NFT #1 (100 voting units) at the snapshot. After the snapshot, she mints NFT #2 (100 voting units). She calls `beginVesting(hook, [#1, #2], tokens)`. For both NFTs, `_tokenStake` returns `min(100, 100) = 100`, allocating 2x the distributable amount. The denominator (`_totalStake` from `getPastTotalSupply`) only counts pre-snapshot supply, so the numerator sum exceeds the denominator, overbooking the round.
+- `univ4-lp-split-hook-v6`: overreported cash-out returns can no longer consume other projects' reserved fee-token claims.
+  Local patch: `_addUniswapLiquidity(...)` now sizes terminal-token liquidity from the measured free-balance delta after cash-out, net of balances reserved for fee-token claims, and the prior shared-clone capture PoC has been converted into a regression.
 
-This is related to H-12 (which covered live state in `_totalStake`) but is a distinct vector — per-token voting power is not deducted when processing multiple tokenIds for the same owner.
+- `nana-buyback-hook-v6`: protocol-derived AMM route minima no longer auto-select lossy / unknown ERC-20 output routes.
+  Local patch: metadata-less ERC-20 sell-output routing stays on the direct cash-out path unless the caller supplies an explicit minimum, and metadata-less buy-output routing only derives an AMM quote for standard `JBTokens` ERC-20 clones. Custom project-token outputs require explicit quote metadata.
 
-**Mitigation:** Track consumed voting power per owner within `_vestTokenIds` and subtract each tokenId's stake from the owner's remaining allowance, or verify the specific tokenId existed at the snapshot block.
+- `univ4-lp-split-hook-v6`: fee-token claims now track the fee-project tokens the hook actually receives.
+  Local patch: `_routeFeesToProject(...)` snapshots and reconciles the fee-project ERC-20 balance around `terminal.pay(...)`, including the case where the terminal token is also the fee-project token, so fee-on-transfer delivery cannot over-credit `claimableFeeTokens`.
 
-**Resolution:** `_vestTokenIds` now tracks consumed voting power per owner and deducts each tokenId's stake from the owner's remaining allowance, preventing overbooking.
+- `univ4-lp-split-hook-v6`: automatic deployment token selection now ignores non-primary terminal balances.
+  Local patch: `_findHighestValueTerminalTokenOf(...)` only scores balances held by the resolved primary terminal for each candidate token, matching the terminal used later by deployment and cash-out.
 
----
+- `nana-suckers-v6`: stale deprecated same-chain sucker snapshots no longer dominate active peer-chain accounting.
+  Local patch: `JBSuckerRegistry` aggregate views now prefer active sucker values for each peer chain and fall back to deprecated values only when no active sucker answers; the stale-max PoCs have been converted into regressions.
 
-### M-38. Pre-Initialized Pool Price Accepted Without Bounds Validation *(pass 4 — promotes Lead 35/43)* — ACCEPTED BY DESIGN
+- `nana-suckers-v6`: failed `toRemoteFee` payments no longer remain addable or permanently stranded.
+  Local patch: `JBSucker` now records failed fee payments as refundable credits for the original caller, excludes the retained ETH from native `amountToAddToBalanceOf(...)`, and exposes `claimRetainedToRemoteFee(...)`; the irrecoverable-fee PoC has been converted into a regression.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-lp-split-hook-v6 |
-| **File** | `src/JBUniswapV4LPSplitHook.sol:1484-1493` |
-| **Auditor confidence** | 85 |
-| **My confidence** | **82 — VERIFIED** |
-| **Known issue?** | Acknowledged in code comments (line 1484: "e.g. by an attacker") and Lead 35/43, previously rated Informational |
-| **Status** | **ACCEPTED BY DESIGN** — reverting on out-of-range prices creates a DoS vector. Documented in RISKS.md §7.4. |
+- `defifa`: one-tier games with disabled scorecard timeout can no longer launch into a permanently unratifiable configuration.
+  Local patch: `DefifaDeployer.launchGameWith(...)` now rejects single-tier launches when `scorecardTimeout == 0`, and the one-tier lock PoCs have been converted into regressions for the launch-time guard.
 
-**Description:** `_createAndInitializePool` accepts any pre-initialized `sqrtPriceX96` from `POOL_MANAGER.getSlot0()` without validating it falls within the hook's calculated tick bounds. An attacker can front-run `deployPool()` by calling `POOL_MANAGER.initialize()` directly with an extreme price. The manipulated price propagates into `_computeOptimalCashOutAmount`, which determines how many project tokens are irreversibly cashed out for terminal tokens. A price far below the tick range triggers the maximum 50% cash-out; a price far above triggers 0% cash-out. The resulting single-sided LP position is arbitrageable.
+- `defifa`: fee-token cash-out claims now follow the cash-out beneficiary.
+  Local patch: `DefifaHook.afterCashOutRecordedWith(...)` passes `context.beneficiary` into the fee-token claim path so terminal-token reclaim, `$DEFIFA`, and `$NANA` settle to the same destination.
 
-**Mitigating factors:** Tick bounds are independently derived from Juicebox economics (not from pool price). Cash-outs have slippage protection via `effectiveMinReturn`. Cash-out amount is capped at 50%. Leftover tokens are returned to the project. Loss is bounded by the cash-out tax on unnecessarily cashed-out tokens plus arbitrage profit from the mispriced LP. Not a total-fund-loss scenario.
+- `defifa`: `tokensClaimableFor(...)` no longer overquotes while reserve mints are pending.
+  Local patch: the preview now uses `_totalMintCost + _pendingReserveMintCost()`, matching the complete-phase execution denominator.
 
-**Promoted from:** Lead 35 (pass 2) / Lead 43 (pass 3), previously rated Informational. Upgraded to Medium based on verified end-to-end loss path via cash-out sizing manipulation.
+- `nana-project-handles-v6`: verified handles now reject dangerous Unicode formatting controls before storage.
+  Local patch: `setEnsNamePartsFor(...)` rejects common bidi and invisible format-control code points in addition to dots, ASCII control bytes, and DEL, and the spoof PoC has been converted into a regression.
 
-**Mitigation:** Before accepting an existing pool price, validate `existingSqrtPriceX96` falls within the tick bounds derived from `_calculateTickBounds`. Revert with `PoolPriceOutOfRange()` if not.
+- `nana-router-terminal-v6`: irreversible terminal locks can no longer pin routes that forward back into the registry.
+  Local patch: the registry rejects itself as a default or project terminal and validates forwarding terminals before writing `hasLockedTerminal`, so circular targets fail before the lock becomes permanent.
 
-**Resolution:** Accepted by design. Reverting on out-of-range prices would create a permanent deployment-blocking DoS vector — an attacker could front-run `deployPool()` by initializing the pool at an extreme price, permanently blocking deployment. The economic cost of an out-of-range initialization is temporary single-sided exposure, which resolves naturally through arbitrage. This is strictly preferable to a permanent DoS. Documented in RISKS.md §3 and §7.4.
+- `nana-router-terminal-v6`: buy-side best-route scoring now uses canonical buyback-hook raw swap quotes when present.
+  Local patch: `JBPayRouteResolver` decodes buyback pay-hook metadata, scores the conservative floor plus any direct mint, and compares the stronger live raw quote when supplied so buyback-hooked routes are ranked against ordinary terminal previews on the same expected-output basis.
 
----
+- `nana-721-hook-v6`: existing-project ruleset helper flows now fail explicitly before side effects when the helper lacks downstream controller permissions.
+  Local patch: `JB721TiersHookProjectDeployer` preflights its own `LAUNCH_RULESETS` / `SET_TERMINALS` / `QUEUE_RULESETS` permissions before deploying hooks and forwarding into `JBController`, so callers get a clear helper-specific error instead of a post-deployment controller revert.
 
-### ~~L-18. `tx.origin` Beneficiary Fallback Misroutes Project Tokens for Contract Callers *(pass 4 nemesis + pashov)* — FIXED~~
+- `nana-721-hook-v6` + `nana-distributor-v6`: 721 round rewards now use token-specific snapshot ownership instead of current-owner voting power alone.
+  Local patch: `JB721TiersHook` checkpoints each token's owner on transfer and exposes `ownerOfAt(...)`; `JB721Distributor` now looks up the snapshot owner before scoring stake and consuming owner vote budgets, so late-minted replacement NFTs cannot steal rewards from transferred snapshot tokens.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-project-payer-v6 |
-| **File** | `src/JBProjectPayer.sol:95,318-320` |
-| **Auditor confidence** | 75 (nemesis + pashov agree) |
-| **My confidence** | **75** |
-| **Known issue?** | No |
-| **Status** | **FIXED** — replaced `tx.origin` with `msg.sender` |
+- `croptop-core-v6`: prior project owners no longer retain direct CTDeployer-owned hook-management permissions after a project NFT transfer.
+  Local patch: `CTDeployer.deployProjectFor(...)` no longer grants `ADJUST_721_TIERS`, `SET_721_METADATA`, `MINT_721`, or `SET_721_DISCOUNT_PERCENT` from `CTDeployer` to the initial owner; owners who want direct hook control must claim project-based hook ownership so authority follows the current project NFT owner.
 
-**Description:** When both the explicit beneficiary and `defaultBeneficiary` are `address(0)`, the payer resolves to `tx.origin` as the token recipient. This misroutes minted project tokens for multisigs, ERC-4337 wallets, routers, relayers, and any contract integration that pays on behalf of a user. The payment itself succeeds, so the misrouting is silent. Both `receive()` (line 95) and `_pay()` (line 318) contain the same fallback.
+- `croptop-core-v6` + `nana-suckers-v6`: Croptop launches no longer hard-fail on initial sucker rollout, and post-launch registry recovery can map sucker tokens through the authorized registry path.
+  Local patch: `CTDeployer.deployProjectFor(...)` emits `CTDeployer_SuckerDeploymentFailed` and keeps the project launch / ownership transfer moving when initial sucker deployment fails, `CTDeployer.deploySuckersFor(...)` now preflights the wrapper's delegated `DEPLOY_SUCKERS` permission explicitly, and `JBSucker` accepts registry-initiated token mapping after the registry has enforced `DEPLOY_SUCKERS`.
 
-**Mitigation:** Revert when no beneficiary is available rather than falling back to `tx.origin`:
-```solidity
-if (beneficiary == address(0) && defaultBeneficiary == address(0)) revert BeneficiaryRequired();
-```
+- `nana-fee-project-deployer-v6` + `deploy-all-v6`: configured project `1` no longer gets accepted as NANA based only on a nonzero controller.
+  Local patch: the standalone fee deployer and deploy-all deploy/resume scripts now require configured project `1` to be owned by the REV deployer, controlled by the canonical controller, have a nonzero revnet configuration hash, and expose the `NANA` token symbol before skipping NANA deployment.
 
-**Resolution:** Replaced `tx.origin` with `msg.sender` as the fallback beneficiary. This correctly routes tokens to the direct caller (including Safes and contract wallets) instead of the transaction originator.
+- `revnet-core-v6`: revnet sucker deployment salts no longer depend on the external split-operator / relayer caller.
+  Local patch: `REVDeployer._deploySuckersFor(...)` now derives the registry salt from the encoded revnet configuration hash and the project-provided sucker salt only, so caller changes do not break default peer symmetry when the registry/deployer topology is otherwise identical.
 
----
+- `revnet-core-v6`: revnet configuration hashes now commit to the authority, routing, and policy fields that affect cross-chain equivalence.
+  Local patch: `_makeRulesetConfigurations(...)` now includes the split operator, extra metadata, reserved split count, and each reserved split's routing fields before hashing the encoded configuration.
 
-### ~~L-19. Deploy Script Lacks Directory Validation — Can Permanently Miswire Factory *(pass 4 nemesis)* — FIXED~~
+- `deploy-all-v6`: resume no longer accepts controller-configured canonical project IDs from public project numbering alone.
+  Local patch: `script/Resume.s.sol` now only accepts already-configured projects `1-4` when they match the expected `REVDeployer` owner, canonical controller, nonzero revnet configuration hash, expected project-token symbol, and Banny 721 hook identity for project `4`.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-project-payer-v6 |
-| **File** | `script/Deploy.s.sol:11-14` |
-| **Auditor confidence** | 75 |
-| **My confidence** | **70** |
-| **Known issue?** | No |
-| **Status** | **FIXED** — added `code.length != 0` validation |
+- `deploy-all-v6`: post-deploy verification now matches canonical route and project-owner topology.
+  Local patch: `script/Verify.s.sol` checks project `1-4` ownership by `REVDeployer`, checks project token symbols and revnet configuration hashes, checks the Banny 721 hook, and verifies that project terminal lists include `JBRouterTerminalRegistry` instead of the raw `JBRouterTerminal`.
 
-**Description:** The deployment script reads `JB_DIRECTORY` from env and passes it directly to `JBProjectPayerDeployer` constructor without validating it is non-zero and has code. If misconfigured, the factory is permanently bricked — every clone inherits the bad immutable directory and cannot be repaired. Requires redeploying the factory and rotating all downstream payer addresses.
+- `deploy-all-v6`: post-deploy verification no longer treats full-product production components as optional.
+  Local patch: `script/Verify.s.sol` now requires address-registry, Defifa, project handles, both distributors, and the project-payer deployer on production chains, then checks Defifa constructor wiring, token / governor wiring, distributor timing, project-handle forwarder parity, and project-payer implementation presence.
 
-**Mitigation:** Add `require(directoryAddress != address(0) && directoryAddress.code.length != 0)` before deployment.
+- `nana-buyback-hook-v6`: sell-side routing compared AMM swap quote against gross bonding-curve reclaim instead of net (post-fee) reclaim.
+  Fixed in [PR #114](https://github.com/Bananapus/nana-buyback-hook-v6/pull/114). The hook now deducts the terminal's 2.5% fee before comparing, closing the window where the terminal path would pay less than the AMM.
 
-**Resolution:** Added non-zero and `code.length != 0` validation in the deploy script before constructing the factory.
+### Stale, fixed, or not compelling enough
 
----
+- `nana-router-terminal-v6`: multi-hop forwarding-cycle findings.
+  Dropped because current code and current tests already reject the 2-hop circular cases that were flagged.
 
-### Pass 4 Corroborations
+- `nana-router-terminal-v6`: zero-route preview / `address(0)` execution path.
+  Dropped because current resolver paths already revert `JBRouterTerminal_NoRouteFound(...)`.
 
-Pass 4 independently re-discovered 6 findings from passes 1-3:
+- `nana-721-hook-v6`: bitmap cache depth-boundary issue.
+  Dropped as gas-only, not security.
 
-| Source | Repo | Corroborates | Notes |
-|--------|------|-------------|-------|
-| Pashov pass 4 | nana-buyback-hook-v6 | C-3 (cashout fallback zeros surplus) | Already FIXED |
-| Pashov pass 4 + Nemesis pass 4 | univ4-lp-split-hook-v6 | H-2 (permissionless LP deployment) | Existing finding |
-| Pashov pass 4 | nana-distributor-v6 | H-12 (721 distributor live state allocation) | Already FIXED |
-| Nemesis pass 4 | nana-suckers-v6 | M-33 (cross-chain surplus staleness) | Nemesis PoC shows 450 ETH overpayment from stale deprecated sucker — **consider re-evaluating severity** |
-| Pashov pass 4 | nana-ownable-v6 | L-2 (constructor binds future project) | Existing finding |
-| Pashov pass 4 | deploy-all-v6 | H-11/M-18 (Tempo deploy divergence) | Existing finding |
+- `nana-721-hook-v6`: `hookMetadata` encode/decode asymmetry.
+  Dropped as benign.
 
-### Pass 4 False Positives
+- `revnet-core-v6`: fee-on-transfer loan-origination DoS.
+  Dropped as too conditional and not important enough to carry.
 
-| Source | Repo | Claim | Verdict |
-|--------|------|-------|---------|
-| Pashov pass 4 | nana-suckers-v6 | Zero-output CCIP retry finalizes unbacked batch | FALSE POSITIVE — `_conversionRateOf` stores `{leafTotal: X, localTotal: 0}`, so `_addToBalance` scales every claim to `amount * 0 / X = 0`. Accounting remains sound. Confirms Lead 12 assessment. |
-| Pashov pass 4 | nana-fee-project-deployer-v6 | Permissionless project #1 squatting bricks deployment | FALSE POSITIVE — project #1 is minted atomically inside `JBProjects` constructor (`createFor(feeProjectOwner)` at line 47). No external minting window exists. |
-| Nemesis pass 4 | nana-address-registry-v6 | Permissionless registration is unauthorized provenance | FALSE POSITIVE — intentional design, confirmed by ARCHITECTURE.md and RISKS.md. CREATE/CREATE2 derivation check ensures only correct deployer can be registered. Confirms H-20 assessment. |
+- `univ4-lp-split-hook-v6`: shared-clone cross-project burn hypothesis.
+  Dropped as too conditional to elevate without stronger evidence.
 
-### Pass 4 Leads
+## Optional Cleanup Items
 
-| # | Repo | Lead | Risk Surface | Verdict |
-|---|------|------|--------------|---------|
-| 54 | nana-core-v6 | Permissionless `processHeldFeesOf` enables fee forgiveness when fee route broken | Fee revenue | By design — explicitly documented in code comments (lines 654-657, 1684-1687). Fees forgiven rather than locking project funds. Risk to fee beneficiary (project #1) only when fee terminal is temporarily unconfigured. Accepted risk. |
-| 55 | nana-address-registry-v6 | `SphinxConstants` deployment in helper perturbs nonce-sensitive broadcasts | Deployment | LOW — only affects script composition when `getDeployment()` is called inside a live broadcast. Not a runtime exploit. |
-| 56 | nana-suckers-v6 | `remoteSurplusOf` max() dedup prefers numeric maximum over freshness | Surplus inflation | Corroborates M-33 — same root cause. Nemesis PoC demonstrates 450 ETH overpayment in migration scenario. **Severity promotion warranted.** |
-| 57 | nana-router-terminal-v6 | Fallback route skipped after any successful candidate preview | Routing quality | Corroborates Lead 40-42 |
-| 58 | nana-distributor-v6 | Zero-balance snapshot can be overwritten in same round | Reward distribution | Pending verification |
-| 59 | nana-distributor-v6 | Anyone can crystallize another holder's vesting state | Permissionless state mutation | Pending verification |
-| 60 | nana-project-payer-v6 | Residual ERC20 allowance left to terminal after payment | Allowance hygiene | LOW — depends on trusted-terminal behavior or accidental later token deposits. No confirmed drain path. |
+These are the only items I would still consider worth touching, and even these are not security blockers.
 
----
+### 1. `nana-721-hook-v6`: make unsupported ERC-20 split-tier configs fail explicitly
 
-## Pass 5 Findings (20260422-003458)
+Current state:
 
-Source: Nemesis Auditor (Codex) run `20260422-003458`. 20 repos scanned; findings in 4 repos (univ4-router-v6: 4 files, nana-suckers-v6: 6 files, nana-ownable-v6: 2 files, nana-address-registry-v6: 2 files). All findings verified against current source code.
+- Split-bearing ERC-20 paths are brittle in [JB721TiersHookLib.sol](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/src/libraries/JB721TiersHookLib.sol).
+- Today they may revert incidentally because of exact-receipt checks, token behavior, or hook-recipient transfer behavior.
 
-### ~~M-39. ROOT Permission Bypasses `permissionId = 0` Direct-Owner-Only Mode *(pass 5 nemesis)* — FIXED~~
+Why this is optional:
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-ownable-v6 |
-| **File** | `src/JBOwnableOverrides.sol:137-139` |
-| **Auditor confidence** | 90 (nemesis rated HIGH) |
-| **My confidence** | **85 — VERIFIED (PoC passes)** |
-| **Known issue?** | No — documented behavior says `permissionId = 0` is "direct-owner-only" |
-| **Status** | **FIXED** — bypass permission system entirely when `permissionId == 0` |
+- If the intended policy is simply “unsupported config, revert,” then the current behavior is already directionally correct.
+- The value in changing it is clarity, not security.
 
-**Description:** `_checkOwner()` always calls `_requirePermissionFrom(account, projectId, permissionId)` even when `permissionId == 0`. Inside `JBPermissioned._requirePermissionFrom`, the check at `JBPermissions.sol:213` authorizes ROOT (permission bit 1) before checking the specific permission bit. Since ROOT supersedes all permission IDs — including 0 — an operator with ROOT can pass any `onlyOwner` gate even though local state says delegation is disabled.
+Suggested cleanup:
 
-`_transferOwnership()` resets `permissionId` to 0 specifically to revoke delegation. But ROOT operators survive this reset because they're authorized through a parallel path that ignores the specific permission ID.
+- Add explicit custom errors for unsupported ERC-20 split-tier configurations.
+- Reject ERC-20 split-hook recipients or other unsupported recipient modes up front, rather than relying on incidental transfer failure.
 
-This affects every contract that inherits `JBOwnable`: croptop-core-v6, nana-omnichain-deployers-v6, and any future inheritors that rely on `permissionId = 0` to restrict owner-only actions.
+### 2. `nana-721-hook-v6`: future-tier metadata writes could be tightened
 
-**Mitigating factors:** ROOT is explicitly granted by the project owner. The attack requires the owner to have intentionally given ROOT permission to the operator. This limits the scenario to cases where ownership was transferred and the new owner expected the reset to fully revoke the old operator.
+Current state:
 
-**Mitigation:**
-```solidity
-if (ownerInfo.permissionId == 0) {
-    if (_msgSender() != resolvedOwner) revert Unauthorized();
-    return;
-}
-_requirePermissionFrom({account: resolvedOwner, projectId: ownerInfo.projectId, permissionId: ownerInfo.permissionId});
-```
+- Metadata for a future tier can be written before the tier exists, and later inherited if the tier does not overwrite it.
 
-**Resolution:** When `permissionId == 0`, the permission system is bypassed entirely — only the direct owner (resolved via `_msgSender()`) can pass the check. This makes `permissionId = 0` truly mean "direct-owner-only" as documented.
+Why this is optional:
 
+- This is an admin / metadata-operator footgun, not a meaningful exploit, assuming metadata operators are trusted.
 
----
+Suggested cleanup:
 
-### ~~M-40. Deployment Helper Accepts Non-Contract Registry Addresses *(pass 5 nemesis)* — FIXED~~
+- Require the tier to already exist before accepting `encodedIPFSUri` writes.
 
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-address-registry-v6 |
-| **File** | `script/helpers/AddressRegistryDeploymentLib.sol:62` |
-| **Auditor confidence** | 85 |
-| **My confidence** | **80 — VERIFIED** |
-| **Known issue?** | No |
-| **Status** | **FIXED** — added `code.length != 0` validation |
+### 3. `nana-router-terminal-v6`: native refund edge case could fail soft instead of hard
 
-**Description:** `_getDeploymentAddress()` reads a deployment artifact JSON file and returns the `.address` field without checking that the target has contract code. If a stale or malicious artifact is supplied, the returned address may be an EOA or undeployed address. Downstream deployers (`JB721TiersHookDeployer`, `JBUniswapV4LPSplitHookDeployer`, `DefifaDeployer`) bake this address as an immutable registry pointer. Runtime calls to `registerAddress(...)` on an EOA succeed silently with empty returndata, so newly deployed hooks/games are never registered in the provenance registry.
+Current state:
 
-**Mitigating factors:** This is a deployment-time configuration issue, not a runtime exploit. Requires supplying an incorrect deployment artifact. Only affects provenance registration, not core protocol accounting.
+- A native partial-fill refund can revert if the refund recipient cannot accept ETH.
 
-**Mitigation:**
-```solidity
-deployed = stdJson.readAddress({json: deploymentJson, key: ".address"});
-require(deployed.code.length != 0, "AddressRegistryDeploymentLib: empty registry code");
-```
+Why this is optional:
 
-**Resolution:** Added `code.length != 0` validation after reading the deployment artifact address, preventing non-contract addresses from being baked into downstream deployers.
+- This is an integration edge case, not a core solvency or authorization problem.
 
----
+Suggested cleanup:
 
-### Pass 5 Corroborations
+- Try ETH refund first.
+- If it fails, re-wrap and refund WETH instead of reverting the full payment.
 
-Pass 5 independently re-discovered 3 findings from passes 1-4:
+### 4. `univ4-lp-split-hook-v6`: deploy script idempotency should match the other repos
 
-| Source | Repo | Corroborates | Notes |
-|--------|------|-------------|-------|
-| Nemesis pass 5 | univ4-router-v6 | H-21 (V4 quote misroutes large trades) | PoC shows 267x overquote: V4 quoted 7.976e18 but executed only 0.03e18. Strongest evidence yet for this finding. |
-| Nemesis pass 5 | nana-suckers-v6 | M-33 (cross-chain surplus staleness) | Third independent re-discovery of this issue |
-| Nemesis pass 5 | nana-ownable-v6 | L-2 (constructor accepts unminted project) | Explicitly noted as accepted deployment assumption |
+Current state:
 
-### Pass 5 False Positives
+- The local deploy script’s `_isDeployed` logic can false-negative an existing deployment when the active deployment path is not the hardcoded `0x4e59` path.
 
-| Source | Repo | Claim | Verdict |
-|--------|------|-------|---------|
-| Nemesis pass 5 | nana-suckers-v6 | Registry-deployed suckers cannot authenticate their real peers due to double-hashed salt diverging across chains | FALSE POSITIVE — The registry, deployer, and singleton are deployed via deterministic CREATE2 at the same addresses on every chain. The double-hash uses `msg.sender = registry address` which is identical cross-chain, so clone addresses match and `peer() == address(this)` holds. The PoC tested with different registry addresses per chain, which doesn't match the actual deployment model. |
+Why this is optional:
 
----
+- This is a deployment-tooling issue, not a runtime protocol bug.
+- It still seems worth aligning with the rest of the repos.
 
-## CertiK AI Scan Triage (Pass 6)
+Suggested cleanup:
 
-**Source:** CertiK AI-generated security scan (`nana-core-v6.md`)
-**Scope:** nana-core-v6 only (JBMultiTerminal, JBController, JBRulesets, JBTerminalStore, JBDirectory, JBTokens, JBSplits, JBFundAccessLimits, JBPrices, JBPermissions, JBProjects, JBERC20, libraries)
-**Method:** Corroboration against source code + parallel verification agents + prior 7-component deep audit context
-**Date:** 2026-04-22
+- Make the deploy-script idempotency check use the same state source / deployment convention as the other repos.
 
-### CertiK Scan Summary
+## Real Deployment Path Note
 
-| Original Severity | Count | Acknowledged (Info) | Invalid | Duplicates |
-|---|---|---|---|---|
-| Major | 9 | 0 | 9 | 0 |
-| Medium | 33 | 2 | 29 | 2 |
-| Minor | 25 | 1 | 24 | 0 |
-| **Total** | **67** | **3** | **62** | **2** |
+The earlier `nana-core-v6` controller-bootstrap script issue is not relevant to production deployment because `deploy-all-v6` is the canonical deploy path:
 
-**Result: 0 actionable findings. 3 acknowledged as informational (no code changes required).**
+- Phase list: [DEPLOY.md](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/DEPLOY.md:22)
+- Phase 05 includes controller deployment: [DEPLOY.md](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/DEPLOY.md:35)
+- Actual controller deployment: [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:1551)
 
-### Acknowledged (Informational)
+## Tests / Evidence Used During Triage
 
-**CertiK-F39: Locked Splits Bypass via Many-to-One Matching** (minor)
-`JBSplits.sol:329-351` — `_includesLockedSplits` matches by value without tracking consumed indices. Duplicate identical locked splits can be collapsed into fewer entries. Requires unusual configuration of duplicate identical locked splits. Owner-configured.
+The following targeted checks were run while triaging:
 
-**CertiK-F40: Empty Split Group Cannot Disable Fallback Splits** (medium)
-`JBSplits.sol:138-154` — `splitsOf` falls back to rulesetId=0 when `_splitCountOf == 0`. No way to distinguish "explicitly emptied" from "never configured". Workaround: set a single 100% split to the project owner.
+- Note: the full Defifa run including [Fork.t.sol](/Users/jango/Documents/jb/v6/evm/defifa/test/Fork.t.sol:1) is currently blocked by the configured Ankr RPC returning HTTP 401 in `setUp()`. The non-fork Defifa suite passed with `forge test --fail-fast --no-match-path test/Fork.t.sol`.
+- Note: the full Revnet run including fork-named tests is also blocked by the configured Ankr RPC returning HTTP 401 in `test/TestSplitWeightFork.t.sol`. The committed non-fork, non-audit Revnet suite passed with `forge test --fail-fast --no-match-contract '.*Fork.*' --no-match-path 'test/audit/*'`; the hidden-supply audit regressions were run separately.
 
-**CertiK-F48: FX Quote Precision Inconsistency in `_computePayFrom`** (medium)
-`JBTerminalStore.sol:1130-1137` — Uses `amount.decimals` for PRICES call while all other FX paths use `_MAX_FIXED_POINT_FIDELITY` (18 decimals). Rounding error is bounded (sub-wei token issuance). Standard tokens (6-18 decimals) unaffected in practice.
+- `forge test --match-path 'test/audit/FreshAudit.t.sol' --match-test 'test_payCredits_can_underfund_split_bearing_tier_mints' -vv`
+- `forge test --match-path 'test/audit/FutureTierPoC.t.sol' -vv`
+- `forge test --match-path 'test/audit/ProjectDeployerAuth.t.sol' -vv`
+- `forge test --match-path 'test/audit/RegistryForwardingLossyToken.t.sol' -vv`
+- `forge test --match-path 'test/audit/MultiHopForwardCycle.t.sol' -vv`
+- `forge test --match-path 'test/audit/CashOutCircularPrimaryTerminal.t.sol' -vv`
+- `forge test --match-path 'test/audit/PhantomSurplusTerminal.t.sol' -vv`
+- `forge test --match-path 'test/audit/DeployScriptEdgeCases.t.sol' -vv`
+- `forge test --match-path 'test/audit/FreshAuditVerification.t.sol' -vv`
+- `forge test --match-path 'test/audit/CodexMigrationFeeFailure.t.sol' -vv`
+- `forge test --match-path test/audit/PersistentAllowanceSteal.t.sol --skip JBUniswapV4HookFork` in `univ4-router-v6`
+- `forge test --match-path test/audit/PersistentAllowanceSteal.t.sol` in `univ4-lp-split-hook-v6`
+- `forge test --match-path test/audit/JBRouteMinOutputBypass.t.sol --skip JBUniswapV4HookFork`
+- `forge test --match-path test/audit/FeeClaimReserveCapture.t.sol` in `univ4-lp-split-hook-v6`
+- `forge test --match-path test/audit/DerivedMinBuySideFOTDoS.t.sol`
+- `forge test --match-path test/audit/DerivedMinSellSideFOTDoS.t.sol`
+- `forge test --match-path 'test/audit/*FOT*.t.sol'` in `nana-buyback-hook-v6`
+- `forge test --match-path test/TestBuybackFOT.t.sol` in `nana-buyback-hook-v6`
+- `forge test --match-path test/V4BuybackHook.t.sol` in `nana-buyback-hook-v6`
+- `forge test --match-path test/TestSellSideNetComparison.t.sol` in `nana-buyback-hook-v6`
+- `forge test --match-path test/TestAuditGaps.sol --match-test test_non18Decimal_sellSideRoutesWithUSDC6` in `nana-buyback-hook-v6`
+- `forge test --no-match-path 'test/fork/*'` in `nana-buyback-hook-v6`
+- `forge build` in `nana-buyback-hook-v6`
+- `forge fmt --check src/JBBuybackHook.sol test/audit/DerivedMinBuySideFOTDoS.t.sol test/audit/DerivedMinSellSideFOTDoS.t.sol test/audit/SellSideFOTOutputDoS.t.sol test/TestAuditGaps.sol` in `nana-buyback-hook-v6`
+- `forge test --match-path test/audit/RegistryStaleDeprecatedMaxSurplus.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/RegistryStaleMaxAggregation.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/RemoteLoanAccountingGap.t.sol`
+- `forge test --match-path 'test/audit/HiddenSupply*.t.sol'` in `revnet-core-v6`
+- `forge test --match-path test/TestHiddenTokens.t.sol` in `revnet-core-v6`
+- `forge test --match-path test/TestAuditFixVerification.t.sol --match-test 'test_A14_hiddenTokensStayInCashOutDenominator|test_A14_hidingTokens_reducesLiveSupply|test_A14_hideTokensOf_revertsForUnauthorized'` in `revnet-core-v6`
+- `forge test --match-path test/audit/LocalLoanStateOmissionCashout.t.sol` in `revnet-core-v6`
+- `forge test --match-path test/TestCashOutCallerValidation.t.sol` in `revnet-core-v6`
+- `forge test --match-path test/TestCrossCurrencyReclaim.t.sol` in `revnet-core-v6`
+- `forge build` in `revnet-core-v6`
+- `forge test --match-path test/audit/SameTimestampSnapshotPinned.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/PeerSnapshotDesync.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/SuckerCrossChainAdversarial.t.sol --match-test 'test_supplySnapshot_updatesWithLatestNonce|test_supplySnapshot_skipsStaleSnapshotNonce'` in `nana-suckers-v6`
+- `forge test --match-path test/InteropCompat.t.sol --match-test 'test_messageRoot_encoding|test_messageRoot_versionConstant|test_messageRoot_amountFitsU128'` in `nana-suckers-v6`
+- `forge test --match-path test/unit/ccip_native_interop.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/unit/peer_chain_state.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/HooklessV4LiquidityOverride.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/HookedV4SpotFallbackOverride.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/FreshV3LiquidityOverrideDoS.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/FreshV3TwapOverride.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/unit/pool_discovery.t.sol` in `nana-suckers-v6`
+- `forge test --fail-fast --no-match-contract '.*Fork.*' --no-match-path 'test/audit/*'` in `nana-suckers-v6`
+- `forge build` in `nana-suckers-v6`
+- `forge test --match-path test/audit/FeeLocking.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/unit/ccip_refund.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/BuybackMetadataPreviewIgnored.t.sol --match-test 'test_metadataOnlyPreview|test_directJBPay' --skip JBUniswapV4HookFork` in `univ4-router-v6`
+- `forge test --match-path test/audit/BuybackCashOutMetadataIgnored.t.sol --match-test 'test_metadataOnlySellPreview|test_directJBCashOut' --skip JBUniswapV4HookFork` in `univ4-router-v6`
+- `forge test --match-path test/audit/JBRouteMinOutputBypass.t.sol --skip JBUniswapV4HookFork` in `univ4-router-v6`
+- `forge test --fail-fast --no-match-contract '.*Fork.*' --no-match-path 'test/audit/*'` in `revnet-core-v6`
+- `forge build --force` in `deploy-all-v6`
+- `forge test --match-path test/audit/SuckerCallerDeterminism.t.sol` in `revnet-core-v6`
+- `forge fmt --check src/REVDeployer.sol test/audit/SuckerCallerDeterminism.t.sol` in `revnet-core-v6`
+- `forge build` in `revnet-core-v6`
+- `forge test --match-path test/audit/WeakConfigurationHash.t.sol` in `revnet-core-v6`
+- `forge test --match-path test/TestTerminalEncodingInHash.t.sol` in `revnet-core-v6`
+- `forge fmt --check src/REVDeployer.sol test/audit/WeakConfigurationHash.t.sol test/TestTerminalEncodingInHash.t.sol` in `revnet-core-v6`
+- `forge test --match-path test/audit/ToRemoteFeeIrrecoverable.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/CodexNemesisBeneficiaryMismatch.t.sol` in `defifa`
+- `forge test --match-path test/audit/Pass12Fixes.t.sol` in `defifa`
+- `forge test --match-path test/audit/SingleTierTimeoutLock.t.sol` in `defifa`
+- `forge test --match-path test/audit/OneTierZeroTimeoutLock.t.sol` in `defifa`
+- `forge test --match-path test/DefifaGovernor.t.sol --match-test testReceiveVotingPower` in `defifa`
+- `forge test --fail-fast` in `defifa`
+- `forge test --fail-fast --no-match-path test/Fork.t.sol` in `defifa`
+- `forge test --match-path test/audit/CodexNemesisPoCs.t.sol --match-test test_oldProjectOwnerDoesNotRetainHookControlAfterProjectNftTransfer` in `croptop-core-v6`
+- `forge test --match-path test/audit/DeployerPermissionBypass.t.sol` in `croptop-core-v6`
+- `forge test --match-path test/CTDeployer.t.sol` in `croptop-core-v6`
+- `forge test --match-path test/ClaimCollectionOwnership.t.sol` in `croptop-core-v6`
+- `forge fmt --check src/CTDeployer.sol src/interfaces/ICTDeployer.sol test/audit/CodexNemesisPoCs.t.sol test/audit/DeployerPermissionBypass.t.sol` in `croptop-core-v6`
+- `forge test --match-path test/audit/CodexNemesisProjectOneSquat.t.sol`
+- `forge fmt --check script/Deploy.s.sol` in `nana-fee-project-deployer-v6`
+- `forge build` in `nana-fee-project-deployer-v6`
+- `forge fmt --check script/Deploy.s.sol script/Resume.s.sol` in `deploy-all-v6`
+- `forge build --force` in `deploy-all-v6`
+- `forge build` in `deploy-all-v6`
+- `forge test --match-path test/audit/CodexNemesisFreshVerification.t.sol --match-test 'test_721LateMintedTokenCannotClaimRoundSnapshotRewardsFromOwnersPastVotes|test_721LateMintedReplacementCannotStealTransferredSnapshotTokensRoundRewards'` in `nana-distributor-v6`
+- `forge test --match-path test/audit/CodexNemesisFreshRoundVerification.t.sol --match-test test_postSnapshot721TokenCannotClaimUsingOwnersEarlierVotes` in `nana-distributor-v6`
+- `forge test --match-path test/JB721Distributor.t.sol` in `nana-distributor-v6`
+- `forge test --match-path test/audit/PostSnapshotMintTheft.t.sol` in `nana-distributor-v6`
+- `forge test --match-path test/audit/CodexNemesisAccountingPoC.t.sol` in `nana-distributor-v6`
+- `forge build` in `nana-distributor-v6`
+- `forge fmt --check src/JB721Distributor.sol test/JB721Distributor.t.sol test/audit/CodexNemesisFreshVerification.t.sol test/audit/CodexNemesisFreshRoundVerification.t.sol test/audit/PostSnapshotMintTheft.t.sol test/audit/H26VotingPowerCap.t.sol test/audit/CodexNemesisAccountingPoC.t.sol test/invariant/JB721DistributorInvariant.t.sol` in `nana-distributor-v6`
+- `forge test --match-path test/unit/getters_constructor_Unit.t.sol --match-test test_ownerOfAt_shouldReturnHistoricalOwners` in `nana-721-hook-v6`
+- `forge fmt --check src/JB721TiersHook.sol src/interfaces/IJB721TiersHook.sol test/unit/getters_constructor_Unit.t.sol` in `nana-721-hook-v6`
+- `forge test --match-path test/audit/JBProjectHandlesUnicodeSpoof.t.sol`
+- `forge test --fail-fast` in `nana-project-handles-v6`
+- `forge test --match-path test/audit/RegistryDefaultRetargetsExistingProjects.t.sol`
+- `forge test --match-path test/audit/RegistryDefaultHookHijack.t.sol`
+- `forge test --match-path test/audit/ResumeCroptopProjectTwoSquat.t.sol`
+- `forge test --match-path test/audit/ResumeBannyProjectFourSquat.t.sol`
+- `forge test --match-path test/audit/ResumeRevProjectThreeSquat.t.sol`
+- `forge test --match-path test/audit/ProjectIdFrontRunDoS.t.sol` in `croptop-core-v6`
+- `forge test --match-path test/audit/ProjectIdFrontRunDoS.t.sol` in `nana-721-hook-v6`
+- `forge test --match-path test/audit/ProjectIdFrontRunDoS.t.sol` in `revnet-core-v6`
+- `forge test --match-path test/audit/ProjectIdFrontRunDoS.t.sol` in `nana-omnichain-deployers-v6`
+- `forge test --match-contract TestQAGameIdPredictionRace` in `defifa`
+- `forge test --match-path test/audit/RemoteLoanStateOmission.t.sol`
+- `forge test --match-path test/audit/SameTimestampSnapshotPinned.t.sol`
+- `forge test --match-path test/audit/LocalLoanStateOmissionCashout.t.sol`
+- `forge test --match-path test/audit/FeeLocking.t.sol --match-test test_failedCcipRefund_staysLockedAfterLaterNativeClaim`
+- `forge test --match-path test/audit/HooklessV4LiquidityOverride.t.sol`
+- `forge test --match-path test/audit/RegistryFirstTerminalSnapshotGap.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/HookedV4SpotFallbackOverride.t.sol`
+- `forge test --match-path test/audit/FreshV3LiquidityOverrideDoS.t.sol`
+- `forge test --match-path test/audit/FreshV3TwapOverride.t.sol`
+- `forge test --match-path test/audit/FirstTerminalRemoteConversionGap.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/BuybackMetadataPreviewIgnored.t.sol --skip JBUniswapV4HookFork`
+- `forge test --match-path test/audit/RawBuybackQuoteRouteMisrank.t.sol --match-test test_rawBuybackQuoteCannotOutrankBetterExecutableRoute`
+- `forge test --match-path test/audit/BuybackCashOutMetadataIgnored.t.sol --skip JBUniswapV4HookFork`
+- `forge test --match-path test/audit/ConservativeBuybackPreviewRouteMisrank.t.sol --match-test 'test_rawBuybackQuoteCanRankBetterBuybackBuyRoute|test_previewPayFor_decodesBuybackPayHookMetadata|test_previewPayFor_prefersRouteWithHigherBuybackHookOutput'` in `nana-router-terminal-v6`
+- `forge test --match-path test/audit/ConservativeBuybackPreviewRouteMisrank.t.sol`
+- `forge fmt --check src/JBPayRouteResolver.sol test/audit/ConservativeBuybackPreviewRouteMisrank.t.sol` in `nana-router-terminal-v6`
+- `forge test --match-path test/audit/BuybackSellFallbackStrandsSourceTokens.t.sol`
+- `forge test --match-path test/audit/GrossCashOutPreviewRouteMisrank.t.sol --match-test test_feeAwareCashOutPreviewCannotOutrankBetterNetRoute`
+- `forge test --match-path test/RouterTerminal.t.sol` in `nana-router-terminal-v6`
+- `forge test --match-path test/audit/BuybackSellFallbackStrandsProjectTokens.t.sol --match-test test_sellFallbackLikeCashOutRevertsInsteadOfStrandingProjectTokensOnHook --skip JBUniswapV4HookFork`
+- `forge test --match-path test/audit/FeelessSellQuoteUnderranksJB.t.sol --match-test test_feelessSellQuoteRoutesThroughBetterJBsellPath --skip JBUniswapV4HookFork`
+- `forge test --match-path test/audit/FeeClaimTokenFOTAccounting.t.sol`
+- `forge test --match-path test/audit/NonPrimaryBalanceSelectionDoS.t.sol`
+- `forge build` in `univ4-lp-split-hook-v6`
+- `forge fmt --check src/JBUniswapV4LPSplitHook.sol test/audit/FeeClaimTokenFOTAccounting.t.sol test/audit/NonPrimaryBalanceSelectionDoS.t.sol` in `univ4-lp-split-hook-v6`
+- `forge test --match-path test/audit/RegistrySelfLockDoS.t.sol`
+- `forge test --match-path test/RouterTerminalRegistry.t.sol` in `nana-router-terminal-v6`
+- `forge test --match-path test/regression/LockTerminalRace.t.sol` in `nana-router-terminal-v6`
+- `forge build` in `nana-router-terminal-v6`
+- `forge test --match-path test/audit/CodexNemesisFreshRound.t.sol --match-test 'test_deployProjectFor_failsOpenWhenSuckerDeploymentFails|test_directRegistryDeploymentAfterOwnershipTransferCanMapThroughRegistry'`
+- `forge test --match-path test/audit/CodexNemesisSuckerWrapper.t.sol`
+- `forge fmt --check src/CTDeployer.sol test/audit/CodexNemesisFreshRound.t.sol test/audit/CodexNemesisSuckerWrapper.t.sol` in `croptop-core-v6`
+- `forge build` in `croptop-core-v6`
+- `forge fmt --check src/JBSucker.sol` in `nana-suckers-v6`
+- `forge build` in `nana-suckers-v6`
+- `forge test --match-path test/audit/PeerTopologyAuthBreak.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/audit/RegistryPeerAuthBreak.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/unit/deployer.t.sol` in `nana-suckers-v6`
+- `forge test --match-path test/unit/multi_chain_evolution.t.sol` in `nana-suckers-v6`
+- `forge test --match-path 'test/audit/*'` in `nana-suckers-v6`
+- `forge test --match-path 'test/unit/*'` in `nana-suckers-v6`
+- `forge test --match-path test/audit/ProjectDeployerAuth.t.sol` in `nana-721-hook-v6`
+- `forge test --match-path test/regression/ProjectDeployerRulesets.t.sol` in `nana-721-hook-v6`
+- `forge build` in `nana-721-hook-v6`
+- `npm install --package-lock-only --ignore-scripts --no-audit --no-fund` in `deploy-all-v6`
+- `npm install --ignore-scripts --no-audit --no-fund` in `deploy-all-v6`
+- `forge fmt --check script/Deploy.s.sol script/Resume.s.sol test/fork/DeployFullStack.t.sol test/fork/DeployResumeRehearsalFork.t.sol test/fork/ResumeDeployFork.t.sol test/fork/WildcardPermissionKillChain.t.sol test/fork/LPBuybackInteropFork.t.sol` in `deploy-all-v6`
+- `forge build` in `deploy-all-v6` with the local file dependencies and explicit remappings
 
-### Invalid — Major (9)
+## Bottom Line
 
-| # | Title | Reason |
-|---|---|---|
-| F2 | Self-referential reserved splits mint against own balance | **Owner trust** — owner configures their own splits |
-| F7 | Descendant rulesets active despite rejected parent | **By design** — overlapping `mustStartAtOrAfter` causes intended overwrite (confirmed via Forge test) |
-| F11 | First payer drains prelaunch terminal balances | **Owner trust** — pre-launch balance is owner's responsibility |
-| F29 | Pay hooks bypass ruleset payout limits | **Data hook trust** — hooks have documented absolute control (code: "SECURITY NOTE: The data hook has absolute control") |
-| F38 | Locked fallback splits bypassed by ruleset-specific tables | **Documented behavior** — new owner can defend by setting their own splits |
-| F43 | ERC20 self-migration zeros recorded balance | **Privileged self-harm** — requires `MIGRATE_TERMINAL` permission |
-| F46 | Cash-out hook amounts as additional withdrawals | **Duplicate of F29** — same data hook trust model |
-| F49 | Pending reserved tokens uint208 cap overcommitment | **Privileged self-harm** — requires mint authority |
-| F67 | Arbitrary external token attachment bricks flows | **Owner trust** — requires `allowSetCustomToken` in ruleset + controller permission |
+Recommended posture:
 
-### Invalid — Medium (31)
-
-| # | Title | Reason |
-|---|---|---|
-| F3 | Reserved splits ignore `preferAddToBalance` | **By design** — reserved tokens are project tokens (minted), not terminal funds |
-| F5 | Empty terminal config doesn't clear terminals | **By design** — use `setTerminalsOf` to clear |
-| F8 | Reentrancy in `mintTokensOf` understates supply | **Invalid** — state finalized before hook callback |
-| F10 | Reverting split hooks strand reserved tokens | **Owner trust** — owner configured the hook |
-| F14 | Missing zero-address controller check | **Invalid** — controller set before terminal config in all valid flows |
-| F16 | Removed terminals excluded from surplus | **Documented** — migrate balance before removing |
-| F17 | Invalid terminal bricks routing | **Owner trust** — terminals set by privileged owner |
-| F18 | JBERC20 mutable init flag allows re-init | **Invalid** — verified: `_name` guard prevents re-initialization |
-| F20 | Contract-wallet owners can't authenticate | **Invalid** — contracts call directly; ERC-2771 is optional UX |
-| F22 | Zero-address beneficiaries = unclaimable supply | **Self-inflicted** — payer chose `beneficiary = address(0)` |
-| F23 | Token payout accounting uses balance deltas | **Informational** — event emission only |
-| F24 | Fee aggregation rounding = insolvency | **Formally proven** — bounded by N wei for N splits |
-| F26 | Min cash-out validates nominal not actual | **Documented** — `minReclaimAmount` is pre-fee |
-| F27 | Gas griefing via `_processFee` try-catch | **Invalid** — fee terminal is protocol-controlled (project 1) |
-| F28 | Pay hooks never validated | **Data hook trust** — documented absolute control |
-| F31 | Rebasing token balance misattribution | **Out of scope** — rebasing tokens not supported |
-| F32 | Self-payouts poison fee-free surplus | **By design** — `_feeFreeSurplusOf` tracks round-tripped funds |
-| F33 | Project feed preempts default feed | **Owner trust** — owner sets their own feeds |
-| F34 | Missing approval check in `_currentlyApprovableRulesetIdOf` | **Invalid** — verified: `currentOf` and `_configureIntrinsicPropertiesFor` independently verify approval |
-| F37 | Derived start time uint48 wrap | **Invalid** — overflow is ~8.9 million years away |
-| F41 | Zero-rounding payout limit grief | **Edge case** — requires extreme price ratios; `ownerMustSendPayouts` mitigates |
-| F47 | Surplus views miscalculate cross-store terminals | **View limitation** — execution path queries each terminal correctly |
-| F53 | Split cash-outs bypass bonding curve tax | **Formally proven false** — subadditivity means splitting receives LESS |
-| F55 | adjustDecimals truncation skews surplus | **Invalid** — rounding is conservative (favors project) |
-| F56 | addToMetadata 32-byte alignment corruption | **Invalid** — verified: library handles padding internally |
-| F57 | Duplicate metadata ID shadowing | **By design** — standard first-match key-value behavior |
-| F59 | Payout fee bypass via same-terminal splits | **Documented fee design** — intra-terminal fee skip is intentional + hook trust |
-| F60 | Fee aggregation precision loss | **Duplicate of F24** — same bounded rounding |
-| F61 | Failed splits consume payout limit (DoS) | **Documented** — code comment: "Failed split payouts consume the payout limit by design" |
-| F62 | Return data bomb DoS in catch(bytes) | **Owner trust** — verified: split targets are owner-configured |
-| F64 | Total-surplus cash-out ignores local liquidity | **Documented** — `useTotalSurplusForCashOuts` is opt-in; owner accepts risk |
-
-### Invalid — Minor (24)
-
-| # | Title | Reason |
-|---|---|---|
-| F1 | Price truncation to zero | Fixed-point inherent; reverts safely |
-| F4 | Migration misroutes zero-beneficiary tokens | Self-inflicted config |
-| F6 | `SET_TERMINALS` check in `launchRulesetsFor` | Intentional permission design |
-| F9 | Custom token lacks capability validation | Owner trust |
-| F12 | Reentrancy in `setControllerOf` double migration | Owner chooses replacement controller |
-| F13 | First controller accepts arbitrary addresses | Requires protocol-level `isAllowedToSetFirstController` |
-| F15 | `ADD_TERMINALS` rendered useless | Permission design choice |
-| F19 | JBERC20 EIP-712 domain fixed to "JBToken" | Cosmetic |
-| F21 | Same-currency limits duplicated across groups | Controller-mediated; documented |
-| F25 | cashOut doesn't reject unsupported tokens | Reverts safely downstream |
-| F30 | Cash-out hooks receive net not gross | Documentation naming issue |
-| F35 | Gas manipulation via approval hook catch | Owner-configured approval hook |
-| F36 | `weight == 1` = "inherit derived weight" | Documented behavior |
-| F42 | Unbounded hook `cashOutTaxRate` bricks cash-outs | Data hook trust — can already halt by reverting |
-| F44 | Zero-value payments trigger pay hooks | Hook responsibility to validate inputs |
-| F45 | address(0) bypasses duplicate accounting check | address(0) is not a valid token; terminal-gated |
-| F50 | Claim to arbitrary beneficiary bypasses pause | `CLAIM_TOKENS` is separate from `pauseCreditTransfers` by design |
-| F51 | Zero-address credit sinks | Duplicate of F22 — self-inflicted |
-| F52 | Zero total supply inconsistent results | View helper edge case |
-| F54 | Sub-40-unit chunks bypass fee | Economically insignificant (sub-40 wei) |
-| F58 | Malformed metadata reverts pay | Caller-controlled input |
-| F63 | Dust-fragmenting payouts amplify wildcard | 1 wei dust per call — insignificant |
-| F65 | Pre-ruleset minting via reentrancy | By design — multi-step setup supported |
-| F66 | Non-standard tokens bypass decimal verification | Documented in code comment; privileged config |
-
-### Invalidation Pattern Summary
-
-| Category | Count | Description |
-|---|---|---|
-| Owner / Privileged Trust | 24 | Requires project owner, controller, or operator to trigger |
-| Data Hook Trust Model | 7 | Assumes data hooks are untrusted; protocol documents hooks have absolute control |
-| By Design / Documented | 16 | Behavior is intentional, in code comments, or confirmed by project owner |
-| Formally Proven Bounded | 4 | Rounding/precision issues proven negligible by formal property tests |
-| Edge Case / Theoretical | 5 | Requires extreme conditions (uint48 overflow, sub-wei amounts, 0-decimal tokens) |
-| View / Cosmetic | 4 | Affects views or events, not fund flows |
-| Duplicates | 2 | F46 = F29; F60 = F24 |
-
----
-
-## Codex Nemesis Run (Pass 7)
-
-**Source:** Codex Nemesis automated audit (`codex-nemesis-summary-20260422-193746.log`)
-**Scope:** 20 repos. Findings in 6: revnet-core-v6, univ4-lp-split-hook-v6, nana-router-terminal-v6, croptop-core-v6, nana-ownable-v6, nana-project-handles-v6
-**Method:** Automated Feynman+State coupled-pair analysis → PoC verification → corroboration against source code
-**Date:** 2026-04-22
-
-### Pass 7 Summary
-
-| Repo | Scanned | TRUE POSITIVES | Fixed | Partial | Unfixed |
-|------|---------|---------------|-------|---------|---------|
-| revnet-core-v6 | 140 functions | 1 (HIGH) | 0 | 0 | 1 |
-| univ4-lp-split-hook-v6 | yes | 2 (MEDIUM) | 2 | 0 | 0 |
-| nana-router-terminal-v6 | yes | 2 (1M, 1L) | 1 | 1 | 0 |
-| croptop-core-v6 | yes | 3 (MEDIUM)* | 1 | 1 | 0 |
-| nana-ownable-v6 | yes | 0 | — | — | — |
-| nana-project-handles-v6 | yes | 1 (MEDIUM) | 0 | 0 | 1 |
-| **14 other repos** | yes | 0 | — | — | — |
-| **Total** | **20 repos** | **9** | **4** | **2** | **2** |
-
-*Croptop NM-001 later reclassified as FALSE POSITIVE / accepted behavior by the team.
-
-### New Findings
-
----
-
-#### ~~H-22: Stale ERC20 Approval in REVLoans~~ — FIXED (`965d3f7`)
-
-| Field | Value |
-|---|---|
-| **Repo** | revnet-core-v6 |
-| **Source** | Nemesis NM-001 (HIGH) + CertiK F19 (MEDIUM) |
-| **Contract** | `REVLoans.sol` |
-| **Status** | **FIXED** |
-
-**Description:** `_tryPayFee` (L1522) and `_removeFrom` (L1322) grant ERC20 approval to terminals via `_beforeTransferTo` but never clear it on the success path. The `catch` branch in `_tryPayFee` clears the approval (L1535), but the happy path leaves a reusable allowance. `_removeFrom` never clears it at all. A terminal that returns success without pulling the full approved amount accumulates reusable allowance that can drain tokens from `REVLoans` during subsequent operations.
-
-**Mitigating factors:** Revnet terminals are set at deployment. The fee terminal is the REV project's (project 1) primary terminal, controlled by the protocol. Exploit requires a terminal that intentionally under-pulls approved amounts. `REVOwner` already implements the correct defensive pattern (`_afterTransferTo` clears approvals on both paths).
-
-**PoC:** `test/audit/CodexNemesisFeeAllowanceLeak.t.sol` — confirms stale approval accumulates across borrows.
-
-**Fix:** Add `_afterTransferTo` (calls `forceApprove(to, 0)`) on both success and failure paths in `_tryPayFee` and `_removeFrom`, matching `REVOwner`'s existing pattern.
-
----
-
-#### ~~M-34: Verified Handles Accept Unsafe Control Characters~~ — FIXED (`30ad40a`)
-
-| Field | Value |
-|---|---|
-| **Repo** | nana-project-handles-v6 |
-| **Source** | Nemesis NM-001 (MEDIUM) |
-| **Contract** | `JBProjectHandles.sol` |
-| **Status** | **FIXED** |
-
-**Description:** `setEnsNamePartsFor` (L70) only rejects empty labels and dots, allowing arbitrary bytes including control characters (`\n`, `\r`). After ENS verification succeeds, `handleOf` returns raw bytes as canonical project identity text. Enables log poisoning, broken formatting, and UI spoofing in offchain consumers.
-
-**PoC:** `JBProjectHandlesNemesis.t.sol` — `handleOf` returned `team\nops` as a verified handle.
-
-**Fix:** Reject labels containing control characters before storing. At minimum, block bytes < 0x20.
-
----
-
-### Pass 7 — Fixed Findings
-
-| Repo | ID | Severity | Title | Status |
-|------|-----|----------|-------|--------|
-| univ4-lp-split-hook-v6 | NM-001 | MEDIUM | Credit-only reserved splits strand value in hook | **FIXED** (commit `5f73731`) |
-| univ4-lp-split-hook-v6 | NM-002 | MEDIUM | Permissionless decay lets outsiders lock terminal token | **FIXED** (commits `b754bd0`, `357c2df`) |
-| nana-router-terminal-v6 | NM-001 | MEDIUM | Forwarding through registry bypasses lossy final-hop guard | **ACCEPTED RISK** — FoT tokens documented as unsupported |
-| nana-router-terminal-v6 | NM-002 | LOW | `lockTerminalFor` can irreversibly lock project to registry | **FIXED** (commit `c30eb49`) |
-| croptop-core-v6 | NM-001 | MEDIUM | Existing tier reuse bypasses updated posting policy | **RECLASSIFIED FP** — intended behavior (commit `0d65db1`) |
-| croptop-core-v6 | NM-002 | MEDIUM | `deployProjectFor` hard-fails on sucker deployment | **FIXED** (commit `c592554`) |
-| croptop-core-v6 | NM-003 | MEDIUM | Post-launch `MAP_SUCKER_TOKEN` authority gap | **PARTIAL** — manual owner grant required, documented limitation |
-
-### Pass 7 — Zero-Finding Repos (14)
-
-nana-core-v6, nana-721-hook-v6, univ4-router-v6, nana-buyback-hook-v6, nana-suckers-v6, defifa, banny-retail-v6, nana-omnichain-deployers-v6, nana-ownable-v6, nana-address-registry-v6, nana-permission-ids-v6, nana-fee-project-deployer-v6, nana-project-payer-v6, deploy-all-v6
-
----
-
-## CertiK AI Scan — revnet-core-v6 (Pass 8)
-
-**Source:** CertiK AI-generated security scan (`revnet-core-v6.md`)
-**Scope:** REVDeployer, REVOwner, REVLoans, REVHiddenTokens (revnet-core-v6)
-**Method:** Corroboration against source code + parallel verification agents + cross-reference with Nemesis findings
-**Date:** 2026-04-22
-
-### Pass 8 Summary
-
-| Original Severity | Count | Actionable (New) | Acknowledged | Invalid | Duplicate |
-|---|---|---|---|---|---|
-| Critical | 1 | 0 | 0 | 1 | 0 |
-| Major | 8 | 2 | 4 | 1 | 1 |
-| Medium | 9 | 1 | 4 | 2 | 2 |
-| Minor | 12 | 0 | 6 | 4 | 2 |
-| **Total** | **30** | **3** | **14** | **8** | **5** |
-
-**Result: 3 actionable findings. 14 acknowledged as informational. 5 duplicates (within scan or cross-ref to Pass 7).**
-
-### New Findings
-
----
-
-#### ~~H-23: Unit Mismatch in Cross-Currency Loan Fees~~ — FIXED (`965d3f7`)
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F12 (Major) |
-| **Contract** | `REVLoans.sol:_addTo` (L1096-1122) |
-| **Status** | **FIXED** |
-
-**Description:** In `_addTo`, `revFeeAmount` is computed from `addedBorrowAmount` via `JBFees.feeAmountFrom`. `addedBorrowAmount` is in the terminal's accounting currency (passed to `useAllowanceOf` with `currency: accountingContext.currency`), while `netAmountPaidOut` is the actual token amount returned by the terminal. For cross-currency terminals (e.g., USD-accounted ETH terminal), the subtraction `netAmountPaidOut - revFeeAmount - sourceFeeAmount` (L1122) mixes token-denominated and currency-denominated values, causing underflow reverts or incorrect fee deductions.
-
-**Mitigating factors:** Standard terminals use `currency = uint32(uint160(token))`, making `addedBorrowAmount` equivalent to token units. Cross-currency terminals require custom configuration. The code comment (L1115-1117) acknowledges the subtraction is safe "in practice" assuming small fee fractions.
-
-**Fix:** Either enforce same-currency accounting for loan sources, or convert `revFeeAmount` to token units using `JBPrices` before subtraction.
-
----
-
-#### ~~M-35: Stale Zero-Balance Loan Sources DoS~~ — FIXED (`965d3f7`)
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F18 (Major) |
-| **Contract** | `REVLoans.sol:_totalBorrowedFrom` (L548-555) |
-| **Status** | **FIXED** |
-
-**Description:** `_totalBorrowedFrom` calls `source.terminal.accountingContextForTokenOf(...)` (L548) before checking `totalBorrowedFrom[...] == 0` (L555). If a fully-repaid source's terminal is later removed or begins reverting, all paths that use `_totalBorrowedFrom` (borrowing, repayment, reallocations) are DoS'd for that revnet.
-
-**Fix:** Swap the order — check `totalBorrowedFrom == 0` before the external call to `accountingContextForTokenOf`.
-
----
-
-#### ~~M-36: Cross-Chain `startsAtOrAfter` Normalization Mismatch~~ — FIXED (`965d3f7`)
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F1 (Medium) |
-| **Contract** | `REVDeployer.sol:_makeRulesetConfigurations` (L136-163) |
-| **Status** | **FIXED** |
-
-**Description:** When stage 0 uses `startsAtOrAfter = 0`, the encoded hash stores `block.timestamp` (L162-163), but the stage ordering check (L136) compares raw calldata values. On the origin chain, stage 1 with `startsAtOrAfter = 1` passes the `1 > 0` check. On a second chain, reproducing the hash requires passing the origin timestamp for stage 0, but then `1 <= originTimestamp` fails with `REVDeployer_StageTimesMustIncrease`. This permanently blocks cross-chain expansion for affected multi-stage revnets.
-
-**Fix:** Normalize stage 0's `startsAtOrAfter` before the ordering check, or validate ordering against the encoded values.
-
----
-
-### Pass 8 Cross-References
-
-| CertiK | Corroborates | Notes |
-|--------|-------------|-------|
-| F19 (Medium) | **H-22** (stale ERC20 approval) | Second independent discovery; same issue as Nemesis revnet NM-001 |
-| F7 (Major) | = F27 (Minor) | Sucker delay bypass — duplicate within scan |
-| F10 (Major) | = F28 (Major) | Hidden tokens excluded from supply — duplicate within scan |
-
-### Acknowledged (Informational) — 14
-
-| # | Title | Severity | Reason |
-|---|---|---|---|
-| F3 | Permissionless `burnHeldTokensOf` enables supply repricing | Medium | **By design** — burns deployer's unclaimed auto-issuance tokens, benefiting all holders equally. Deployer holds no other revnet tokens. |
-| F5 | Adding suckers later bypasses cash-out delay | Medium | **Design gap (low impact)** — sucker registration alone doesn't change pricing; bridge operations happen later. Quarantine is for normal cash-outs. |
-| F7 | Sucker withdrawals bypass cash-out delay on new chain | Major | **By design** — code comment: "no taxes or fees" for suckers. Suckers are trusted cross-chain bridges, not user cash-outs. |
-| F8 | Unclaimed auto-issuance excluded from supply | Major | **Acknowledged** — `amountToAutoIssue` tokens are not yet minted. Supply denominators use `totalSupply` which correctly reflects minted tokens only. Auto-issuance is a future claim, not current supply. |
-| F10 | Hidden tokens excluded from supply inflates cash-out/borrow | Major | **Acknowledged** — hiding requires allowlist membership. Hidden tokens are burned from supply by design (hide = voluntary lockup with reduced cash-out representation). |
-| F13 | Fail-open fee payment allows fee bypass | Major | **By design** — code comment: "If it fails, revFeeAmount is zeroed so the borrower receives it instead." Deliberate fail-safe to prevent fee terminal issues from bricking loans. |
-| F16 | Permission mismatch: REALLOCATE_LOAN needs OPEN_LOAN | Medium | **UX issue** — operator with only REALLOCATE_LOAN fails at internal `borrowFrom` call. Documented: callers need both permissions. |
-| F23 | Borrow payouts reenter before collateral is burned | Medium | **Acknowledged** — no reentrancy guard, but each nested borrow must independently satisfy collateral. Code comment (L1128-1131) acknowledges this as "practically infeasible." |
-| F2 | Configuration hash omits splits/extraMetadata/721 settings | Minor | **Intentional tradeoff** — hash covers timing/issuance/tax fields for cross-chain reproducibility. Splits and 721 config are per-chain by design. |
-| F6 | Pool initialization always uses stage-0 issuance | Minor | **Low impact** — pool sets initial price only, has no liquidity. Stale issuance affects price discovery minimally. |
-| F11 | `_addTo` trusts nominal payout instead of actual tokens | Minor | **Terminal trust** — `useAllowanceOf` returns net amount from canonical JBMultiTerminal. Fee-on-transfer tokens are unsupported protocol-wide. |
-| F15 | Reentrant repayment-token transfer lets stale owners finish repay | Medium | **Theoretical** — requires reentrant ERC-20 (ERC-777) or Permit2 callback during `_acceptFundsFor`. Standard tokens unaffected. |
-| F20 | Late fee accrual rounding creates zero-fee window | Minor | **Negligible** — zero-fee gap is ~3.5 days for 10-year loans at 2.5% prepaid. Rounding inherent to integer math. |
-| F22 | Borrow amount quoted against aggregate surplus, not source | Minor | **Conservative** — can cause DoS (revert) if source terminal lacks liquidity, but not fund loss. Overstated borrow capacity fails at `useAllowanceOf`. |
-
-### Invalid — 8
-
-| # | Title | Severity | Reason |
-|---|---|---|---|
-| F25 | Unauthenticated `afterCashOutRecordedWith` drains ETH | Critical | **Invalid** — REVOwner has no `receive()` or `fallback()`, cannot accumulate ETH. For native token: only spends `msg.value` sent by caller. For ERC20: `safeTransferFrom(msg.sender)` pulls from caller first. Code comment: "A non-terminal caller would just be donating their own funds as fees." |
-| F26 | Cross-chain surplus overstates redeemable amount | Medium | **Invalid** — fee-bearing path caps at `context.surplus.value` (local surplus). Terminal enforces its own balance constraint on actual payouts. |
-| F9 | `caller != holder` disables operator-delegated hide/reveal | Medium | **By design** — NatSpec: "The caller must be the holder." Self-service model, not operator-delegation. HIDE_TOKENS permission is for allowlist proof. |
-| F30 | Repayment clears debt without restoring treasury if terminal misbehaves | Major (Op) | **Terminal trust** — terminal is validated against `DIRECTORY.isTerminalOf` at borrow time. Misbehaving terminal is a trust assumption violation. |
-| F4 | Split operator prevented from deploying suckers before first ruleset | Minor | **Timing issue** — initial deployment flow handles this via deployer. Not a security concern. |
-| F14 | Zero remaining capacity forces full repayment | Minor | **UX quirk** — `maxRepayBorrowAmount` cap still protects caller from overpayment. |
-| F17 | Zero-amount ERC20 transferFrom DoS on collateral-only repay | Minor | **Edge case** — mainstream tokens handle zero-amount transfers. Non-standard token behavior is unsupported protocol-wide. |
-| F24 | Skipping zero-price debt sources understates surplus | Minor | **Conservative** — understated surplus means lower borrowing capacity, not inflation. Protective, not exploitable. |
-
-### Remaining Minor (Informational)
-
-| # | Title | Severity | Reason |
-|---|---|---|---|
-| F21 | Split-repayment rounding shaves late fees | Minor | 1 wei per partial repay. Impractical for 18-decimal tokens. |
-| F27 | Sucker holders bypass cash-out delay entirely | Minor | Duplicate of F7 at lower severity. |
-| F28 | Hidden token supply excluded from cash-out denominator | Major | Duplicate of F10. |
-| F29 | `_msgSender()` in sucker salt breaks permissionless expansion | Minor (Op) | Inherited from base sucker registry design. Different deployers produce different addresses. |
-
-### Pass 8 Invalidation Pattern Summary
-
-| Category | Count | Description |
-|---|---|---|
-| By Design / Documented | 6 | Intentional behavior confirmed by code comments or NatSpec |
-| Terminal/Token Trust | 4 | Assumes canonical terminals; unsupported token types |
-| Low/No Impact | 6 | Conservative rounding, UX quirks, timing issues |
-| Architectural Choice | 3 | Design tradeoffs (fail-open fees, aggregate surplus, self-service model) |
-| Duplicates (within scan) | 3 | F7=F27, F10=F28, F19=H-22 |
-| Cross-reference to Pass 7 | 2 | F19 corroborates H-22; NM-001 same as F19 |
-
----
-
-## CertiK AI Scan — nana-router-terminal-v6 (Pass 9)
-
-**Source:** CertiK AI-generated security scan (`nana-router-terminal-v6.md`)
-**Scope:** JBRouterTerminal, JBRouterTerminalRegistry, JBPayRouteResolver, JBSwapLib (nana-router-terminal-v6)
-**Method:** Corroboration against source code + parallel verification agents
-**Date:** 2026-04-23
-
-### Pass 9 Summary
-
-| Original Severity | Count | Will Fix | Accepted | Invalid |
-|---|---|---|---|---|
-| Major | 1 | 1 (F13) | 0 | 0 |
-| Medium | 6 | 2 (F12, F21) | 4 (F5, F10, F15, F20) | 0 |
-| Minor | 14 | 4 (F1, F3, F7, F18) | 8 (F2, F4, F6, F8, F14, F17, F19 + F11 via F13) | 2 |
-| **Total** | **21** | **7** | **12** | **2** |
-
-**Result: 7 findings will be fixed. 12 accepted risk/by design. 2 invalid.**
-
-### Acknowledged — Major (1)
-
-#### F13: Manipulable Instantaneous V4 Liquidity Inflates Slippage Tolerance
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F13 (Major) |
-| **Contract** | `JBRouterTerminal.sol:_getV4SpotQuote` (L2308-2367), `JBSwapLib.sol:calculateImpact` |
-| **Corroboration** | VALID |
-
-**Description:** `_getV4SpotQuote` reads instantaneous in-range liquidity via `POOL_MANAGER.getLiquidity(id)` and passes it to `calculateImpact`. An attacker can inflate liquidity via JIT provisioning, deflating the impact calculation and producing a tight slippage band around a potentially manipulated spot price, enabling sandwich attacks.
-
-**Mitigating factors:** Extensive security comments in the code (L2271-2301) already acknowledge V4 spot quoting limitations. Users SHOULD provide `quoteForSwap` metadata for V4 swaps. The sigmoid slippage formula has a 2% floor. The code documents this as a known design trade-off where V4 hooks may not expose TWAP oracles.
-
-**Verdict:** Acknowledged — known V4 spot quoting limitation, documented in code. Users should provide off-chain quotes.
-
-**Admin note — WILL FIX:** Increase V4 TWAP window from 30s → 120s to match V3 floor. Cap V4 slippage at 15-20%. Use fixed tolerance when no TWAP available. (Addresses F11 and F13 together.)
-
----
-
-### Acknowledged — Medium (6)
-
-#### F5: Registry Forwarding Uses Registry as Credit Holder
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F5 (Medium) |
-| **Contract** | `JBRouterTerminal.sol:_acceptFundsFor` (L1042-1066), `JBRouterTerminalRegistry.sol:pay` |
-| **Corroboration** | VALID |
-
-**Description:** When payments are forwarded through the registry, `_acceptFundsFor` uses `msg.sender` (the registry address) as the credit holder. Credit-based cashout payments routed through the registry will fail because the registry doesn't hold user credits. Code comment (L1055-1057) confirms this is intentional to prevent `originalPayer()` spoofing from stealing credits.
-
-**Verdict:** Acknowledged — intentional security/functionality trade-off. Credit cashouts must go directly to the router, not through the registry.
-
-**Admin note — ACCEPTED (by design):** Consider removing credit cashout accounting from the mechanism entirely. Document the incompatibility.
-
----
-
-#### F10: Pool-Local V3 TWAP Trusted as Swap Floor for Permissionless Pools
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F10 (Medium) |
-| **Contract** | `JBRouterTerminal.sol:_getV3TwapQuote` (L2222-2269), `_discoverPool` (L1909-1946) |
-| **Corroboration** | VALID |
-
-**Description:** `_discoverPool` selects from permissionless Uniswap V3 pools by in-range liquidity. An attacker could deploy a pool with manipulated TWAP and higher liquidity than legitimate pools. The 2-minute minimum TWAP window (`MIN_TWAP_WINDOW = 120`) provides limited resistance.
-
-**Verdict:** Acknowledged — users should provide `quoteForSwap` metadata from off-chain sources. TWAP-based auto-quoting is a best-effort fallback.
-
-**Admin note — ACCEPTED:** Sandwich attack risk exists for users who don't provide off-chain quotes. Mitigated by TWAP window floors and sigmoid slippage formula.
-
----
-
-#### F12: Missing Oracle Return Length Validation Causes OOB Revert
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F12 (Medium) |
-| **Contract** | `JBRouterTerminal.sol:_getV4SpotQuote` (L2335-2342) |
-| **Corroboration** | VALID |
-
-**Description:** The `try` success block accesses `tickCumulatives[1]` without verifying the array has at least 2 elements. If a V4 hook's `observe()` returns a shorter array, the OOB panic is NOT caught by `catch {}` (Solidity try/catch only catches external call failures, not panics in the success block). The transaction reverts.
-
-**Verdict:** Acknowledged — DoS vector only (not fund loss). Affects only pools with broken/malicious hooks. Legitimate oracle implementations return arrays matching input length.
-
-**Admin note — WILL FIX:** Add array length check before `tickCumulatives[1]` access to prevent OOB panic in try-success block.
-
----
-
-#### F15: Liquidity-Based Pool Selection Enables Unsafe Spot Quoting
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F15 (Medium) |
-| **Contract** | `JBRouterTerminal.sol:_discoverPool` (L1909-1946), `JBPayRouteResolver.sol:_discoverAcceptedToken` (L166-226) |
-| **Corroboration** | PARTIAL |
-
-**Description:** Pool selection uses instantaneous in-range liquidity to rank candidates. An attacker could temporarily inflate liquidity in a manipulable pool to force selection. V3 TWAP quoting and user-provided quotes mitigate this, but the pool selection step itself is vulnerable to manipulation.
-
-**Verdict:** Acknowledged — pool discovery is best-effort; users should provide off-chain quotes for reliable execution.
-
-**Admin note — ACCEPTED:** Mitigated by V4 TWAP hardening (F13 fix). Residual risk accepted.
-
----
-
-#### F20: Harmonic-Mean Liquidity Inflates V3 Slippage Tolerance
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F20 (Medium) |
-| **Contract** | `JBSwapLib.sol:calculateImpact` (L74-94), `JBRouterTerminal.sol:_getV3TwapQuote` (L2255) |
-| **Corroboration** | PARTIAL |
-
-**Description:** `OracleLibrary.consult` returns harmonic-mean liquidity over the TWAP window, which `calculateImpact` treats as executable depth. Brief low-liquidity periods can deflate the harmonic mean, inflating slippage tolerance. However, the 120-second minimum TWAP window, 10-minute default, and the sigmoid slippage formula's 2% floor provide meaningful mitigation.
-
-**Verdict:** Acknowledged — mitigated by TWAP window floors and sigmoid parameters. Residual risk for LP manipulation during observation window.
-
-**Admin note — ACCEPTED:** Harmonic mean is MORE resistant to manipulation than spot liquidity. Risk accepted.
-
----
-
-#### F21: Incorrect `sqrtPriceLimitX96` Derivation from Average Execution Rate
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F21 (Medium) |
-| **Contract** | `JBSwapLib.sol:sqrtPriceLimitFromAmounts` (L107-168) |
-| **Corroboration** | VALID |
-
-**Description:** Derives `sqrtPriceLimitX96` from `minimumAmountOut / amountIn` (average execution rate) instead of the correct marginal price limit. The average rate is always better than the terminal marginal price, making the limit systematically too strict. This can cause premature partial fills for valid swaps. Unconsumed input is refunded via `_handleSwap`.
-
-**Verdict:** Acknowledged — causes suboptimal execution (premature partial fills), not fund loss. Users can bypass via `quoteForSwap` metadata.
-
-**Admin note — WILL FIX:** Remove `sqrtPriceLimitFromAmounts`. Use extreme price limits (MIN/MAX sqrtPrice). Rely on post-swap `minAmountOut` check for slippage protection. Well-tested.
-
----
-
-### Acknowledged — Minor (12)
-
-| # | CertiK ID | Title | Contract | Corroboration | Notes |
-|---|---|---|---|---|---|
-| 1 | F1 | Multi-hop circular route detection gap | `JBPayRouteResolver._isCircularTerminal` | PARTIAL | **WILL FIX** — Extend to bounded loop (max 5 hops) |
-| 2 | F2 | `quoteForSwap` / auto-selected tokenOut mismatch | `JBRouterTerminal._pickPoolAndQuote` | VALID | **ACCEPTED** — Documentation issue, not code bug. Frontends should set quoteForSwap per expected output token |
-| 3 | F3 | Fallback preview path reverts on terminal failure | `JBPayRouteResolver.previewBestPayRoute` (L934-955) | VALID | **WILL FIX** — Wrap fallback path in try/catch |
-| 4 | F4 | Unbounded quadratic candidate enumeration gas cost | `JBPayRouteResolver._candidatePayRouteTokens` | PARTIAL | **ACCEPTED** — Bounded in practice (~5-10 terminals) |
-| 5 | F6 | Forwarding-terminal receipt bypass | `JBRouterTerminal._isForwardingTerminal` (L974-983) | VALID | **ACCEPTED** — By design, forwarding terminals trusted by project owners |
-| 6 | F7 | V3 callback delta off-by-one at boundary | `JBRouterTerminal.uniswapV3SwapCallback` (L406) | VALID | **WILL FIX** — Change `< 0` to `> 0` to match canonical Uniswap pattern |
-| 7 | F8 | Multi-hop cashout slippage cleared after first hop | `JBRouterTerminal._cashOutLoop` (L1231) | VALID | **ACCEPTED (by design)** — Only final output matters; outer function enforces end-to-end minimum |
-| 8 | F11 | V4 TWAP uses 30-second window | `JBRouterTerminal._TWAP_WINDOW` (L112) | VALID | **WILL FIX** — Addressed by F13 fix (30s → 120s) |
-| 9 | F14 | Zero oracle quote disables swap protection | `JBRouterTerminal._quoteWithSlippage` (L2636) | PARTIAL | **ACCEPTED** — Zero quote means no liquidity; swap would fail anyway |
-| 10 | F17 | Forwarder claim disables receipt check | `JBRouterTerminal._isForwardingTerminal` (L974-983) | PARTIAL | **ACCEPTED** — Forwarding terminals registered by project owners |
-| 11 | F18 | Transient `originalPayer` corruption on nested calls | `JBRouterTerminalRegistry.originalPayer` (L88) | VALID | **WILL FIX** — Save/restore pattern instead of clearing to address(0) |
-| 12 | F19 | Permit2 try/catch falls through to ERC20 allowance | `JBRouterTerminalRegistry._acceptFundsFor` (L536-540) | PARTIAL | **ACCEPTED (by design)** — Standard Permit2 fallback pattern |
-
----
-
-### Invalid — Minor (2)
-
-| # | CertiK ID | Title | Reason |
-|---|---|---|---|
-| 1 | F9 | Balance-delta over-credit for rebasing tokens | Router uses balance-before/after correctly; fee-on-transfer explicitly unsupported (L1101); `_enforceStandardTerminalReceipt` rejects discrepancies |
-| 2 | F16 | Spoofable `originalPayer()` redirects refunds | `_resolveOriginalPayer` only queries `msg.sender`, which already controls the funds. Credit path deliberately avoids `originalPayer()` (L1057). No third-party fund theft possible. |
-
----
-
-### Pass 9 Invalidation Pattern Summary
-
-| Pattern | Count | Examples |
-|---|---|---|
-| Known design trade-off, documented in code | 8 | F5, F8, F13, F19 |
-| Mitigated by user-provided `quoteForSwap` | 5 | F10, F13, F15, F20, F21 |
-| View-only / DoS-only, no fund loss | 4 | F3, F4, F12, F14 |
-| Bounded by practical configuration | 2 | F1, F4 |
-| Misunderstood trust model | 2 | F9, F16 |
-
----
-
-## CertiK AI Scan — nana-omnichain-deployers-v6 (Pass 10)
-
-**Source:** CertiK AI-generated security scan (`nana-omnichain-deployer.md`)
-**Scope:** JBOmnichainDeployer (nana-omnichain-deployers-v6)
-**Method:** Corroboration against source code + verification agent
-**Date:** 2026-04-23
-
-### Pass 10 Summary
-
-| Original Severity | Count | Will Fix | Accepted | Invalid |
-|---|---|---|---|---|
-| Medium | 3 | 1 (F2) | 0 | 2 |
-| Minor | 5 | 1 (F1) | 3 (F5, F7, F8) | 1 |
-| **Total** | **8** | **2** | **3** | **3** |
-
-**Result: 2 findings will be fixed. 3 accepted risk/by design. 3 invalid.**
-
-### Acknowledged — Medium (1)
-
-#### F2: Controller Validation Trusts Untrusted Directory
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F2 (Medium) |
-| **Contract** | `JBOmnichainDeployer.sol:_validateController` (L928-934) |
-| **Corroboration** | VALID |
-
-**Description:** `_validateController` reads `controller.DIRECTORY()` from the user-provided controller, then trusts that directory's `controllerOf(projectId)`. A forged controller can return a fake directory that confirms itself. The deployer has no immutable `DIRECTORY` reference.
-
-**Mitigating factors:** All calling paths (`_launchRulesetsFor`, `_queueRulesetsOf`) require `_requirePermissionFrom` with the project owner's permission. An attacker who already has owner/operator permission can already invoke controller operations directly. The code comment (L923-925) acknowledges the reflexive lookup as intentional.
-
-**Verdict:** Acknowledged — defense-in-depth gap, but exploitability is limited to callers who already have project owner/operator permission.
-
-**Admin note — WILL FIX:** Store immutable `DIRECTORY` reference in constructor. Validate against known directory instead of querying user-provided controller.
-
----
-
-### Acknowledged — Minor (4)
-
-| # | CertiK ID | Title | Contract | Corroboration | Notes |
-|---|---|---|---|---|---|
-| 1 | F1 | `transferFrom` instead of `safeTransferFrom` for NFT handoff | `JBOmnichainDeployer.sol:_launchProjectFor` (L719) | VALID | **WILL FIX** — Change to `safeTransferFrom` for ERC-721 safety |
-| 2 | F5 | Unvalidated extra data hooks can brick live flows | `JBOmnichainDeployer.sol:_setup721` (L860-876) | VALID | **ACCEPTED** — Self-inflicted misconfiguration by project owner |
-| 3 | F7 | Missing hook721 alias check enables double invocation | `JBOmnichainDeployer.sol:_setup721` (L862) | VALID | **ACCEPTED** — Self-inflicted misconfiguration by project owner |
-| 4 | F8 | `_msgSender()` in deployment salt breaks cross-chain determinism | `JBOmnichainDeployer.sol:deploySuckersFor` (L161) | VALID | **ACCEPTED** — Documented and intentional replay protection |
-
----
-
-### Invalid (3)
-
-| # | CertiK ID | Title | Reason |
-|---|---|---|---|
-| 1 | F3 | Double application of tiered-721 split | Not double-counting — weight and amount are separate dimensions. The 721 hook reduces weight; the deployer reduces amount passed to extra hook. Different downstream consumers. |
-| 2 | F4 | Sucker cash-outs use only local supply/surplus | Intentional design. Suckers redeem proportionally against local surplus with 0% tax. Cross-chain aggregation is correctly applied only for non-sucker cash-outs. Comment at L398 confirms. |
-| 3 | F6 | Stale extra data hook persists on key reuse | RulesetId keys are always unique (timestamp-based with collision guard at L789-791). No scenario allows pre-existing data at a new rulesetId slot. |
-
----
-
-### Pass 10 Invalidation Pattern Summary
-
-| Pattern | Count | Examples |
-|---|---|---|
-| Intentional documented design | 2 | F4 (sucker local accounting), F8 (salt replay protection) |
-| Permission-gated, self-inflicted only | 3 | F2, F5, F7 |
-| Misunderstood lifecycle/key uniqueness | 1 | F6 |
-| Misunderstood multi-dimensional accounting | 1 | F3 |
-
----
-
-## CertiK AI Scan — nana-univ4-router-v6 (Pass 11)
-
-**Source:** CertiK AI-generated security scan (`nana-univ4-router-v6.md`)
-**Scope:** JBUniswapV4Hook, Oracle library (univ4-router-v6)
-**Method:** Corroboration against source code + verification agent
-**Date:** 2026-04-23
-
-### Pass 11 Summary
-
-| Original Severity | Count | Will Fix | Accepted | Invalid |
-|---|---|---|---|---|
-| Major | 2 | 0 | 1 (F2) | 1 (F9 = dup of F2) |
-| Medium | 4 | 1 (F1) | 3 (F4, F6, F7) | 0 |
-| Minor | 3 | 0 | 3 (F3, F5, F8) | 0 |
-| **Total** | **9** | **1** | **7** | **1** |
-
-**Result: 1 finding will be fixed. 7 accepted risk/by design. 1 duplicate.**
-
-### Acknowledged — Major (1)
-
-#### F2: Post-Action Oracle Observation Backfills TWAP with Post-Swap Tick
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F2 (Major) |
-| **Contract** | `Oracle.sol:transform` (L63-106), `JBUniswapV4Hook.sol:_afterSwap` |
-| **Corroboration** | VALID |
-
-**Description:** `Oracle.transform` records the current tick as `tickCumulative` for the entire elapsed time since the last observation. When called from `_afterSwap`, the tick is the POST-swap tick, so the entire time interval between the last observation and the swap is credited with the post-action price. For large swaps with infrequent observations, this corrupts the TWAP by retroactively projecting the post-swap price backwards in time.
-
-**Impact:** An attacker can front-run with a large swap, backfill the TWAP history with a moved tick, and exploit downstream protocols that rely on the oracle. The corruption worsens with less frequent observations.
-
-**Mitigating factors:** Uniswap V4 pools with active trading have frequent observations that limit the backfill window. The `MAX_TWAP_CARDINALITY = 1024` caps total history. `JBRouterTerminal` uses independent TWAP quoting for its own slippage, so the primary consumer of this oracle is external integrators.
-
-**Admin note — ACCEPTED:** This is the same behavior as Uniswap V3's native oracle. Splitting observations into pre/post intervals would double gas cost and deviate from V3's well-understood semantics. JBRouterTerminal uses independent TWAP quoting (F13 hardened). External integrators should verify TWAP quality via observation count.
-
----
-
-### Acknowledged — Medium (4)
-
-#### F1: `_settleOutput` Trusts Terminal's Reported Output for Fee-on-Transfer Tokens
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F1 (Medium) |
-| **Contract** | `JBUniswapV4Hook.sol:_settleOutput` |
-| **Corroboration** | VALID |
-
-**Description:** `_settleOutput` uses the terminal's return value from `addToBalanceOf` as the amount settled, rather than measuring the actual balance delta. For fee-on-transfer tokens, the terminal receives fewer tokens than reported, creating a bookkeeping discrepancy.
-
-**Verdict:** Acknowledged — fee-on-transfer tokens are explicitly unsupported by the Juicebox protocol (documented in JBMultiTerminal and JBRouterTerminal).
-
-**Admin note — WILL FIX:** Use balance-before/after measurement instead of trusting terminal return value. Defense-in-depth: prevents PoolManager settlement from over-crediting if a fee-on-transfer token is ever used in a pool.
-
----
-
-#### F4: Insufficient TWAP Falls Back to Manipulable Spot Price
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F4 (Medium) |
-| **Contract** | `JBUniswapV4Hook.sol:observeTWAP`, `JBRouterTerminal._getV4SpotQuote` |
-| **Corroboration** | VALID |
-
-**Description:** When the oracle has insufficient observations (< 2 data points), `observeTWAP` returns the current spot tick as the TWAP value. This fallback is manipulable via JIT liquidity or sandwich attacks. Downstream consumers (including JBRouterTerminal) receive a manipulable "TWAP" that is actually just spot price.
-
-**Verdict:** Acknowledged — documented behavior. The JBRouterTerminal F13 fix now applies fixed 15% slippage tolerance when no TWAP is available, mitigating the downstream impact. External consumers should verify TWAP quality via observation count.
-
-**Admin note — ACCEPTED:** Mitigated by F13 fix (15% fixed slippage when no TWAP). Residual risk for external callers who don't check observation count.
-
----
-
-#### F6: Synchronous TWAP Observation Growth Enables Gas-Griefing DoS
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F6 (Medium) |
-| **Contract** | `Oracle.sol:grow` (L151-175), `JBUniswapV4Hook.sol:increaseOracleCardinalityNext` |
-| **Corroboration** | VALID (mitigated) |
-
-**Description:** `increaseOracleCardinalityNext` calls `Oracle.grow`, which initializes new oracle slots in a synchronous loop. Growing cardinality by large amounts (e.g., 1024 slots) costs significant gas. An attacker can grief by calling `increaseOracleCardinalityNext` with `MAX_TWAP_CARDINALITY` before a user's transaction, inflating gas costs for subsequent operations that trigger oracle writes.
-
-**Mitigating factors:** Bounded by `MAX_TWAP_CARDINALITY = 1024`, which limits max growth. The `grow` function is permissionless but idempotent — once grown, it can't be called again to the same size. Gas griefing is a one-time cost per cardinality increase.
-
-**Verdict:** Acknowledged — bounded by MAX_TWAP_CARDINALITY. One-time cost, not repeatable. Practical impact limited.
-
-**Admin note — ACCEPTED:** Bounded by MAX_TWAP_CARDINALITY = 1024. One-time cost per cardinality increase, not repeatable. Adding per-call caps just distributes the cost across more transactions.
-
----
-
-#### F7: Unchecked Terminal Fee Arithmetic Can Cause Sell-Side DoS
-
-| Field | Value |
-|---|---|
-| **Source** | CertiK F7 (Medium) |
-| **Contract** | `JBUniswapV4Hook.sol:_settleOutput` |
-| **Corroboration** | VALID |
-
-**Description:** Fee computation in `_settleOutput` can revert if the terminal's fee calculations produce unexpected values (e.g., fee > amount). This would cause sell-side operations to revert, blocking token sales through the hook.
-
-**Mitigating factors:** The code wraps terminal calls in try-catch. If the fee calculation fails, the hook defaults fee to 0 and proceeds. The DoS only affects the specific transaction, not the pool or other operations.
-
-**Verdict:** Acknowledged — try-catch fallback prevents persistent DoS. Fee defaults to 0 on failure.
-
-**Admin note — ACCEPTED:** Existing try-catch fallback already handles this. Fee defaults to 0 on arithmetic failure.
-
----
-
-### Acknowledged — Minor (3)
-
-| # | CertiK ID | Title | Contract | Corroboration | Notes |
-|---|---|---|---|---|---|
-| 1 | F3 | Single observation returns spot tick as TWAP | `JBUniswapV4Hook.observeTWAP` | PARTIAL | **ACCEPTED** — Internal routing mitigated by F13 fix (15% fixed slippage). External callers should check observation count. |
-| 2 | F5 | `_beforeSwap` ignores caller's `sqrtPriceLimitX96` | `JBUniswapV4Hook._beforeSwap` | VALID | **ACCEPTED (by design)** — sqrtPriceLimitX96 is irrelevant for JB-routed swaps (no AMM ticks crossed). V4-path swaps apply it normally via PoolManager. |
-| 3 | F8 | Buy helper truncates currency IDs to `uint32` | `JBUniswapV4Hook._getBuyHelper` | VALID | **ACCEPTED** — View-only preview helper. Even a collision (~0.001% probability) only affects quote estimation, not swap execution. |
-
----
-
-### Invalid (1)
-
-| # | CertiK ID | Title | Reason |
-|---|---|---|---|
-| 1 | F9 | Oracle.transform backfills elapsed time with post-action state | DUPLICATE of F2 — identical finding about post-swap tick backfilling TWAP history. |
-
----
-
-### Pass 11 Invalidation Pattern Summary
-
-| Pattern | Count | Examples |
-|---|---|---|
-| Unsupported token type (fee-on-transfer) | 1 | F1 |
-| Known oracle limitation, mitigated by F13 fix | 3 | F3, F4, F2 (TWAP fallback/backfill) |
-| Bounded by MAX_TWAP_CARDINALITY | 1 | F6 |
-| Try-catch fallback prevents DoS | 1 | F7 |
-| Outer protocol enforces limit | 1 | F5 |
-| Negligible collision probability | 1 | F8 |
-| Duplicate | 1 | F9 |
-
----
-
-## Audit Findings Summary (All Passes)
-
-### All Findings Resolved
-
-| ID | Severity | Repo | Resolution |
-|---|---|---|---|
-| ~~**L-22**~~ | LOW | nana-suckers-v6 | **N/A** — Polygon, Avalanche, and BNB not in deployment scope |
-| ~~**L-23**~~ | LOW | nana-suckers-v6 | **ACCEPTED** — nonce cache makes common path O(1); documented in RISKS.md 10.11 |
-| ~~**L-25**~~ | LOW | nana-router-terminal-v6 | **ACCEPTED** — self-correcting, bypassable via quoteForSwap; documented in RISKS.md |
-
-### Previously Resolved (Pass 12)
-
-| ID | Severity | Repo | Resolution |
-|---|---|---|---|
-| ~~**H-27**~~ | HIGH | revnet-core-v6 | **FIXED** — use `context.surplus.currency` instead of token address encoding |
-| ~~**M-41**~~ | MEDIUM | nana-router-terminal-v6 | **FIXED** — pass hookData with minAmountOut to V4 swaps |
-| ~~**M-42**~~ | MEDIUM | nana-suckers-v6 | **FIXED** — unwrap WETH before native ETH settlement in V4 callback |
-| ~~**M-43**~~ | MEDIUM | nana-ownable-v6 | **FIXED** — reset permissionId when resolved owner diverges from stored owner |
-| ~~**M-44**~~ | MEDIUM | nana-omnichain-deployers-v6 | **FIXED** — propagate cashOutCount to extra hooks |
-| ~~**L-20**~~ | LOW | revnet-core-v6 | **FIXED** — extract internal `_borrowFrom` bypassing redundant permission check |
-| ~~**L-21**~~ | LOW | nana-suckers-v6 | **FIXED** — call fromRemote before writing batch metadata and conversion rates |
-| ~~**L-24**~~ | LOW | nana-buyback-hook-v6 | **FIXED** — guard against FOT token accounting drift |
-| ~~**L-26**~~ | LOW | univ4-lp-split-hook-v6 | **FIXED** — skip unpriced tokens in highest-value terminal selection |
-
-### Previously Resolved (Passes 7-11)
-
-| ID | Severity | Repo | Resolution |
-|---|---|---|---|
-| ~~**H-22**~~ | HIGH | revnet-core-v6 | **FIXED** — `_afterTransferTo` pattern in REVLoans (PR #130, merged) |
-| ~~**H-23**~~ | HIGH | revnet-core-v6 | **Accepted risk** — cross-currency terminals are caller-configured; misconfigured terminal is caller's problem |
-| ~~**M-34**~~ | MEDIUM | nana-project-handles-v6 | **FIXED** — control char validation rejects bytes < 0x20 and 0x7F (PR #5, merged) |
-| ~~**M-35**~~ | MEDIUM | revnet-core-v6 | **FIXED** — reordered `_totalBorrowedFrom` to check zero before external call (PR #130, merged) |
-| ~~**M-36**~~ | MEDIUM | revnet-core-v6 | **FIXED** — stage ordering validated against normalized timestamps (PR #130, merged) |
-
-### Cumulative Statistics (Passes 1-13)
-
-| Pass | Source | Scope | Findings Reviewed | Actionable | Acknowledged | Invalid/FP |
-|---|---|---|---|---|---|---|
-| 1 | Component audits (7 reports) | nana-core-v6 | ~40 | 0 | 0 | ~40 |
-| 2 | Cross-component analysis | nana-core-v6 | 12 | 0 | 0 | 12 |
-| 3 | Formal verification | nana-core-v6 | 8 | 0 | 0 | 8 |
-| 4 | Economic simulation | nana-core-v6 | 6 | 0 | 0 | 6 |
-| 5 | Nemesis (first run) | 6 repos | 90 | 5 | 3 | 82 |
-| 6 | CertiK AI (nana-core-v6) | nana-core-v6 | 67 | 0 | 3 | 64 |
-| 7 | Nemesis (second run) | 20 repos | 9 | 2 | 0 | 7 |
-| 8 | CertiK AI (revnet-core-v6) | revnet-core-v6 | 30 | 3 | 14 | 13 |
-| 9 | CertiK AI (nana-router-terminal-v6) | nana-router-terminal-v6 | 21 | 7 | 12 | 2 |
-| 10 | CertiK AI (nana-omnichain-deployers-v6) | nana-omnichain-deployers-v6 | 8 | 2 | 3 | 3 |
-| 11 | CertiK AI (nana-univ4-router-v6) | univ4-router-v6 | 9 | 1 | 7 | 1 |
-| 12 | Pashov (Codex `20260428-213302` + Claude `20260428-213315`) | 21 repos | 33 | 12 | 0 | 21 |
-| 13 | Gemini Paranoid QA | All repos | 25 | 0 | 4 | 21 |
-| **Total** | | | **~358** | **32** | **48** | **~278** |
-
----
-
-## Pass 12 — Pashov Solidity Auditor (2026-04-28/29)
-
-**Source:** Codex run `20260428-213302` (21/21 repos, 13 reports) + Claude run `20260428-213315` (11/21 repos partial, 3 reports)
-**Raw findings:** 20 (Codex) + 13 (Claude) = 33 total
-**After triage:** 12 genuine new | 1 downgraded | 8 duplicate | 5 false positive | 7 by-design/documented
-
-### Corroborations
-
-Pass 12 corroborated 6 existing findings:
-- **C-5** (Hidden Token Burn/Reveal) — re-identified by both Codex and Claude
-- **M-22** (Migration Verifier Fallback-Held Tiers) — re-identified by Codex
-- **H-25** (Distributor Snapshot Manipulation) — re-identified by Codex (the eager locking IS the fix)
-- **H-22** (Controller-Prepaid ERC20 Credits) — re-identified by Codex (balance-delta accounting IS the fix)
-- **M-2/H-11** (Deployment Squatting/Convergence) — re-identified by Codex
-- **L-9** (Banny Resolver Re-Initialization) — re-identified by Codex
-
-### Duplicates / False Positives / By-Design (21)
-
-| # | Title | Repo | Verdict | Reason |
-|---|---|---|---|---|
-| 1 | Revealable hidden supply inflates loan/cashout value | revnet-core-v6 | DUPLICATE of C-5 | Hidden token mechanics are by-design (RISKS.md §2, §4) |
-| 2 | Hidden tokens inflate borrowable amount | revnet-core-v6 | DUPLICATE of C-5 | Same as above, loan-side angle |
-| 3 | Fee-on-transfer tokens cause _addTo mismatch | revnet-core-v6 | INFORMATIONAL | Protocol-wide design limitation, not REVLoans-specific. Tx reverts, no fund loss. |
-| 4 | V4 Spot Tick Fallback sandwich manipulation | nana-suckers-v6 | BY-DESIGN | Documented in RISKS.md §10.6 — spot fallback preferred over stuck bridge messages |
-| 5 | retrySwap TWAP 120s manipulation | nana-suckers-v6 | FALSE POSITIVE | V3 default is 600s, not 120s. 120s is floor only. Overstated risk. |
-| 6 | Conversion rate truncation dust extraction | nana-suckers-v6 | FALSE POSITIVE | Standard rounding favors protocol (project keeps dust). Not extractable by attacker. |
-| 7 | Retained fee ETH inflates project balance | nana-suckers-v6 | BY-DESIGN | Documented in RISKS.md §8 — bounded by MAX_TO_REMOTE_FEE (0.001 ETH) |
-| 8 | assert() consumes all gas on failure | nana-suckers-v6 | FALSE POSITIVE | Incorrect for Solidity 0.8.28 — assert uses Panic(0x01), does NOT consume all gas |
-| 9 | Split-routed NFT mints retain full cash-out weight | nana-721-hook-v6 | DUPLICATE of L-3/H-7 | Documented in RISKS.md §8.2/§8.6. Cash-out weight = treasury share, not purchase price. |
-| 10 | Registry-routed metadata ignores caller minima | nana-buyback-hook-v6 | FALSE POSITIVE | Registry passes context unchanged — no namespace transformation occurs |
-| 11 | Dust-Sized LP fee collections bypass fee routing | univ4-lp-split-hook-v6 | BY-DESIGN | Standard integer rounding. Min amount for 1-wei fee is 40 wei. Economically insignificant. |
-| 12 | Commitment payout failures finalized as winner surplus | defifa | BY-DESIGN | Try-catch is intentional — prevents permanent fund lock when split recipients revert |
-| 13 | Migration verifier skips owner checks for fallback-held tiers | banny-retail-v6 | DUPLICATE of M-22 | Already ACCEPTED |
-| 14 | Same-salt sucker deployments create non-peer suckers | nana-omnichain-deployers-v6 | BY-DESIGN | Documented in RISKS.md §9 — _msgSender() inclusion is intentional replay protection |
-| 15 | Future-round snapshots frozen before round starts | nana-distributor-v6 | DUPLICATE of H-25 | Eager locking IS the fix for H-25 |
-| 16 | Global prepaid ERC20 balances can be hijacked | nana-distributor-v6 | DUPLICATE of H-22 | Balance-delta accounting correctly handles controller-prepaid path |
-| 17 | Current NFT IDs spend snapshot votes from different NFTs | nana-distributor-v6 | FALSE POSITIVE | pastVotes cap correctly prevents double-counting across NFTs |
-| 18 | Canonical project IDs squatted during recovery | deploy-all-v6 | DUPLICATE of M-2/H-11 | Both Deploy and Resume correctly validate ownership |
-| 19 | Banny resolver ownership handed off before init | deploy-all-v6 | RELATED to L-9 | Deployment would revert if mismatch — caught immediately, no runtime impact |
-| 20 | Fee route failures forgive protocol fees | nana-fee-project-deployer-v6 | BY-DESIGN | Core try-catch fee handling + held fees mechanism. Fees held, not forgiven. |
-| 21 | CCIP Encoding Mismatch (JBCCIPSucker vs JBSwapCCIPSucker) | nana-suckers-v6 | DOWNGRADED | Cross-type peering prevented by CREATE2 deployment mechanism. Document as constraint. |
-
----
-
-### H-27. Cross-Chain Cash-Outs Silently Drop Remote Surplus Due to Currency Parameter Mismatch — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVOwner.sol:181` + `src/REVLoans.sol:378` |
-| **Source** | Pashov Claude run (conf 95) |
-| **Auditor confidence** | 95 |
-| **My confidence** | **92 — CORROBORATED by test file** |
-| **Known issue?** | No |
-
-**Description:** `REVOwner.beforeCashOutRecordedWith` passes `currency: uint256(uint160(context.surplus.token))` to `SUCKER_REGISTRY.remoteSurplusOf`. For native ETH, this is `61166`. But the sucker registry indexes surplus by `JBCurrencyIds.ETH = 1` (stored via `_peerChainSurplus`). Since `61166 != 1`, `remoteSurplusOf` always returns zero for cross-chain revnets. The same mismatch exists in `REVLoans._borrowableAmountFrom` at line 378.
-
-**Impact:** On cross-chain revnets, the bonding curve sees only local surplus. Cash-outs underpay (local surplus / cross-chain supply). Loans underlend (same deflated curve). The cross-chain surplus aggregation feature is non-functional.
-
-**Mitigation:** Use `context.surplus.currency` instead of `uint256(uint160(context.surplus.token))` in REVOwner. Alternatively, align the currency encoding between JBSuckerLib snapshot messages and JBAccountingContext (one uses `JBCurrencyIds.ETH = 1`, the other uses `uint32(uint160(NATIVE_TOKEN)) = 61166`).
-
-Admin note: fix. Verify which currency encoding is canonical and align both sides. Add fork tests with cross-chain surplus to cover this.
-
----
-
-### M-41. Hooked V4 Pools Are Discoverable But Not Executable — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBRouterTerminal.sol:432,1973` |
-| **Source** | Pashov Codex run (conf 85) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **85 — CORROBORATED** |
-| **Known issue?** | No |
-
-**Description:** `_discoverV4Pool` selects pools with `hooks = IHooks(UNIV4_HOOK)` as candidates when they have the deepest liquidity. But `unlockCallback` passes `hookData: ""` (empty) to `POOL_MANAGER.swap()`. The `JBUniswapV4Hook._beforeSwap` requires `hookData.length >= 32` and reverts with `JBUniswapV4Hook_AmountOutMinRequired()`. If the hooked pool dominates liquidity for a pair, all routed swaps for that pair revert.
-
-**Mitigation:** Either pass `hookData: abi.encode(uint256(minAmountOut))` in `unlockCallback`, or exclude `UNIV4_HOOK` pools from `_discoverV4Pool` discovery (the buyback hook already correctly passes hookData).
-
-Admin note: fix.
-
----
-
-### M-42. V4 WETH Swaps Can Spend Native ETH Instead of WETH — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/libraries/JBSwapPoolLib.sol:110,216,830` |
-| **Source** | Pashov Codex run (conf 90) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **80 — CORROBORATED** |
-| **Known issue?** | No |
-
-**Description:** `executeSwap` normalizes raw WETH and `NATIVE_TOKEN` together. For V4 swaps, WETH is converted to `address(0)` at line 830. The V4 unlock callback then settles with `poolManager.settle{value: amountIn}()`, spending the contract's native ETH balance while the WETH ERC-20 tokens remain unspent. This affects the inbound CCIP path when WETH is delivered and a V4 swap is selected.
-
-**Impact:** Accounting drift — WETH stays in sucker while ETH is consumed. Can cause V4 settlement to revert if insufficient ETH. Stranded WETH eventually flows to project via `amountToAddToBalanceOf`.
-
-**Mitigation:** When `originalTokenIn` is WETH (not `NATIVE_TOKEN`), use WETH ERC-20 settlement instead of native ETH for V4 swaps. The V3 path already handles this correctly (line 266-269 checks `originalTokenIn == NATIVE_TOKEN`).
-
-Admin note: fix.
-
----
-
-### M-43. Project NFT Transfers Keep Prior Delegated-Owner Permission Policy — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-ownable-v6 |
-| **File** | `src/JBOwnableOverrides.sol:122-151` |
-| **Source** | Pashov Codex run (conf 90) |
-| **Auditor confidence** | 90 |
-| **My confidence** | **82 — CORROBORATED** |
-| **Known issue?** | No |
-
-**Description:** When a project NFT is transferred via standard ERC-721 `transferFrom`, `_transferOwnership` is never called, so the stored `jbOwner.permissionId` persists. If the previous owner set `permissionId = 42`, and the new NFT holder had previously granted permission ID 42 to some address for an unrelated purpose on the same `projectId`, those addresses unexpectedly gain owner access to the `JBOwnable` contract. RISKS.md §3 incorrectly states "permissionId resets on transfer" — this is only true for `_transferOwnership`, not NFT transfers.
-
-**Mitigation:** In `_checkOwner`, detect that the resolved owner differs from a stored owner hint and force `permissionId` to 0 when they diverge. Alternatively, update RISKS.md to correctly document that `permissionId` persists across NFT transfers and advise project buyers to audit JBOwnable contracts.
-
-Admin note: fix. The RISKS.md assertion about reset-on-transfer is incorrect and should be fixed regardless.
-
----
-
-### M-44. NFT Cash-Outs Forward Stale Counts to Extra Hooks — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-omnichain-deployers-v6 |
-| **File** | `src/JBOmnichainDeployer.sol:454` |
-| **Source** | Pashov Codex run (conf 85) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **80 — CORROBORATED** |
-| **Known issue?** | No |
-
-**Description:** When the 721 hook converts NFT metadata into a nonzero `cashOutCount`, the wrapper updates `hookContext.cashOutTaxRate`, `totalSupply`, and `surplus.value` before forwarding to the extra hook — but leaves `hookContext.cashOutCount` at the caller's original value. The extra hook's internal logic operates on stale `cashOutCount` (e.g., 0 when the 721 hook converted it to a tier-weight-based value). If the extra hook uses `cashOutCount` for policy decisions, those decisions are based on wrong inputs.
-
-**Mitigation:** Add `hookContext.cashOutCount = cashOutCount;` at line 454 alongside the other field updates.
-
-Admin note: fix.
-
----
-
-### L-20. reallocateCollateralFromLoan Requires Undocumented OPEN_LOAN Permission — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | revnet-core-v6 |
-| **File** | `src/REVLoans.sol:817,628` |
-| **Source** | Pashov Claude run (conf 85) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **78** |
-| **Known issue?** | No |
-
-**Description:** `reallocateCollateralFromLoan` checks `REALLOCATE_LOAN` permission, then calls the public `borrowFrom` which independently checks `OPEN_LOAN` permission. The loan owner passes both checks automatically (`sender == account`), but a delegated operator with only `REALLOCATE_LOAN` reverts at the inner `borrowFrom` permission check. The documented permission model is incomplete.
-
-**Mitigation:** Extract `borrowFrom`'s core logic into an internal `_borrowFrom` and call that from `reallocateCollateralFromLoan`, bypassing the redundant permission check. Or document that `REALLOCATE_LOAN` requires `OPEN_LOAN`.
-
----
-
-### L-21. ccipReceive Writes Batch Range Data Before fromRemote Rejects Stale Nonce — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/JBSwapCCIPSucker.sol:308-348` |
-| **Source** | Pashov Claude run (conf 85) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **70** |
-| **Known issue?** | No |
-
-**Description:** In `ccipReceive`, `_batchStartOf`, `_batchEndOf`, `_highestReceivedNonce`, and `_conversionRateOf` are written unconditionally before `this.fromRemote(root)` is called. If `fromRemote` rejects the root as stale, the batch metadata persists as orphaned storage. `_findNonceForLeafIndex` may discover this orphaned data and return a stale nonce, potentially applying the wrong conversion rate.
-
-**Mitigation:** Call `fromRemote` first to validate the nonce, then write batch/conversion data only if the inbox nonce was incremented.
-
----
-
-### L-22. Missing LINK Token Addresses for Polygon, Avalanche, and BNB Chains — N/A
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/libraries/CCIPHelper.sol:187-211` |
-| **Source** | Pashov Claude run (conf 82) |
-| **Auditor confidence** | 82 |
-| **My confidence** | **82** |
-| **Known issue?** | No |
-
-**Description:** `linkOfChain()` has no entries for Polygon (137), Avalanche (43114), or BNB (56), yet `routerOfChain()`, `selectorOfChain()`, and `wethOfChain()` all support those chains. Deploying a sucker on these chains with `transportPayment == 0` (LINK fee mode) reverts with `CCIPHelper_UnsupportedChain`. Native ETH fee mode still works.
-
-**Mitigation:** Add LINK token addresses: Polygon `0xb0897686c545045aFc77CF20eC7A532E3120E0F1`, Avalanche `0x5947BB275c521040051D82396571985b38D4e7bF`, BNB `0x404460C6A5EdE2D891e8297795264fDe62ADBB75`.
-
----
-
-### L-23. _findNonceForLeafIndex O(N) Reverse Scan Can Exceed Gas Limit — ACCEPTED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-suckers-v6 |
-| **File** | `src/JBSwapCCIPSucker.sol:484-513` |
-| **Source** | Pashov Claude run (conf 80) |
-| **Auditor confidence** | 80 |
-| **My confidence** | **65** |
-| **Known issue?** | No |
-
-**Description:** When the cache hint and neighbor probe miss, `_findNonceForLeafIndex` scans from `_highestReceivedNonce` down to 1, each iteration reading 2 SLOADs. For a long-lived sucker with hundreds of nonces, a non-sequential claim after cache invalidation could cost millions of gas. The cache optimization makes sequential claims O(1), limiting this to edge cases.
-
-**Mitigation:** Acceptable with cache for normal usage. Consider bounding the slow path to ~50 nonces and reverting if target not found. Document in RISKS.md.
-
----
-
-### L-24. Fee-on-Transfer Project Tokens Not Fully Restored After Failed Cash-Out Sells — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-buyback-hook-v6 |
-| **File** | `src/JBBuybackHook.sol:220-247` |
-| **Source** | Pashov Codex run (conf 85) |
-| **Auditor confidence** | 85 |
-| **My confidence** | **75** |
-| **Known issue?** | No |
-
-**Description:** In `afterCashOutRecordedWith`, the sell-side failure path mints `cashOutCountToSell` tokens to the hook, then transfers them back to the holder. For fee-on-transfer project tokens, the holder receives `cashOutCountToSell - feeOnTransferTax`, less than the amount the terminal burned. The holder loses the FOT tax.
-
-**Mitigation:** Document as accepted risk — FOT project tokens (custom ERC-20 with transfer fees) are not a supported configuration. Standard `JBERC20` has no transfer fees.
-
----
-
-### L-25. Unquotable High-Liquidity V3 Pools Can Block Usable Routes — ACCEPTED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | nana-router-terminal-v6 |
-| **File** | `src/JBRouterTerminal.sol:2463-2494` |
-| **Source** | Pashov Codex run (conf 75) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **68** |
-| **Known issue?** | No |
-
-**Description:** `_discoverPool` picks the highest-liquidity V3 pool before `_getV3TwapQuote` checks TWAP history. A fresh high-liquidity V3 pool without observation history wins discovery but fails the TWAP check, reverting the entire routing flow while lower-liquidity pools with adequate TWAP are ignored.
-
-**Impact:** Griefing vector — expensive (requires real liquidity), self-correcting (pool accumulates observations over time), bypassable (callers can provide `quoteForSwap` metadata to skip auto-quoting).
-
-**Mitigation:** Fall back to the next-best pool if TWAP quoting fails for the best pool. Or filter out V3 pools without sufficient observation history during discovery.
-
----
-
-### L-26. Raw-Balance Oracle Fallback Can Block Permissionless Pool Deployment — FIXED
-
-| Field | Value |
-|-------|-------|
-| **Repo** | univ4-lp-split-hook-v6 |
-| **File** | `src/JBUniswapV4LPSplitHook.sol:320,387-390` |
-| **Source** | Pashov Codex run (conf 75) |
-| **Auditor confidence** | 75 |
-| **My confidence** | **65** |
-| **Known issue?** | No |
-
-**Description:** In `_findHighestValueTerminalTokenOf`, when a price feed reverts, the code uses `ethValue = balance` (raw token balance as ETH-equivalent). A donated unpriced token with large raw balance can be selected as the "highest value" terminal token, causing downstream pool deployment to fail if that token can't form a valid Uniswap pair.
-
-**Impact:** Griefing vector against permissionless deployment — requires project to have accepted a worthless token (operator misconfiguration). Manual deployment path still works.
-
-**Mitigation:** Skip tokens with no price feed instead of using raw balance as fallback.
-
----
-
-## Pass 13 — Gemini Paranoid QA Scan (2026-04-29)
-
-**Source:** `GEM_AUDIT_REPORT.md` — Gemini "Paranoid QA & Security Lead" scan
-**Raw findings:** 10 Critical + 5 High + 8 Medium + 6 Low/Gas = 29 total
-**After triage:** 0 genuine new | 4 corroborate existing | 25 false positive/by-design/duplicates
-
-### Corroborations
-
-- **2.7** (Default Hook Hijack) → corroborates **H-17** (ACCEPTED)
-- **2.8** (Permissionless Pool Deployment Arbitrage) → corroborates **M-38** (ACCEPTED by design)
-- **3.2** (Cross-Chain Root Overwrite) → corroborates **H-13** (FIXED)
-- **3.5** (Sucker Supply Desync) → corroborates **M-33** (ACCEPTED)
-
-### All Gemini Findings — Triage
-
-| # | Gemini ID | Severity | Title | Verdict | Reason |
-|---|---|---|---|---|---|
-| 1 | 2.1 | CRITICAL | Reentrancy Double-Counting in JBMultiTerminal | **FALSE POSITIVE** | balance-before/after IS the reentrancy protection. ERC777 not a supported token type. |
-| 2 | 2.2 | CRITICAL | Reserve Drainage via Shared Balance in JBBuybackHook | **FALSE POSITIVE** | Hook uses weight/token count from data hook context, NOT terminal balance deltas. Mechanism described does not exist. |
-| 3 | 2.3 | CRITICAL | Synergistic Hidden Token Multiplier Attack | **FALSE POSITIVE** | "Fake terminal" requires owner action (self-harm). Hidden token math fixed in C-5. |
-| 4 | 2.4 | CRITICAL | Initial Project Configuration Hijacking | **FALSE POSITIVE** | Sequential IDs by design. No pre-announced IDs to "steal." Frontrunner must guess victim's configuration. |
-| 5 | 2.5 | CRITICAL | $REV Auto-Issuance Token Lock | **FALSE POSITIVE** | rulesetId = block.timestamp, not latestId+1. Claim based on incorrect understanding of JBRulesets ID mechanism. |
-| 6 | 2.6 | CRITICAL | Surplus Inflation via Redundant Payout Limits | **FALSE POSITIVE** | Payout limits are unique per terminal/token/currency combo. Duplicate limits not possible within same key. |
-| 7 | 2.7 | CRITICAL | Default Hook Hijack (Buyback Registry) | **DUPLICATE of H-17** | Already ACCEPTED risk — registry owner is trusted. |
-| 8 | 2.8 | CRITICAL | Permissionless Pool Deployment Arbitrage | **DUPLICATE of M-38** | Already ACCEPTED by design. |
-| 9 | 2.9 | CRITICAL | Price Feed Bricking (Zero Price) | **FALSE POSITIVE** | JBChainlinkV3PriceFeed already reverts on zero/negative prices and checks staleness. |
-| 10 | 2.10 | CRITICAL | Terminal Migration Self-Grief / Fund Lock | **INFORMATIONAL** | Owner self-harm only. Requires project owner to call migrateBalanceOf(to=self). |
-| 11 | 3.1 | HIGH | Payout Limit Reset via Terminal Migration | **FALSE POSITIVE** | Limits are per-terminal by design. New terminal needs its own limit config in JBFundAccessLimits. Migration doesn't bypass — it resets correctly. |
-| 12 | 3.2 | HIGH | Cross-Chain Root Overwrite (Nonce Gaps) | **DUPLICATE of H-13** | Already FIXED (`649f90a`). |
-| 13 | 3.3 | HIGH | Protocol Fee Evasion via Obscure Tokens | **BY-DESIGN** | Fee try-catch + held fees mechanism is documented. Fees are held, not forgiven. processHeldFeesOf retries. |
-| 14 | 3.4 | HIGH | Oracle Arbitrage on Payouts | **ACCEPTED RISK** | Standard Chainlink spot price usage. Protocol-wide, same as all DeFi using Chainlink. |
-| 15 | 3.5 | HIGH | Sucker Supply Desync / Flash Manipulation | **DUPLICATE of M-33** | Already ACCEPTED risk — cross-chain surplus staleness is inherent to bridge delays. |
-| 16 | 4.1 | MEDIUM | Sucker Root Stomping | **FALSE POSITIVE** | Each token has its own outbox tree keyed by token address. No cross-token overwrite possible. |
-| 17 | 4.2 | MEDIUM | Blind Decoding of HookData (V4 Hook) | **FALSE POSITIVE** | Hook validates hookData.length >= 32 before decoding. Not "blind." |
-| 18 | 4.3 | MEDIUM | LP Range Manipulation via Surplus Inflation | **INFORMATIONAL** | Requires payment + cashout in same tx. Bonding curve limits extractable value. |
-| 19 | 4.4 | MEDIUM | Bridge Message Loss | **BY-DESIGN** | Inherent to all cross-chain bridges. Documented in RISKS.md. |
-| 20 | 4.5 | MEDIUM | Registry-Keyed Metadata Mismatch | **FALSE POSITIVE** | Registry passes context unchanged — no namespace transformation. Same finding rejected in pass 12. |
-| 21 | 4.6 | MEDIUM | Migration Fee Bypass | **ACCEPTED RISK** | Related to M-7 (DOWNGRADED). Requires owner action. |
-| 22 | 4.7 | MEDIUM | Verified Handle Spoofing | **FALSE POSITIVE** | Bidirectional ENS verification IS the authorization mechanism. ENS text record → project ID is by-design. |
-| 23 | 4.8 | MEDIUM | 39-Wei Protocol Fee Bypass | **FALSE POSITIVE** | Gas cost per 39-wei tx (~21,000 gas) vastly exceeds fee savings. Economically infeasible. |
-| 24 | 5.1-5.2 | LOW | ERC721 Compliance, Hardcoded ENS | **INFORMATIONAL** | No security impact. |
-| 25 | 5.3-5.6 | GAS/LIVENESS | Permission Caching, Transient Storage, Splits DoS, Terminal Registration | **INFORMATIONAL** | Gas optimizations and liveness concerns. Splits DoS documented in RISKS.md (unbounded array risks). |
-
-### Pass 13 Analysis
-
-The Gemini scan produced 10 "CRITICAL" findings, all of which were triaged as false positives, duplicates, or informational. Key patterns:
-
-| Pattern | Count | Examples |
-|---|---|---|
-| Incorrect mechanism understanding | 4 | 2.1 (reentrancy), 2.2 (balance delta), 2.5 (ruleset IDs), 2.6 (payout limits) |
-| Owner self-harm / trusted role | 3 | 2.3, 2.4, 2.10 |
-| Already mitigated in code | 2 | 2.9 (zero price), 4.2 (hookData validation) |
-| Duplicate of existing finding | 4 | 2.7→H-17, 2.8→M-38, 3.2→H-13, 3.5→M-33 |
-| By-design / accepted | 5 | 3.3, 3.4, 4.4, 4.6, 4.8 |
-| Economically infeasible | 2 | 4.3, 4.8 |
-
-The scan's "DEPLOYMENT HALTED — 0/10 confidence" assessment is **not substantiated**. None of its 10 critical findings survived triage.
+- Security action required before deploy:
+  1. review and merge the local persistent terminal-allowance fix in the shared routing hooks,
+  2. review and merge the local shared-clone fee-claim capture fix in the LP split hook,
+  3. review and merge the local realized-output enforcement for JB-routed `amountOutMin`,
+  4. review and merge the local `JBBuybackHook` transfer-tax route-gating patch,
+  5. review and merge the local active-sucker precedence fix for same-chain sucker aggregate views,
+  6. review and merge the local retained `toRemoteFee` refund/accounting fix,
+  7. review and merge the local Defifa launch guard that rejects one-tier games when the no-contest timeout is disabled,
+  8. review and merge the local Defifa fee-token beneficiary routing fix,
+  9. review and merge the local Defifa pending-reserve preview denominator fix,
+  10. review and merge the local Croptop patch that removes launch-time direct CTDeployer-owned hook-management grants,
+  11. review and merge the local canonical NANA project-`1` guard in the fee-project / deploy-all rollout path,
+  12. review and merge the local 721 hook / distributor snapshot-owner eligibility patch,
+  13. review and merge the local verified-handle Unicode formatting guard,
+  14. review and merge the local hidden-revnet-balance denominator fix so split operators / allowlisted holders cannot drain via cash out or loans and then restore the hidden tranche,
+  15. review and merge the local `Verify.s.sol` patch that brings checks back into sync with canonical routing and ownership topology,
+  16. review and merge the local `Resume.s.sol` patch that rejects attacker-configured canonical project IDs instead of adopting them as Croptop fee sinks,
+  17. review and merge the local BAN/Banny verification patch that proves the canonical product deployment happened instead of accepting any generically wired project `4`,
+  18. review and merge the local resume and verification patch that proves canonical REV identity really belongs to project `3` before binding fees, loans, and downstream integrations to it,
+  19. review and merge the local reservation-based launcher patches for Croptop, the shared 721 project deployer, Defifa, fresh Revnet, and omnichain deployment flows,
+  20. review and merge the local `Verify.s.sol` patch that fails closed on the full deploy-all surface instead of silently skipping address-registry / Defifa / Phase 11 periphery coverage,
+  21. review and merge the local revnet sucker salt patch that removes the external caller from peer-address derivation,
+  22. review and merge the local cross-repo peer snapshot patch that includes each revnet chain's hidden supply, burned loan collateral, and outstanding loan debt in remote omnichain pricing,
+  23. review and merge the local sucker snapshot freshness patch so multiple same-block outbound roots get distinct project-wide freshness keys,
+  24. review and merge the local revnet cash-out pricing patch that includes local outstanding loan debt and local burned loan collateral before running the bonding curve,
+  25. review and merge the local retained CCIP transport-refund patch so failed excess-payment refunds are caller-claimable and excluded from claimable native balance,
+  26. review and merge the local revnet configuration-hash expansion so cross-chain pairing actually captures split-operator power, reserved split routing, and policy bits,
+  27. review and merge the local explicit sucker peer-configuration patch; keep `deploy-all-v6` pinned to the sibling working-copy packages for the one-shot deployment, or publish fresh patched package versions and regenerate the lockfile before running it,
+  28. review and merge the local `JBSwapPoolLib` route-quality patch so hookless V4 spot pools, broken hooked V4 pools, and fresh V3 pools cannot outrank TWAP-capable/live alternatives,
+  29. review and merge the local sucker terminal-scanning patch so slot-zero forwarding wrappers cannot zero later real terminals or remote peer-value conversion,
+  30. keep the accepted V4 spot fallback limited to the no-TWAP-route case, with hooked V4 routes required to prove TWAP availability,
+  31. review and merge the local `JBUniswapV4Hook` metadata-only buyback pay-preview patch,
+  32. review and merge the local `JBRouterTerminal` buyback sell-side executable-floor scoring patch,
+  33. review and merge the local `JBUniswapV4Hook` metadata-only buyback cash-out preview patch,
+  34. review and merge the local `JBPayRouteResolver` buy-side raw-buyback-quote scoring patch,
+  35. review and merge the local `JBRouterTerminal` zero-delivery source cash-out guard,
+  36. review and merge the local `JBRouterTerminal` fee-aware source cash-out preview scoring patch,
+  37. review and merge the local `JBUniswapV4Hook` zero-delivery JB sell guard,
+  38. review and merge the local `JBUniswapV4Hook` feeless-beneficiary sell-quote patch,
+  39. review and merge the local `JBUniswapV4LPSplitHook` fee-token actual-receipt accounting patch,
+  40. review and merge the local `JBUniswapV4LPSplitHook` primary-terminal deploy-token selection patch,
+  41. review and merge the local `JBRouterTerminalRegistry` circular-lock guard,
+  42. make Croptop's sucker rollout model internally consistent by either failing closed at launch or providing a real post-launch recovery path that satisfies registry permission requirements,
+  43. review and merge the local `JB721TiersHookProjectDeployer` downstream-permission preflight.
+- Remaining optional cleanup after that:
+  1. explicit rejection for unsupported ERC-20 split-tier configs,
+  2. future-tier metadata existence check,
+  3. router ETH refund fail-soft behavior,
+  4. deploy-script idempotency alignment.
