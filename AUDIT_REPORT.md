@@ -55,25 +55,26 @@ Bottom line under the current threat model:
 
 ## Open And Locally Patched Findings
 
-### Review Branches
+### Review PRs
 
-The local remediation patches have been committed and pushed for review:
+The local remediation patches have been committed and opened for review:
 
-- `banny-retail-v6`: `codex/v6-audit-remediations-20260501`
-- `croptop-core-v6`: `codex/v6-audit-remediations-20260501`
-- `defifa`: `codex-v6-audit-remediations-20260501`
-- `deploy-all-v6`: `codex/v6-audit-remediations-20260501`
-- `nana-721-hook-v6`: `codex/v6-audit-remediations-20260501`
-- `nana-buyback-hook-v6`: `codex/v6-audit-remediations-20260501`
-- `nana-distributor-v6`: `codex-v6-audit-remediations-20260501`
-- `nana-fee-project-deployer-v6`: `codex/v6-audit-remediations-20260501`
-- `nana-omnichain-deployers-v6`: `codex/v6-audit-remediations-20260501`
-- `nana-project-handles-v6`: `codex-v6-audit-remediations-20260501`
-- `nana-router-terminal-v6`: `codex-v6-audit-remediations-20260501`
-- `nana-suckers-v6`: `codex-v6-audit-remediations-20260501`
-- `revnet-core-v6`: `codex-v6-audit-remediations-20260501`
-- `univ4-lp-split-hook-v6`: `codex-v6-audit-remediations-20260501`
-- `univ4-router-v6`: `codex-v6-audit-remediations-20260501`
+- `version-6`: https://github.com/Bananapus/version-6/pull/100
+- `banny-retail-v6`: https://github.com/mejango/banny-retail-v6/pull/101
+- `croptop-core-v6`: https://github.com/mejango/croptop-core-v6/pull/118
+- `defifa`: https://github.com/BallKidz/defifa/pull/97
+- `deploy-all-v6`: https://github.com/Bananapus/deploy-all-v6/pull/70
+- `nana-721-hook-v6`: https://github.com/Bananapus/nana-721-hook-v6/pull/122
+- `nana-buyback-hook-v6`: https://github.com/Bananapus/nana-buyback-hook-v6/pull/115
+- `nana-distributor-v6`: https://github.com/Bananapus/nana-distributor-v6/pull/12
+- `nana-fee-project-deployer-v6`: https://github.com/Bananapus/nana-fee-project-deployer-v6/pull/69
+- `nana-omnichain-deployers-v6`: https://github.com/Bananapus/nana-omnichain-deployers-v6/pull/97
+- `nana-project-handles-v6`: https://github.com/Bananapus/nana-project-handles-v6/pull/8
+- `nana-router-terminal-v6`: https://github.com/Bananapus/nana-router-terminal-v6/pull/98
+- `nana-suckers-v6`: https://github.com/Bananapus/nana-suckers-v6/pull/110
+- `revnet-core-v6`: https://github.com/rev-net/revnet-core-v6/pull/136
+- `univ4-lp-split-hook-v6`: https://github.com/Bananapus/nana-univ4-lp-split-hook-v6/pull/112
+- `univ4-router-v6`: https://github.com/Bananapus/nana-univ4-router-v6/pull/95
 
 ### 1. `univ4-router-v6` + `univ4-lp-split-hook-v6`: persistent terminal approvals can leak later same-token balances
 
