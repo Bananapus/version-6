@@ -48,8 +48,9 @@ Bottom line under the current threat model:
 - The previously open sucker registry/deployer topology drift bug is now locally mitigated by making the remote peer address an explicit deployer configuration field while retaining zero as the deterministic same-address default.
 - The previously open weak revnet configuration hash is now locally mitigated by including split-operator authority, reserved split routing, and extra metadata policy bits in the stored configuration commitment.
 - The previously open `nana-buyback-hook-v6` fee-on-transfer derived-minimum self-brick is now locally mitigated by requiring explicit user minima for ERC-20 sell-output AMM routing and standard Juicebox ERC-20 project tokens for protocol-derived buy-output AMM routing.
-- The previously open `nana-distributor-v6` 721 snapshot-transfer reward-redirection bug is now locally mitigated by token-owner checkpoints in `JB721TiersHook` and snapshot-owner eligibility checks in `JB721Distributor`; review is still required before deployment.
+- The previously open `nana-distributor-v6` 721 snapshot-transfer reward-redirection bug is now locally mitigated by mint blocks plus post-mint owner checkpoints in `JB721Checkpoints` and snapshot-owner eligibility checks in `JB721Distributor`; review is still required before deployment.
 - The previously open public launcher `count() + 1` grief pattern is now locally mitigated across Croptop, Defifa, Revnet, the shared 721 project deployer, and the omnichain deployer by reserving the project ID before deriving hook / ruleset / sucker configuration.
+- The newly confirmed `nana-core-v6` protocol-fee dust bypass is now locally mitigated by rounding any nonzero feeable amount whose computed fee would floor to 0 up to a 1-unit fee.
 - The previously reported Defifa cash-out / one-tier issues, sucker same-block snapshot issue, revnet hidden-supply, local-loan-state, and remote-loan-state issues, verified-handle spoof surface, buyback-hook transfer-tax route gating, and `deploy-all-v6` resume / verifier blind spots remain listed below until their local patches are reviewed and merged.
 - Several earlier findings were dropped because they rely on deployment paths you do not use, behaviors you explicitly accept, or invariants you do not want this system to enforce.
 
@@ -68,6 +69,7 @@ The local remediation patches have been committed and opened for review:
 - `nana-buyback-hook-v6`: https://github.com/Bananapus/nana-buyback-hook-v6/pull/115
 - `nana-distributor-v6`: https://github.com/Bananapus/nana-distributor-v6/pull/12
 - `nana-fee-project-deployer-v6`: https://github.com/Bananapus/nana-fee-project-deployer-v6/pull/69
+- `nana-core-v6`: https://github.com/Bananapus/nana-core-v6/pull/127
 - `nana-omnichain-deployers-v6`: https://github.com/Bananapus/nana-omnichain-deployers-v6/pull/97
 - `nana-project-handles-v6`: https://github.com/Bananapus/nana-project-handles-v6/pull/8
 - `nana-router-terminal-v6`: https://github.com/Bananapus/nana-router-terminal-v6/pull/98
@@ -486,7 +488,7 @@ Why it is real:
 - `_tokenStake(...)` and `_vestSingleToken(...)` only checked the token’s current owner and that owner’s checkpointed `pastVotes` at `roundSnapshotBlock[currentRound()]`.
 - That meant any NFT currently owned by an address that had snapshot voting power could vest rewards for the round, even if that NFT was minted or acquired after the snapshot.
 - The cross-user PoC showed the concrete consequence: a seller could hold token `1` at round start, transfer token `1` to a buyer after the snapshot, mint or receive token `2` after the snapshot, and then vest the full round through token `2` while the buyer’s real snapshot token became ineligible because the buyer had zero past votes.
-- The local patch adds token-owner checkpoints to the 721 hook, exposes `ownerOfAt(tokenId, blockNumber)`, and makes the distributor score / consume round eligibility against the token's snapshot owner. Tokens that cannot prove a snapshot owner get zero eligibility.
+- The local patch adds mint blocks and post-mint token-owner checkpoints to the 721 checkpoint module, exposes `ownerOfAt(tokenId, blockNumber)` from `CHECKPOINTS`, and makes the distributor score / consume round eligibility against the token's snapshot owner. Tokens that cannot prove a snapshot owner get zero eligibility.
 
 Impact:
 
@@ -1816,6 +1818,39 @@ Recommended fix:
 - Review and merge the local downstream-permission preflight.
 - Alternatively, narrow the documented operating model and require explicit permissioning of the helper contract before using these existing-project helper flows.
 
+### 47. `nana-core-v6`: nonzero protocol-fee dust can be split to bypass fees
+
+Severity: `LOW`
+
+Status: locally mitigated in `nana-core-v6/src/libraries/JBFees.sol`; retained here until the patch is reviewed and merged.
+
+Affected code:
+
+- [JBFees.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/libraries/JBFees.sol:18)
+- [JBFees.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/libraries/JBFees.sol:32)
+
+Why it is real:
+
+- `JBFees.feeAmountFrom(...)` floors `amountBeforeFee * feePercent / MAX_FEE`.
+- For any nonzero payout smaller than the fee denominator threshold, the computed fee can round down to 0 even when the project has a nonzero protocol fee.
+- A payer can split a larger payout into many feeable micro-payouts, each below the fee threshold, causing the protocol to collect no fee on value that would have produced a fee if paid out as one amount.
+- `feeAmountResultingIn(...)` has the same dust-shape issue for reverse fee calculations.
+
+Impact:
+
+- Protocol fees can be bypassed on feeable dust by splitting payout execution into many tiny amounts.
+- The per-transfer impact is bounded to dust, but the strategy is repeatable and should not be preserved before immutable deployment.
+
+Evidence:
+
+- Regression: [TestFees.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/test/TestFees.sol:183)
+- Fuzz invariant update: [TestFeesFuzz.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/test/units/static/JBFees/TestFeesFuzz.sol:51)
+
+Recommended fix:
+
+- Review and merge the local `JBFees` patch that returns a 1-unit fee whenever both the amount and fee percent are nonzero but the computed fee would otherwise be 0.
+- Keep zero-amount and zero-fee behavior unchanged.
+
 ## No-Action / Accepted Items
 
 These were reviewed and intentionally dropped.
@@ -1904,7 +1939,7 @@ These were reviewed and intentionally dropped.
   Local patch: `JB721TiersHookProjectDeployer` preflights its own `LAUNCH_RULESETS` / `SET_TERMINALS` / `QUEUE_RULESETS` permissions before deploying hooks and forwarding into `JBController`, so callers get a clear helper-specific error instead of a post-deployment controller revert.
 
 - `nana-721-hook-v6` + `nana-distributor-v6`: 721 round rewards now use token-specific snapshot ownership instead of current-owner voting power alone.
-  Local patch: `JB721TiersHook` checkpoints each token's owner on transfer and exposes `ownerOfAt(...)`; `JB721Distributor` now looks up the snapshot owner before scoring stake and consuming owner vote budgets, so late-minted replacement NFTs cannot steal rewards from transferred snapshot tokens.
+  Local patch: `JB721Checkpoints` records token mint blocks plus owner changes after mint and exposes `ownerOfAt(...)`; `JB721Distributor` now looks up the checkpointed snapshot owner before scoring stake and consuming owner vote budgets, so late-minted replacement NFTs cannot steal rewards from transferred snapshot tokens.
 
 - `croptop-core-v6`: prior project owners no longer retain direct CTDeployer-owned hook-management permissions after a project NFT transfer.
   Local patch: `CTDeployer.deployProjectFor(...)` no longer grants `ADJUST_721_TIERS`, `SET_721_METADATA`, `MINT_721`, or `SET_721_DISCOUNT_PERCENT` from `CTDeployer` to the initial owner; owners who want direct hook control must claim project-based hook ownership so authority follows the current project NFT owner.
@@ -2117,6 +2152,7 @@ The following targeted checks were run while triaging:
 - `forge test --match-path test/JB721Distributor.t.sol` in `nana-distributor-v6`
 - `forge test --match-path test/audit/PostSnapshotMintTheft.t.sol` in `nana-distributor-v6`
 - `forge test --match-path test/audit/CodexNemesisAccountingPoC.t.sol` in `nana-distributor-v6`
+- `forge test --match-path test/invariant/JB721DistributorInvariant.t.sol` in `nana-distributor-v6`
 - `forge build` in `nana-distributor-v6`
 - `forge fmt --check src/JB721Distributor.sol test/JB721Distributor.t.sol test/audit/CodexNemesisFreshVerification.t.sol test/audit/CodexNemesisFreshRoundVerification.t.sol test/audit/PostSnapshotMintTheft.t.sol test/audit/H26VotingPowerCap.t.sol test/audit/CodexNemesisAccountingPoC.t.sol test/invariant/JB721DistributorInvariant.t.sol` in `nana-distributor-v6`
 - `forge test --match-path test/unit/getters_constructor_Unit.t.sol --match-test test_ownerOfAt_shouldReturnHistoricalOwners` in `nana-721-hook-v6`
@@ -2177,6 +2213,10 @@ The following targeted checks were run while triaging:
 - `forge test --match-path test/audit/ProjectDeployerAuth.t.sol` in `nana-721-hook-v6`
 - `forge test --match-path test/regression/ProjectDeployerRulesets.t.sol` in `nana-721-hook-v6`
 - `forge build` in `nana-721-hook-v6`
+- `forge test --match-path test/TestFees.sol` in `nana-core-v6`
+- `forge test --match-path test/units/static/JBFees/TestFeesFuzz.sol` in `nana-core-v6`
+- `forge test --match-path test/units/static/JBMultiTerminal/TestExecutePayout.sol` in `nana-core-v6`
+- `forge build` in `nana-core-v6`
 - `npm install --package-lock-only --ignore-scripts --no-audit --no-fund` in `deploy-all-v6`
 - `npm install --ignore-scripts --no-audit --no-fund` in `deploy-all-v6`
 - `forge fmt --check script/Deploy.s.sol script/Resume.s.sol test/fork/DeployFullStack.t.sol test/fork/DeployResumeRehearsalFork.t.sol test/fork/ResumeDeployFork.t.sol test/fork/WildcardPermissionKillChain.t.sol test/fork/LPBuybackInteropFork.t.sol` in `deploy-all-v6`
