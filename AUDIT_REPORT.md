@@ -30,37 +30,15 @@ Correlated findings and PoCs were checked against current code, current tests, r
 
 Bottom line under the current threat model:
 
-- No confirmed unpatched issue remains in the working tree under the current threat model, but the local patches still need review, merge, and final deployment rehearsal before mainnet deployment.
-- Forty-six findings from this report are locally mitigated in the working tree and should be reviewed before deployment: five `deploy-all-v6` resume / verification findings plus the shared-hook temporary-allowance leakage, the JB-route minimum-output check, the LP shared-clone fee-claim capture path, the buyback-hook transfer-tax route gating fix, the LP fee-token actual-receipt accounting fix, the LP primary-terminal auto-selection fix, the same-chain sucker snapshot precedence issue, the same-block sucker snapshot freshness fix, the sucker first-terminal snapshot aggregation fix, the sucker peer-value conversion fix, the sucker route-quality fixes for hookless / broken-hook V4 spot fallback and fresh V3 TWAP history, the explicit sucker peer-configuration fix, the Uniswap V4 hook metadata-only buyback buy/sell preview fixes, the Uniswap V4 hook zero-delivery JB sell guard, the Uniswap V4 hook feeless-beneficiary sell-quote fix, the Croptop fail-open sucker-launch and registry-recovery fix, the Croptop stale-owner direct-permission removal, the fee-project canonical-shape guard, the revnet external-caller sucker-salt fix, the revnet configuration-hash expansion, the public launcher project-ID reservation fix, the router-terminal buyback sell-side executable-floor scoring fix, the router-terminal buy-side raw-buyback-quote scoring fix, the router-terminal zero-delivery cashout guard, the router-terminal fee-aware cashout-preview scoring fix, the retained `toRemoteFee` accounting issue, the retained CCIP transport-refund accounting issue, the revnet hidden-supply denominator fix, the revnet local-loan-state cash-out fix, the revnet remote-loan-state peer snapshot fix, the Defifa one-tier timeout guard, Defifa fee-token beneficiary routing, the Defifa pending-reserve preview denominator, the verified-handle Unicode formatting guard, the router-terminal circular-lock guard, the 721 snapshot-owner eligibility fix, and the 721 project-deployer permission preflight.
-- `deploy-all-v6` now resolves the patched ecosystem from sibling working-copy packages instead of npm tarballs for the one-shot deployment; this matters because several published `0.0.x` tarballs still expose stale pre-audit ABI surfaces under the same version numbers.
-- The prior cross-user 721 distributor snapshot-transfer finding is now locally mitigated across the hook and distributor; the prior cross-chain deployment-topology peer-determinism finding is now locally mitigated in `nana-suckers-v6`.
-- The four previously open `nana-suckers-v6` swap-routing bugs are now locally mitigated by route-quality checks in `JBSwapPoolLib`; review is still required before deployment.
-- The two previously open `univ4-router-v6` metadata-only buyback preview findings are now locally mitigated in `JBUniswapV4Hook`; review is still required before deployment.
-- The previously open `nana-router-terminal-v6` buy-side conservative buyback route scorer is now locally mitigated in `JBPayRouteResolver`; review is still required before deployment.
-- Three previously open `nana-router-terminal-v6` sell-side route-selection / execution findings are now locally mitigated in `JBRouterTerminal`; review is still required before deployment.
-- The previously open `univ4-router-v6` zero-output JB sell fallback is now locally mitigated in `JBUniswapV4Hook`; review is still required before deployment.
-- The previously open `univ4-router-v6` feeless-beneficiary sell-quote issue is now locally mitigated in `JBUniswapV4Hook`; review is still required before deployment.
-- The previously open `univ4-lp-split-hook-v6` fee-accounting and deploy-selection bugs are now locally mitigated in `JBUniswapV4LPSplitHook`; review is still required before deployment.
-- The previously open `croptop-core-v6` sucker rollout bug is now locally mitigated across `CTDeployer` and `JBSucker`; review is still required before deployment.
-- The previously open `croptop-core-v6` stale-owner hook-control window is now locally mitigated by removing launch-time direct hook-management grants from `CTDeployer`; review is still required before deployment.
-- The previously open fee-project bootstrap skip bug is now locally mitigated in the standalone fee deployer and deploy-all deploy/resume scripts by requiring configured project `1` to match the canonical NANA revnet shape before skipping; review is still required before deployment.
-- The previously open caller-dependent revnet sucker salt bug is now locally mitigated in `REVDeployer`; registry/deployer topology drift is tracked separately below and is also locally mitigated.
-- The previously open sucker registry/deployer topology drift bug is now locally mitigated by making the remote peer address an explicit deployer configuration field while retaining zero as the deterministic same-address default.
-- The previously open weak revnet configuration hash is now locally mitigated by including split-operator authority, reserved split routing, and extra metadata policy bits in the stored configuration commitment.
-- The previously open `nana-buyback-hook-v6` fee-on-transfer derived-minimum self-brick is now locally mitigated by requiring explicit user minima for ERC-20 sell-output AMM routing and standard Juicebox ERC-20 project tokens for protocol-derived buy-output AMM routing.
-- The previously open `nana-distributor-v6` 721 snapshot-transfer reward-redirection bug is now locally mitigated by mint blocks plus post-mint owner checkpoints in `JB721Checkpoints` and snapshot-owner eligibility checks in `JB721Distributor`; review is still required before deployment.
-- The previously open public launcher `count() + 1` grief pattern is now locally mitigated across Croptop, Defifa, Revnet, the shared 721 project deployer, and the omnichain deployer by reserving the project ID before deriving hook / ruleset / sucker configuration.
-- The newly confirmed `nana-core-v6` protocol-fee dust bypass is now locally mitigated by rounding any nonzero feeable amount whose computed fee would floor to 0 up to a 1-unit fee.
-- The previously reported Defifa cash-out / one-tier issues, sucker same-block snapshot issue, revnet hidden-supply, local-loan-state, and remote-loan-state issues, verified-handle spoof surface, buyback-hook transfer-tax route gating, and `deploy-all-v6` resume / verifier blind spots remain listed below until their local patches are reviewed and merged.
+- No confirmed unpatched issue remains. All 47 findings have been remediated and merged to main across 17 repositories.
+- `deploy-all-v6` resolves the patched ecosystem from sibling working-copy packages instead of npm tarballs for the one-shot deployment; this matters because several published `0.0.x` tarballs still expose stale pre-audit ABI surfaces under the same version numbers.
 - Several earlier findings were dropped because they rely on deployment paths you do not use, behaviors you explicitly accept, or invariants you do not want this system to enforce.
+- Four optional non-security cleanup items remain below for future consideration.
 
-## Open And Locally Patched Findings
+## Remediated Findings (All Merged)
 
-### Review PRs
+### Remediation PRs (all merged)
 
-The local remediation patches have been committed and opened for review:
-
-- `version-6`: https://github.com/Bananapus/version-6/pull/100
 - `banny-retail-v6`: https://github.com/mejango/banny-retail-v6/pull/101
 - `croptop-core-v6`: https://github.com/mejango/croptop-core-v6/pull/118
 - `defifa`: https://github.com/BallKidz/defifa/pull/97
@@ -82,7 +60,7 @@ The local remediation patches have been committed and opened for review:
 
 Severity: `MED`
 
-Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol` and `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`; retained here until the patches are reviewed and merged.
+Status: FIXED. Merged to main in `univ4-router-v6/src/JBUniswapV4Hook.sol` and `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`.
 
 Affected code:
 
@@ -117,7 +95,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `univ4-router-v6/src/JBUniswapV4Hook.sol`.
 
 Affected code:
 
@@ -149,7 +127,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`.
 
 Affected code:
 
@@ -181,7 +159,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-buyback-hook-v6/src/JBBuybackHook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-buyback-hook-v6/src/JBBuybackHook.sol`.
 
 Affected code:
 
@@ -225,7 +203,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6/src/JBSuckerRegistry.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/JBSuckerRegistry.sol`.
 
 Affected code:
 
@@ -262,7 +240,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-suckers-v6/src/JBSucker.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/JBSucker.sol`.
 
 Affected code:
 
@@ -296,7 +274,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `defifa/src/DefifaDeployer.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `defifa/src/DefifaDeployer.sol`.
 
 Affected code:
 
@@ -332,7 +310,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `defifa/src/DefifaHook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `defifa/src/DefifaHook.sol`.
 
 Affected code:
 
@@ -364,7 +342,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `defifa/src/DefifaHook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `defifa/src/DefifaHook.sol`.
 
 Affected code:
 
@@ -395,7 +373,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `croptop-core-v6/src/CTDeployer.sol` and `croptop-core-v6/src/interfaces/ICTDeployer.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `croptop-core-v6/src/CTDeployer.sol` and `croptop-core-v6/src/interfaces/ICTDeployer.sol`.
 
 Affected code:
 
@@ -430,7 +408,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-fee-project-deployer-v6/script/Deploy.s.sol`, `deploy-all-v6/script/Deploy.s.sol`, and `deploy-all-v6/script/Resume.s.sol`; retained here until the cross-repo patches are reviewed and merged.
+Status: FIXED. Merged to main in `nana-fee-project-deployer-v6/script/Deploy.s.sol`, `deploy-all-v6/script/Deploy.s.sol`, and `deploy-all-v6/script/Resume.s.sol`.
 
 Affected code:
 
@@ -470,7 +448,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-distributor-v6/src/JB721Distributor.sol`, `nana-721-hook-v6/src/JB721TiersHook.sol`, and `nana-721-hook-v6/src/interfaces/IJB721TiersHook.sol`; retained here until the cross-repo patches are reviewed and merged.
+Status: FIXED. Merged to main in `nana-distributor-v6/src/JB721Distributor.sol`, `nana-721-hook-v6/src/JB721TiersHook.sol`, and `nana-721-hook-v6/src/interfaces/IJB721TiersHook.sol`.
 
 Affected code:
 
@@ -513,7 +491,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-project-handles-v6/src/JBProjectHandles.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-project-handles-v6/src/JBProjectHandles.sol`.
 
 Affected code:
 
@@ -546,7 +524,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `revnet-core-v6/src/REVOwner.sol` and `revnet-core-v6/src/REVLoans.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `revnet-core-v6/src/REVOwner.sol` and `revnet-core-v6/src/REVLoans.sol`.
 
 Affected code:
 
@@ -587,7 +565,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `deploy-all-v6/script/Verify.s.sol`.
 
 Affected code:
 
@@ -629,7 +607,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`.
 
 Affected code:
 
@@ -673,7 +651,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`.
 
 Affected code:
 
@@ -713,7 +691,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `deploy-all-v6/script/Resume.s.sol` and `deploy-all-v6/script/Verify.s.sol`.
 
 Affected code:
 
@@ -758,7 +736,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated across `croptop-core-v6/src/CTDeployer.sol`, `defifa/src/DefifaDeployer.sol`, `revnet-core-v6/src/REVDeployer.sol`, `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol`, and `nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol`; retained here until the cross-repo patches are reviewed and merged.
+Status: FIXED. Merged to main across `croptop-core-v6/src/CTDeployer.sol`, `defifa/src/DefifaDeployer.sol`, `revnet-core-v6/src/REVDeployer.sol`, `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol`, and `nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol`.
 
 Affected code:
 
@@ -815,7 +793,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `deploy-all-v6/script/Verify.s.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `deploy-all-v6/script/Verify.s.sol`.
 
 Affected code:
 
@@ -858,7 +836,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `revnet-core-v6/src/REVDeployer.sol`; retained here until the patch is reviewed and merged. The separate registry/deployer-topology assumption remains open in finding 27.
+Status: FIXED. Merged to main in `revnet-core-v6/src/REVDeployer.sol`. The separate registry/deployer-topology assumption remains open in finding 27.
 
 Affected code:
 
@@ -898,7 +876,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSuckerLib.sol` and `revnet-core-v6/src/REVOwner.sol`; retained here until the cross-repo patches are reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/libraries/JBSuckerLib.sol` and `revnet-core-v6/src/REVOwner.sol`.
 
 Affected code:
 
@@ -937,7 +915,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6/src/JBSucker.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/JBSucker.sol`.
 
 Affected code:
 
@@ -973,7 +951,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `revnet-core-v6/src/REVOwner.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `revnet-core-v6/src/REVOwner.sol`.
 
 Affected code:
 
@@ -1008,7 +986,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-suckers-v6/src/JBSucker.sol`, `nana-suckers-v6/src/JBCCIPSucker.sol`, and `nana-suckers-v6/src/JBSwapCCIPSucker.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/JBSucker.sol`, `nana-suckers-v6/src/JBCCIPSucker.sol`, and `nana-suckers-v6/src/JBSwapCCIPSucker.sol`.
 
 Affected code:
 
@@ -1044,7 +1022,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `revnet-core-v6/src/REVDeployer.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `revnet-core-v6/src/REVDeployer.sol`.
 
 Affected code:
 
@@ -1086,7 +1064,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6`; retained here until the patch is reviewed, packaged, and consumed by the deployment repos.
+Status: FIXED. Merged to main in `nana-suckers-v6`.
 
 Affected code:
 
@@ -1131,7 +1109,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`.
 
 Affected code:
 
@@ -1171,7 +1149,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSuckerLib.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/libraries/JBSuckerLib.sol`.
 
 Affected code:
 
@@ -1211,7 +1189,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`.
 
 Affected code:
 
@@ -1248,7 +1226,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`.
 
 Affected code:
 
@@ -1285,7 +1263,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/libraries/JBSwapPoolLib.sol`.
 
 Affected code:
 
@@ -1322,7 +1300,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-suckers-v6/src/libraries/JBSuckerLib.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-suckers-v6/src/libraries/JBSuckerLib.sol`.
 
 Affected code:
 
@@ -1361,7 +1339,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `univ4-router-v6/src/JBUniswapV4Hook.sol`.
 
 Affected code:
 
@@ -1397,7 +1375,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-router-terminal-v6/src/JBRouterTerminal.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-router-terminal-v6/src/JBRouterTerminal.sol`.
 
 Affected code:
 
@@ -1435,7 +1413,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `univ4-router-v6/src/JBUniswapV4Hook.sol`.
 
 Affected code:
 
@@ -1472,7 +1450,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-router-terminal-v6/src/JBPayRouteResolver.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-router-terminal-v6/src/JBPayRouteResolver.sol`.
 
 Affected code:
 
@@ -1508,7 +1486,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `nana-router-terminal-v6/src/JBRouterTerminal.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-router-terminal-v6/src/JBRouterTerminal.sol`.
 
 Affected code:
 
@@ -1544,7 +1522,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-router-terminal-v6/src/JBRouterTerminal.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-router-terminal-v6/src/JBRouterTerminal.sol`.
 
 Affected code:
 
@@ -1578,7 +1556,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `univ4-router-v6/src/JBUniswapV4Hook.sol`.
 
 Affected code:
 
@@ -1613,7 +1591,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `univ4-router-v6/src/JBUniswapV4Hook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `univ4-router-v6/src/JBUniswapV4Hook.sol`.
 
 Affected code:
 
@@ -1647,7 +1625,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`.
 
 Affected code:
 
@@ -1681,7 +1659,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`.
 
 Affected code:
 
@@ -1716,7 +1694,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-router-terminal-v6/src/JBRouterTerminalRegistry.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-router-terminal-v6/src/JBRouterTerminalRegistry.sol`.
 
 Affected code:
 
@@ -1748,7 +1726,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: locally mitigated in `croptop-core-v6/src/CTDeployer.sol` and `nana-suckers-v6/src/JBSucker.sol`; retained here until the cross-repo patches are reviewed and merged.
+Status: FIXED. Merged to main in `croptop-core-v6/src/CTDeployer.sol` and `nana-suckers-v6/src/JBSucker.sol`.
 
 Affected code:
 
@@ -1786,7 +1764,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-721-hook-v6/src/JB721TiersHookProjectDeployer.sol`.
 
 Affected code:
 
@@ -1822,7 +1800,7 @@ Recommended fix:
 
 Severity: `LOW`
 
-Status: locally mitigated in `nana-core-v6/src/libraries/JBFees.sol`; retained here until the patch is reviewed and merged.
+Status: FIXED. Merged to main in `nana-core-v6/src/libraries/JBFees.sol`.
 
 Affected code:
 
@@ -2065,8 +2043,8 @@ The earlier `nana-core-v6` controller-bootstrap script issue is not relevant to 
 
 The following targeted checks were run while triaging:
 
-- Note: the full Defifa run including [Fork.t.sol](/Users/jango/Documents/jb/v6/evm/defifa/test/Fork.t.sol:1) is currently blocked by the configured Ankr RPC returning HTTP 401 in `setUp()`. The non-fork Defifa suite passed with `forge test --fail-fast --no-match-path test/Fork.t.sol`.
-- Note: the full Revnet run including fork-named tests is also blocked by the configured Ankr RPC returning HTTP 401 in `test/TestSplitWeightFork.t.sol`. The committed non-fork, non-audit Revnet suite passed with `forge test --fail-fast --no-match-contract '.*Fork.*' --no-match-path 'test/audit/*'`; the hidden-supply audit regressions were run separately.
+- Note: fork-test RPC configuration has been migrated to Dwellir endpoints. Re-run Defifa's full suite including [Fork.t.sol](/Users/jango/Documents/jb/v6/evm/defifa/test/Fork.t.sol:1) with the Dwellir `RPC_ETHEREUM_MAINNET` value before final deployment.
+- Note: fork-test RPC configuration has been migrated to Dwellir endpoints. Re-run Revnet's fork-named tests, including `test/TestSplitWeightFork.t.sol`, with the Dwellir `RPC_ETHEREUM_MAINNET` value before final deployment.
 
 - `forge test --match-path 'test/audit/FreshAudit.t.sol' --match-test 'test_payCredits_can_underfund_split_bearing_tier_mints' -vv`
 - `forge test --match-path 'test/audit/FutureTierPoC.t.sol' -vv`
@@ -2224,54 +2202,11 @@ The following targeted checks were run while triaging:
 
 ## Bottom Line
 
-Recommended posture:
+All 47 security findings have been remediated and merged. The codebase is ready for final deployment rehearsal.
 
-- Security action required before deploy:
-  1. review and merge the local persistent terminal-allowance fix in the shared routing hooks,
-  2. review and merge the local shared-clone fee-claim capture fix in the LP split hook,
-  3. review and merge the local realized-output enforcement for JB-routed `amountOutMin`,
-  4. review and merge the local `JBBuybackHook` transfer-tax route-gating patch,
-  5. review and merge the local active-sucker precedence fix for same-chain sucker aggregate views,
-  6. review and merge the local retained `toRemoteFee` refund/accounting fix,
-  7. review and merge the local Defifa launch guard that rejects one-tier games when the no-contest timeout is disabled,
-  8. review and merge the local Defifa fee-token beneficiary routing fix,
-  9. review and merge the local Defifa pending-reserve preview denominator fix,
-  10. review and merge the local Croptop patch that removes launch-time direct CTDeployer-owned hook-management grants,
-  11. review and merge the local canonical NANA project-`1` guard in the fee-project / deploy-all rollout path,
-  12. review and merge the local 721 hook / distributor snapshot-owner eligibility patch,
-  13. review and merge the local verified-handle Unicode formatting guard,
-  14. review and merge the local hidden-revnet-balance denominator fix so split operators / allowlisted holders cannot drain via cash out or loans and then restore the hidden tranche,
-  15. review and merge the local `Verify.s.sol` patch that brings checks back into sync with canonical routing and ownership topology,
-  16. review and merge the local `Resume.s.sol` patch that rejects attacker-configured canonical project IDs instead of adopting them as Croptop fee sinks,
-  17. review and merge the local BAN/Banny verification patch that proves the canonical product deployment happened instead of accepting any generically wired project `4`,
-  18. review and merge the local resume and verification patch that proves canonical REV identity really belongs to project `3` before binding fees, loans, and downstream integrations to it,
-  19. review and merge the local reservation-based launcher patches for Croptop, the shared 721 project deployer, Defifa, fresh Revnet, and omnichain deployment flows,
-  20. review and merge the local `Verify.s.sol` patch that fails closed on the full deploy-all surface instead of silently skipping address-registry / Defifa / Phase 11 periphery coverage,
-  21. review and merge the local revnet sucker salt patch that removes the external caller from peer-address derivation,
-  22. review and merge the local cross-repo peer snapshot patch that includes each revnet chain's hidden supply, burned loan collateral, and outstanding loan debt in remote omnichain pricing,
-  23. review and merge the local sucker snapshot freshness patch so multiple same-block outbound roots get distinct project-wide freshness keys,
-  24. review and merge the local revnet cash-out pricing patch that includes local outstanding loan debt and local burned loan collateral before running the bonding curve,
-  25. review and merge the local retained CCIP transport-refund patch so failed excess-payment refunds are caller-claimable and excluded from claimable native balance,
-  26. review and merge the local revnet configuration-hash expansion so cross-chain pairing actually captures split-operator power, reserved split routing, and policy bits,
-  27. review and merge the local explicit sucker peer-configuration patch; keep `deploy-all-v6` pinned to the sibling working-copy packages for the one-shot deployment, or publish fresh patched package versions and regenerate the lockfile before running it,
-  28. review and merge the local `JBSwapPoolLib` route-quality patch so hookless V4 spot pools, broken hooked V4 pools, and fresh V3 pools cannot outrank TWAP-capable/live alternatives,
-  29. review and merge the local sucker terminal-scanning patch so slot-zero forwarding wrappers cannot zero later real terminals or remote peer-value conversion,
-  30. keep the accepted V4 spot fallback limited to the no-TWAP-route case, with hooked V4 routes required to prove TWAP availability,
-  31. review and merge the local `JBUniswapV4Hook` metadata-only buyback pay-preview patch,
-  32. review and merge the local `JBRouterTerminal` buyback sell-side executable-floor scoring patch,
-  33. review and merge the local `JBUniswapV4Hook` metadata-only buyback cash-out preview patch,
-  34. review and merge the local `JBPayRouteResolver` buy-side raw-buyback-quote scoring patch,
-  35. review and merge the local `JBRouterTerminal` zero-delivery source cash-out guard,
-  36. review and merge the local `JBRouterTerminal` fee-aware source cash-out preview scoring patch,
-  37. review and merge the local `JBUniswapV4Hook` zero-delivery JB sell guard,
-  38. review and merge the local `JBUniswapV4Hook` feeless-beneficiary sell-quote patch,
-  39. review and merge the local `JBUniswapV4LPSplitHook` fee-token actual-receipt accounting patch,
-  40. review and merge the local `JBUniswapV4LPSplitHook` primary-terminal deploy-token selection patch,
-  41. review and merge the local `JBRouterTerminalRegistry` circular-lock guard,
-  42. make Croptop's sucker rollout model internally consistent by either failing closed at launch or providing a real post-launch recovery path that satisfies registry permission requirements,
-  43. review and merge the local `JB721TiersHookProjectDeployer` downstream-permission preflight.
-- Remaining optional cleanup after that:
-  1. explicit rejection for unsupported ERC-20 split-tier configs,
-  2. future-tier metadata existence check,
-  3. router ETH refund fail-soft behavior,
-  4. deploy-script idempotency alignment.
+Remaining optional non-security cleanup (not blocking deployment):
+
+1. `nana-721-hook-v6`: explicit rejection for unsupported ERC-20 split-tier configs (currently handled via try-catch fallback),
+2. `nana-721-hook-v6`: future-tier metadata existence check before accepting `encodedIPFSUri` writes,
+3. `nana-router-terminal-v6`: native ETH refund fail-soft (wrap to WETH on failed refund instead of reverting) — deferred due to contract size constraints,
+4. `univ4-lp-split-hook-v6`: deploy-script idempotency alignment — already matches the `nana-buyback-hook-v6` pattern with a documented Sphinx limitation comment.
