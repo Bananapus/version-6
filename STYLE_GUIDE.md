@@ -451,9 +451,9 @@ jobs:
         run: forge fmt --check
 ```
 
-**static-analysis.yml** (repos with `src/` contracts only):
+**slither.yml** (repos with `src/` contracts only):
 ```yaml
-name: static-analysis
+name: slither
 on:
     pull_request:
       branches:
@@ -475,14 +475,14 @@ jobs:
         run: npm install --omit=dev
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
-      - name: Run static-analysis
-        uses: static-analysis-action@v0.3.1
+      - name: Run slither
+        uses: crytic/slither-action@v0.3.1
         with:
-            static-analysis-config: static-analysis-ci.config.json
+            slither-config: slither-ci.config.json
             fail-on: medium
 ```
 
-**static-analysis-ci.config.json:**
+**slither-ci.config.json:**
 ```json
 {
   "detectors_to_exclude": "timestamp,uninitialized-local,naming-convention,solc-version,shadowing-local",
@@ -497,7 +497,8 @@ jobs:
 ```
 
 **Variations:**
-- Deployer-only repos (no `src/`, only `script/`) skip static-analysis entirely — the action's internal `forge build` skips `test/` and `script/` by default, leaving nothing to compile.
+- Deployer-only repos (no `src/`, only `script/`) skip slither entirely — the action's internal `forge build` skips `test/` and `script/` by default, leaving nothing to compile.
+- Use inline `// slither-disable-next-line <detector>` to suppress known false positives rather than adding to `detectors_to_exclude` in the config. The comment must be on the line immediately before the flagged expression.
 
 ### package.json
 

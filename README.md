@@ -8,7 +8,7 @@ Use this README when you need to answer four questions quickly:
 
 - which repo owns the behavior I care about
 - what order should I read the ecosystem in
-- where should I start if I am reviewing, integrating, or debugging
+- where should I start if I am auditing, integrating, or debugging
 - which directories are active workspace surfaces versus supporting material
 
 App: <https://juicebox.money>  
@@ -18,7 +18,7 @@ User journeys: [USER_JOURNEYS.md](./USER_JOURNEYS.md)
 Workspace navigation: [SKILLS.md](./SKILLS.md)  
 Risks: [RISKS.md](./RISKS.md)  
 Administration: [ADMINISTRATION.md](./ADMINISTRATION.md)  
-Review guide: [REVIEW_GUIDE.md](./REVIEW_GUIDE.md)
+Audit instructions: [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md)
 RISKS maintenance: [RISKS_MAINTENANCE.md](./RISKS_MAINTENANCE.md)
 
 ## Workspace Scope
@@ -30,9 +30,9 @@ This workspace contains:
 - templates under [`documentation_templates`](./documentation_templates)
 - maintenance notes under [`docs`](./docs)
 - archived packages under [`archive`](./archive)
-- review artifacts and local tooling
+- audit artifacts and local tooling
 
-If you are tracing live behavior, start from active top-level repos, not `archive/`, templates, or old review output.
+If you are tracing live behavior, start from active top-level repos, not `archive/`, templates, or old audit output.
 
 ## What This Workspace Contains
 
@@ -57,7 +57,7 @@ The main reading rule is simple:
 | follow cross-repo actor flows | [USER_JOURNEYS.md](./USER_JOURNEYS.md) |
 | navigate quickly across repos | [SKILLS.md](./SKILLS.md) |
 | review ecosystem-level risks | [RISKS.md](./RISKS.md) |
-| run or structure a review | [REVIEW_GUIDE.md](./REVIEW_GUIDE.md) |
+| run or structure an audit | [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md) |
 | follow local documentation norms | [STYLE_GUIDE.md](./STYLE_GUIDE.md) |
 
 If you are new to Juicebox V6, start with [`nana-core-v6/README.md`](./nana-core-v6/README.md) and then move outward into the repo that changes the execution path you care about.
@@ -87,7 +87,7 @@ If the goal is fast orientation, use this order:
 5. [`nana-distributor-v6`](./nana-distributor-v6), [`nana-project-handles-v6`](./nana-project-handles-v6), [`nana-fee-project-deployer-v6`](./nana-fee-project-deployer-v6), [`deploy-all-v6`](./deploy-all-v6)
 6. [`revnet-core-v6`](./revnet-core-v6), [`croptop-core-v6`](./croptop-core-v6), [`banny-retail-v6`](./banny-retail-v6), [`defifa`](./defifa)
 
-If the goal is a live-path review, start here instead:
+If the goal is a live-path audit, start here instead:
 
 1. `JBController`
 2. `JBMultiTerminal`
