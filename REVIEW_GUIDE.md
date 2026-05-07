@@ -1,13 +1,13 @@
-# Audit Instructions
+# Review Guide
 
-`v6/evm` is a modular Ethereum protocol workspace. Audit it as one composed system, not as isolated repos.
+`v6/evm` is a modular Ethereum protocol workspace. Review it as one composed system, not as isolated repos.
 
 ## Getting Started
 
 Paste this into any AI with code execution (Claude Code, Cursor, Codex, etc.):
 
 ```
-Clone https://github.com/Bananapus/version-6 recursively and read AUDIT_INSTRUCTIONS.md. Follow the audit engine instructions in that file to walk me through configuring and running an audit.
+Clone https://github.com/Bananapus/version-6 recursively and read REVIEW_GUIDE.md. Follow the review engine instructions in that file to walk me through configuring and running a review.
 ```
 
 If your AI doesn't have code execution, clone manually and point it at the repo:
@@ -16,11 +16,11 @@ If your AI doesn't have code execution, clone manually and point it at the repo:
 git clone --recursive https://github.com/Bananapus/version-6
 ```
 
-Then paste the prompt above and point your AI at AUDIT_INSTRUCTIONS.md.
+Then paste the prompt above and point your AI at REVIEW_GUIDE.md.
 
 ---
 
-## Audit Engine
+## Review Engine
 
 When an AI reads this file, it should follow this process:
 
@@ -41,10 +41,10 @@ Ask the user three things. Present the options clearly so they can choose what t
 | Depth | Time | What it covers | Best for |
 |-------|------|----------------|----------|
 | Quick scan | ~30 min | One repo, surface-level checks | Contributing something useful with minimal cost |
-| Focused audit | ~2-4 hrs | One subsystem, composition-aware | Going deep on an area you care about |
-| Deep dive | ~8-24 hrs | Full 19-repo ecosystem | Maximum-value findings, cross-repo composition bugs |
+| Focused review | ~2-4 hrs | One subsystem, composition-aware | Going deep on an area you care about |
+| Deep dive | ~8-24 hrs | Full 19-repo ecosystem | Maximum-value edge cases, cross-repo composition bugs |
 
-**Subsystem — where do you want to focus?** (for quick scan and focused audit)
+**Subsystem — where do you want to focus?** (for quick scan and focused review)
 
 | # | Subsystem | Repos | What to look for |
 |---|-----------|-------|------------------|
@@ -60,7 +60,7 @@ The user can pick one, several, or all. For deep dive, all subsystems are covere
 
 **Adversarial persona — what kind of attacker should you think like?**
 
-Each persona targets specific contracts and attack patterns in this codebase. When a persona is selected, the audit must trace these specific paths.
+Each persona targets specific contracts and attack patterns in this codebase. When a persona is selected, the review must trace these specific paths.
 
 **1. MEV bot**
 Target `JBBuybackHook.beforePayRecordedWith` and `JBUniswapV4Hook` — these decide whether to mint tokens or swap on an AMM. Trace:
@@ -143,11 +143,11 @@ No constraints, no persona — just steal money by any means. Start from the hig
 - Check every `unchecked` block — can any overflow or underflow be triggered to wrap a balance, amount, or index?
 - Look at every `try/catch` — if the try fails and funds are returned to the project balance instead of the intended recipient, can you trigger the failure deliberately and then claim those funds?
 
-The user can pick one to focus on, several to combine, or let the AI pick randomly for maximum diversity across community runs. If the user has their own attacker model or specialization (e.g. "I know Uniswap V4 hooks well"), they should say so — it gets woven into the audit.
+The user can pick one to focus on, several to combine, or let the AI pick randomly for maximum diversity across community runs. If the user has their own attacker model or specialization (e.g. "I know Uniswap V4 hooks well"), they should say so — it gets woven into the review.
 
-### Step 3: Generate audit seed
+### Step 3: Generate review seed
 
-Based on the user's choices, construct an audit seed:
+Based on the user's choices, construct a review seed:
 
 ```
 Seed: {depth} / {subsystems} / {personas} / {user specialization if any}
@@ -157,7 +157,7 @@ If the user left any choice as "random" or "surprise me", pick randomly. The see
 
 ### Step 4: Decompose into components
 
-**Smaller context produces better results.** Rather than auditing an entire subsystem in one pass, break it into scoped components and audit each one with a dedicated subagent. This is the single most effective way to improve finding quality.
+**Smaller context produces better results.** Rather than reviewing an entire subsystem in one pass, break it into scoped components and review each one with a dedicated subagent. This is the single most effective way to improve edge case quality.
 
 **How to decompose:**
 
@@ -166,7 +166,7 @@ If the user left any choice as "random" or "surprise me", pick randomly. The see
    - A single large contract (e.g. `JBMultiTerminal` alone is ~2000 lines — that's one component)
    - A pair of contracts that form a unit (e.g. `JBTerminalStore` + its library dependencies)
    - A small repo with 1-3 contracts (e.g. `nana-ownable-v6`)
-3. For each component, identify which other components it trusts or calls — these become the "boundary context" that the subagent needs to understand but not audit line-by-line.
+3. For each component, identify which other components it trusts or calls — these become the "boundary context" that the subagent needs to understand but not review line-by-line.
 
 **Example decomposition for "Core treasury" subsystem:**
 
@@ -180,7 +180,7 @@ If the user left any choice as "random" or "surprise me", pick randomly. The see
 | Price system | `JBPrices.sol`, price feed contracts | JBTerminalStore consumers |
 | Splits & limits | `JBSplits.sol`, `JBFundAccessLimits.sol` | JBMultiTerminal payout flow |
 
-For a **quick scan**, pick 1-2 components. For a **focused audit**, cover all components in the subsystem. For a **deep dive**, decompose every subsystem.
+For a **quick scan**, pick 1-2 components. For a **focused review**, cover all components in the subsystem. For a **deep dive**, decompose every subsystem.
 
 **Component subagent instructions:**
 
@@ -189,11 +189,11 @@ Each component subagent should receive:
 - Interface signatures and key behaviors of boundary contracts (not their full source — keep context small)
 - The relevant invariants from this file
 - The selected adversarial persona(s)
-- The repo-local `AUDIT_INSTRUCTIONS.md` for that component's repo
+- The repo-local `REVIEW_GUIDE.md` for that component's repo
 
 The subagent should NOT receive the full source of every contract in the subsystem. The goal is focused attention on a small surface area.
 
-### Step 5: Run the audit
+### Step 5: Run the review
 
 For each component from Step 4, launch a subagent (or run sequentially if your platform doesn't support parallel agents). Each component gets these passes:
 
@@ -205,25 +205,25 @@ For each component from Step 4, launch a subagent (or run sequentially if your p
 
 After all component subagents complete, run a **composition pass** across components:
 
-**Cross-component passes** (these require findings from the component passes):
+**Cross-component passes** (these require edge cases from the component passes):
 - **Cross-boundary tracer** — for each trust boundary identified in the decomposition, check: does the calling component's assumption match the called component's actual behavior? Focus on cases where component passes found surprising behavior.
 - **Hypothesis tester** — invent 3 novel "what if this assumption is wrong" hypotheses that span multiple components, then try to prove each one.
 - **Random walker** — pick a random internal function, trace all callers and callees across component and repo boundaries, and look for assumption mismatches at each boundary. Repeat 3-5 times.
-- **Finding composer** — take every finding from the component passes and check whether it composes with findings from other components to create a larger issue.
+- **Edge Case composer** — take every edge case from the component passes and check whether it composes with edge cases from other components to create a larger issue.
 
 **Final review:**
-- Test each finding against the 9 critical invariants listed below
-- Try to disprove each finding — construct the strongest argument for why it's NOT a bug
-- **As each finding survives self-review, submit it immediately** as a GitHub issue (see format below) — don't hold findings until the end
+- Test each edge case against the 9 critical invariants listed below
+- Try to disprove each edge case — construct the strongest argument for why it's NOT a bug
+- **As each edge case survives self-review, submit it immediately** as a GitHub issue (see format below) — don't hold edge cases until the end
 
-### Step 6: Submit findings as you go
+### Step 6: Submit edge cases as you go
 
-**Submit each verified finding immediately** to https://github.com/Bananapus/version-6/issues. Don't wait until the audit is complete — findings are most valuable when they arrive early. If your AI has access to `gh` CLI or the GitHub API, it should create issues directly. Otherwise, present each finding to the user for submission as soon as it's verified.
+**Submit each verified edge case immediately** to https://github.com/Bananapus/version-6/issues. Don't wait until the review is complete — edge cases are most valuable when they arrive early. If your AI has access to `gh` CLI or the GitHub API, it should create issues directly. Otherwise, present each edge case to the user for submission as soon as it's verified.
 
-Each finding issue should include:
+Each edge case issue should include:
 
-- **Title:** `[Audit] [SEVERITY] <one-line description>`
-- **Audit seed** (so we can track coverage)
+- **Title:** `[Review] [SEVERITY] <one-line description>`
+- **Review seed** (so we can track coverage)
 - **Repos involved**
 - **Root cause** — the fundamental issue, not the symptom
 - **Impact** — what an attacker gains, with concrete values
@@ -233,19 +233,19 @@ Each finding issue should include:
 
 After all passes complete, submit one final summary issue:
 
-- **Title:** `[Audit] Summary — <seed description>`
-- Audit seed, subsystems covered, personas used
-- Total findings submitted (with links to each issue)
+- **Title:** `[Review] Summary — <seed description>`
+- Review seed, subsystems covered, personas used
+- Total edge cases submitted (with links to each issue)
 - Ecosystem observations: fragile trust assumptions, missing boundary checks, areas needing more coverage
-- Whether any subsystems had zero findings (confirms that surface is clean)
+- Whether any subsystems had zero edge cases (confirms that surface is clean)
 
-Merge findings that share root causes. Only submit findings with demonstrated, concrete impact.
+Merge edge cases that share root causes. Only submit edge cases with demonstrated, concrete impact.
 
 Skip: test/, lib/, interfaces/, mocks/, *.t.sol, *Test*.sol, *Mock*.sol
 
 ---
 
-## Audit Objective
+## Review Objective
 
 Find issues that:
 
@@ -296,18 +296,18 @@ If you notice gas optimizations while reviewing, please flag them. Common areas 
 - calldata vs memory for read-only parameters
 - unchecked arithmetic where overflow is already bounded
 
-Gas findings are welcome alongside security findings — they don't need a separate pass.
+Gas edge cases are welcome alongside security edge cases — they don't need a separate pass.
 
 ## Out Of Scope
 
-- re-auditing third-party dependency internals in `node_modules` or `lib/` unless Juicebox composition makes them unsafe
+- reviewing third-party dependency internals in `node_modules` or `lib/` unless Juicebox composition makes them unsafe
 - purely stylistic, naming, or comment-only issues
 
 ## Start Here
 
 1. `ARCHITECTURE.md`
 2. `RISKS.md`
-3. `nana-core-v6/AUDIT_INSTRUCTIONS.md`
+3. `nana-core-v6/REVIEW_GUIDE.md`
 4. one routing chain: `nana-buyback-hook-v6` -> `univ4-router-v6`
 5. one cross-chain chain: `nana-suckers-v6` plus its deployer or registry assumptions
 
@@ -327,7 +327,7 @@ The rest of the workspace composes around that core:
 - deployers, registries, and owner helpers create and preserve the runtime trust model
 - app-level repos like `defifa`, `croptop-core-v6`, `revnet-core-v6`, and `banny-retail-v6` turn shared primitives into higher-level products
 
-The main audit mindset here is composition:
+The main review mindset here is composition:
 
 - one repo often treats another repo's preview, registry lookup, or hook output as authoritative
 - deployment-time wiring creates runtime trust assumptions
@@ -403,10 +403,10 @@ Replay these ecosystem sequences:
 ## Accepted Risks Or Behaviors
 
 - Some repos intentionally preserve liveness through conservative fallback behavior instead of failing closed on every external integration problem.
-- Composition is a first-class design goal, so bugs that appear only in multi-repo flows are the default audit target, not an edge case.
+- Composition is a first-class design goal, so bugs that appear only in multi-repo flows are the default review target, not an edge case.
 
 ## Verification
 
-- read repo-local `AUDIT_INSTRUCTIONS.md` files for each component's exact scope and invariants
+- read repo-local `REVIEW_GUIDE.md` files for each component's exact scope and invariants
 - use `ARCHITECTURE.md`, `RISKS.md`, and `USER_JOURNEYS.md` as the cross-repo map
-- run the repo-local verification commands when validating a concrete finding
+- run the repo-local verification commands when validating a concrete edge case

@@ -6,6 +6,9 @@ This file tracks the deployed ecosystem shift from `../../v5/evm` to the current
 
 Excluded from the ecosystem delta on purpose:
 - `defifa`
+- `nana-distributor-v6`
+- `nana-project-handles-v6`
+- `nana-project-payer-v6`
 - `univ4-lp-split-hook-v6`
 - `univ4-router-v6`
 
@@ -86,6 +89,9 @@ Those repos exist in source form, but they were not part of the deployed v5 ecos
 ## Excluded Repos
 
 - [`defifa/CHANGELOG.md`](./defifa/CHANGELOG.md)
+- [`nana-distributor-v6/CHANGELOG.md`](./nana-distributor-v6/CHANGELOG.md)
+- [`nana-project-handles-v6/CHANGELOG.md`](./nana-project-handles-v6/CHANGELOG.md)
+- [`nana-project-payer-v6/CHANGELOG.md`](./nana-project-payer-v6/CHANGELOG.md)
 - [`univ4-lp-split-hook-v6/CHANGELOG.md`](./univ4-lp-split-hook-v6/CHANGELOG.md)
 - [`univ4-router-v6/CHANGELOG.md`](./univ4-router-v6/CHANGELOG.md)
 

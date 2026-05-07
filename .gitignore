@@ -1,4 +1,11 @@
-# Audit materials
+# Review materials
+.review/
+.review-findings-*/
+.review-logs/
+REVIEW_FINDINGS*.md
+REVIEW_REPORT.md
+
+# Legacy generated review materials
 .audit/
 .audit-findings-*/
 .audit-logs/
@@ -6,7 +13,13 @@ AUDIT_FINDINGS*.md
 AUDIT_REPORT.md
 NEMESIS_SCOPE.md
 
-# Audit/CI scripts
+# Review/CI scripts
+run-regression-all.sh
+run-regression-all-regression.sh
+run-review-all.sh
+run-review-all-regression.sh
+
+# Legacy local runner scripts
 run-nemesis-all.sh
 run-nemesis-all-codex.sh
 run-pashov-all.sh
