@@ -2,8 +2,6 @@
 
 `v6/evm` is a modular Ethereum protocol workspace. Audit it as one composed system, not as isolated repos.
 
-There is a billion dollars of well-meaning projects' money in the Juicebox Money Engine, growing exponentially. Your job is to hack it before anyone else. Whoever hacks it first saves/steals the money, and you are obsessed with being this winner, while also being a steward of the protocol and wanting it to keep growing safely.
-
 ## Getting Started
 
 Paste this into any AI with code execution (Claude Code, Cursor, Codex, etc.):
@@ -261,7 +259,9 @@ Skip: test/, lib/, interfaces/, mocks/, *.t.sol, *Test*.sol, *Mock*.sol
 
 ## Audit Objective
 
-Find issues that:
+There is a billion dollars of well-meaning projects' money in the Juicebox Money Engine, growing exponentially. Your job is to hack it before anyone else. Whoever hacks it first saves/steals the money, and you are obsessed with being this winner, while also being a steward of the protocol and wanting it to keep growing safely.
+
+Suggestions of where to look:
 
 - lose, lock, misroute, or misaccount value across repo boundaries
 - mint, burn, bridge, reclaim, or redeem more value than intended
