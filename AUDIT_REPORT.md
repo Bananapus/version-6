@@ -32,11 +32,11 @@ Correlated edge cases and PoCs were checked against current code, current tests,
 
 Bottom line under the current threat model:
 
-- All twenty-two immediate `deploy-all-v6` one-shot blockers are now FIXED. Two ecosystem blockers (S, AH) remain deferred for swap-enabled CCIP suckers in a future rollout. See "Current Open Edge Case A" through "Current Open Edge Case AS" below.
+- All twenty-two immediate `deploy-all-v6` one-shot blockers are now FIXED. Swap-enabled CCIP suckers are part of the initial rollout scope, and their two ecosystem issues (S, AH) are RESOLVED in `nana-suckers-v6` PR #120.
 - Eleven items (D, E, AF, AA, AD, 74, 66, 69, AV, AW, AY) have been closed as ACCEPTED — all are explicitly documented and accepted in their respective RISKS.md files.
 - Two items (Z, AQ) have been RESOLVED — Z via per-project feeless system (nana-core-v6 v0.0.44), AQ via `scopeCashOutsToLocalBalances` flag (revnet-core-v6 v0.0.45, omnichain-deployers-v6 v0.0.39).
 - Thirty-seven items are now FIXED: AL, AM, AN, AO, AP, AE, R, U, AR, Q (previously fixed), plus A, AC, B, C, F, G, H, I, J, K, L, M, N, O, P, T, V, W, X, Y, AI, AJ, AK (deploy-all-v6 deploy/resume identity gates, verifier extensions, package bumps, and runbook rewrite), plus AS, AT, AU, AX, AZ (regression audit fixes).
-- Two items (S, AH) are deferred — swap-enabled CCIP suckers and native routes are not in the initial rollout.
+- Two swap-enabled CCIP rollout items (S, AH) are RESOLVED by `nana-suckers-v6` PR #120. Initial rollout must verify the deployed swap-enabled sucker source/manifest includes this fix.
 - Two items (JD-1, JD-2) are out of EVM scope (frontend/jb-directory).
 - One item (58) has been accepted/deferred by admin.
 - Several earlier edge cases were dropped because they rely on deployment paths you do not use, behaviors you explicitly accept, or invariants you do not want this system to enforce.
@@ -101,12 +101,12 @@ Immediate `deploy-all-v6` blockers:
 | AY | `CTPublisher` allowlist bypass via EIP-7702 delegated EOAs. | ACCEPTED. Documented in `croptop-core-v6/RISKS.md` section 7.5 (PR #127). |
 | AZ | ~~`Resume.s.sol._resumeBuybackHook` unconditionally calls `setHookFor`, reverting on re-runs when the hook is already pinned.~~ | FIXED. Idempotent check added (deploy-all-v6 PR #84, v0.0.19). |
 
-Future / expanded rollout blockers:
+Swap-enabled initial rollout checks:
 
 | ID | Confirmed issue | Default disposition |
 | --- | --- | --- |
-| S | ~~Swap-enabled CCIP suckers can strand earlier nonce batches delivered after a higher nonce.~~ | DEFERRED. Swap-enabled suckers not in initial rollout. |
-| AH | ~~Swap-enabled native-token V4 routes revert before settlement when the sucker holds raw ETH.~~ | DEFERRED. Swap-enabled native routes not in initial rollout. |
+| S | ~~Swap-enabled CCIP suckers can strand earlier nonce batches delivered after a higher nonce.~~ | RESOLVED. Batch metadata writes are nonce-keyed and decoupled from inbox nonce advancement (`nana-suckers-v6` PR #120). |
+| AH | ~~Swap-enabled native-token V4 routes revert before settlement when the sucker holds raw ETH.~~ | RESOLVED. V4 settlement now unwraps only when the caller actually holds enough wrapped native token; raw-ETH suckers settle directly (`nana-suckers-v6` PR #120). |
 
 Deduping decisions:
 
@@ -127,7 +127,7 @@ Existing admin-note response map:
 | AE | Worst case: any stale ERC-20 inventory sitting directly on a distributor can be attributed to an attacker-controlled hook by any authorized project controller using the controller-prepaid branch; the rounded-dust variant can permanently reserve small vesting leftovers. Worth fixing before immutable deploy: require exact fresh funding/allowance for ERC-20 prepaid credit, or track unaccounted balance per hook/source so global stale balance cannot be reassigned. |
 | AF | Not mitigated by a trusted forwarder. The issue is token-transfer reentrancy during `_transferFrom`, not sender authentication. Worst case: callback-capable ERC-20 deposits can be counted more than once, minting/crediting more project value than the terminal actually received. Fix with a reentrancy guard around `pay` / `addToBalanceOf` ERC-20 intake, or explicitly reject callback-capable/unsupported ERC-20s. |
 | AG | The proposed registry reroute is the right mitigation shape: when the registry forwards to the resolved hook, translate metadata scoped to the registry into the resolved hook's `quote` metadata ID, or make the quote ID interface-scoped rather than address-scoped. |
-| AH | If native routes were changed to a wrapped-native token path, keep AH open until a current regression proves the V4-selected route settles from the deployed source graph. The stale source recheck still showed raw ETH entering V4 settlement and a WETH withdraw before settlement. |
+| AH | Current source recheck confirms PR #120 changed V4 native settlement to check wrapped-native balance before unwrapping, so raw-ETH sucker settlement no longer trips a pre-settlement WETH withdraw. Before enabling swap-enabled native V4 routes in production, keep a focused regression in the rollout gate proving the deployed source graph settles a V4-selected raw-native path. |
 | AD | If terminal selection is accepted risk, document the accepted boundary precisely: clients can cross-reference terminals for display, but onchain Defifa games still trust registered terminals for callbacks. For canonical/user-safe launchers, prefer a terminal allowlist or deployer-enforced terminal provenance. |
 | J / historical 53 | Caller-supplied fee metadata is only needed if Croptop lets posts target arbitrary hook/terminal/currency setups. If Croptop fees must always be paid to a known ETH/native fee project, the safer design is protocol-generated fee metadata or fail-closed fee routing, not user-controlled fee metadata that can be made to refund. |
 | AC | "Do not sweat it" is not applicable to the canonical deploy path: Banny resolver metadata ownership currently makes Phase 09 revert before launch unless the call order/owner is fixed or metadata setup is moved to the resolver owner. |
@@ -156,7 +156,7 @@ Suggested triage order:
 1. All immediate deployment mechanism blockers are FIXED: B (packages), V (Sphinx CREATE2), W (runbook), A (Banny identity gates), AB (REV resume), AC (resolver ownership), H (Defifa hook store), X (buyback hook pinning), and AL (CREATE2 addresses).
 2. All verifier coverage gaps are FIXED: C, F, G, I, J, K, L, M, N, O, P, T, Y, AI, AJ, and AK. The verifier now authenticates the full deployment surface including ownership, oracle provenance, external addresses, canonical project economics, sucker manifests, and clone surfaces.
 3. All runtime economic/accounting risks are closed. (D, E, AA, AF, and AD have been closed as ACCEPTED per RISKS.md; AG was previously FIXED; Z and AQ are RESOLVED; AL, AM, AN, AO, AP, AE, R, U, AR, and Q are FIXED.)
-4. Keep S and AH out of the initial rollout unless swap-enabled suckers are added before launch. If swap-enabled CCIP enters the manifest, promote both to immediate deploy blockers.
+4. Because swap-enabled suckers are initial-rollout scope, require the PR #120 `nana-suckers-v6` code path, S/AH regression coverage, and verifier/manifest checks for the selected swap deployers before launch.
 
 Admin disposition template:
 
@@ -195,14 +195,14 @@ Suggested owner/workstream routing:
 | Cross-chain and sucker protocol fixes | ~~AM~~, ~~AQ~~, ~~AS~~ | AM: FIXED. Conversion formula inverted (nana-suckers-v6 PR #118, v0.0.37). AQ: RESOLVED via `scopeCashOutsToLocalBalances` (revnet-core-v6 v0.0.45, omnichain-deployers-v6 v0.0.39). AS: FIXED. Deployer forwards to hook (nana-omnichain-deployers-v6 PR #104, v0.0.41). |
 | Revnet product economics | ~~AN~~, ~~D, E~~ | AN: FIXED. Now uses terminal token decimals (revnet-core-v6 PR #143). D, E: ACCEPTED per `revnet-core-v6/RISKS.md` §4 and §8. |
 | Product/periphery runtime safety | ~~AD~~, ~~AE~~, AG, ~~AO~~, ~~AP~~, ~~AR~~, ~~Q~~, ~~R~~, ~~U~~, ~~AT~~, ~~AU~~, ~~AX~~ | AE: FIXED (nana-distributor-v6 PR #18). AO, AP: FIXED (croptop-core-v6 PR #125). R: FIXED (nana-project-handles-v6 PRs #11, #14). U: FIXED (604,800s round duration). AR: FIXED (univ4-lp-split-hook-v6 PR #120, v0.0.32). AD: ACCEPTED (`defifa/RISKS.md` §1, §8.5). Q: FIXED (nana-721-hook-v6 PR #129, v0.0.47). AT: FIXED (defifa PR #106, v0.0.32). AU: FIXED (nana-distributor-v6 PR #21, v0.0.13). AX: FIXED (defifa PR #107, v0.0.33). AV, AW, AY: ACCEPTED per RISKS.md. All closed. |
-| Cross-chain future rollout | S, AH | DEFERRED. Not in initial rollout. `nana-suckers-v6`, swap-enabled CCIP manifest policy. |
+| Cross-chain initial rollout | ~~S~~, ~~AH~~ | RESOLVED by `nana-suckers-v6` PR #120. Since swap-enabled CCIP is initial-rollout scope, the deploy manifest/verifier must prove the selected swap deployers use this fixed source. |
 | Static interface publication | JD-1, JD-2 | OUT OF SCOPE (frontend). `jb-directory`, ABI/address manifest generation, token/chain UX, publication build checks. |
 
 ## Implementation Handoff TLDR
 
-Current status: `READY`. Zero immediate deploy blockers remain. All 37 immediate `deploy-all-v6` blockers are FIXED. 12 items closed as ACCEPTED per RISKS.md (D, E, AA, AF, AD, Q, 66, 69, 74, AV, AW, AY). 2 items RESOLVED (Z via per-project feeless, AQ via `scopeCashOutsToLocalBalances`). 1 accepted/deferred (58). 2 items DEFERRED for future rollout (S, AH — swap-enabled CCIP suckers not in initial deployment). Separate `jb-directory` publication edge cases JD-1 and JD-2 are not EVM deployment blockers (frontend scope), but should gate publication of the static interface.
+Current status: `READY`. Zero immediate deploy blockers remain. All 37 immediate `deploy-all-v6` blockers are FIXED. 12 items closed as ACCEPTED per RISKS.md (D, E, AA, AF, AD, Q, 66, 69, 74, AV, AW, AY). 4 items RESOLVED (Z via per-project feeless, AQ via `scopeCashOutsToLocalBalances`, S/AH via `nana-suckers-v6` PR #120). 1 accepted/deferred (58). Swap-enabled CCIP suckers are initial-rollout scope, so launch evidence must prove the deployed swap-enabled sucker manifest/source includes PR #120. Separate `jb-directory` publication edge cases JD-1 and JD-2 are not EVM deployment blockers (frontend scope), but should gate publication of the static interface.
 
-Keep S and AH out of the initial rollout unless swap-enabled suckers are added before launch, in which case promote both to immediate blockers.
+Before launch, verify the deployed `nana-suckers-v6` swap-enabled sucker source includes PR #120 and keep focused S/AH regressions in the rollout gate. Local `deploy-all-v6/script` currently references plain `JBCCIPSucker` deployers; if the live initial rollout uses swap-enabled suckers, the deploy manifest/script evidence must show the intended `JBSwapCCIPSucker` deployers and singleton source.
 
 For each edge case, read its detailed section before changing code, implement the smallest code/runbook/verifier change that closes the stated impact, add or update a focused regression, run the relevant Forge build/tests, and update this report only after the evidence proves the deploy objective is covered. Do not close edge cases based only on proxy green tests that do not exercise the actual deploy/resume/verifier path. No PRs/issues have been opened yet.
 
@@ -216,8 +216,8 @@ Cross-referenced against all 20 RISKS.md files on 2026-05-07.
 | Verify.s.sol manifest gaps | 16 | OPEN — needs verification checks | C, F, G, H, I, J, K, L, M, N, O, P, T, AI, AJ, AK |
 | Deploy script fixes | 6 | OPEN — needs script changes | A, AC, AL, B, V, W |
 | Protocol-level fixes | 10 | OPEN — needs contract changes | AE, AD, ~~Q~~, X, R, AM, AN, AO, AP, AR |
-| Protocol-level resolved | 2 | RESOLVED | Z (per-project feeless), AQ (`scopeCashOutsToLocalBalances`) |
-| Operational/config | 5 | DEFERRED or CONFIG FIX | U, Y, S, AH, 58 |
+| Protocol-level resolved | 4 | RESOLVED | Z (per-project feeless), AQ (`scopeCashOutsToLocalBalances`), S (swap CCIP out-of-order metadata), AH (raw-native V4 settlement) |
+| Operational/config | 3 | DEFERRED or CONFIG FIX | U, Y, 58 |
 | Low-priority standalone | 5 | LOW PRIORITY or OUT OF SCOPE | 65, 71, 76, JD-1, JD-2 |
 
 ### Remaining 34 Immediate Deploy Blockers (by fix type)
@@ -260,7 +260,7 @@ This section maps the original review request and `REVIEW_GUIDE.md` process to c
 | Flag gas optimizations noticed during review. | `REVIEW_GUIDE.md` says gas edge cases are welcome and do not need a separate pass. No gas-only item was promoted to a deployment blocker; gas-adjacent risks that affected solvency or accounting were triaged under current edge cases AA and AE. | BEST-EFFORT / NO SEPARATE PASS REQUIRED |
 | Respect out-of-scope boundaries for third-party dependency internals and style-only issues. | Third-party packages were only inspected where deployment composition makes them part of Juicebox's execution path, such as Sphinx action replay and stale first-party npm package resolution. Style/comment-only issues were kept in optional cleanup only when they affect operator, reviewer, or generated-agent reliability. | COVERED |
 | Submit edge cases as issues if following `REVIEW_GUIDE.md`. | User workflow for this thread is to triage into `AUDIT_REPORT.md` and not open PRs/issues yet; no issue submission was performed. | INTENTIONALLY DEFERRED |
-| Reach "10/10 confident to deploy." | All 37 immediate deploy blockers are FIXED. 12 items ACCEPTED per RISKS.md. 2 RESOLVED. 2 DEFERRED (swap-enabled CCIP, not in initial rollout). | ACHIEVED |
+| Reach "10/10 confident to deploy." | All 37 immediate deploy blockers are FIXED. 12 items ACCEPTED per RISKS.md. 4 RESOLVED. Swap-enabled CCIP is initial-rollout scope and S/AH are resolved, provided the deployed swap-enabled source includes PR #120. | ACHIEVED |
 
 Completion review snapshot, 2026-05-06:
 
@@ -269,8 +269,8 @@ Completion review snapshot, 2026-05-06:
 | Full Juicebox V6 EVM ecosystem review before immutable one-shot deployment. | Scope covers the 19 repos named by top-level `REVIEW_GUIDE.md` / `ARCHITECTURE.md`, plus `nana-project-payer-v6`; current edge cases A-AZ span deploy, core, revnets, suckers, products, hooks, routers, distributors, and periphery. All immediate blockers resolved. | AUDIT COMPLETE, DEPLOYMENT READY |
 | Start from top-level `REVIEW_GUIDE.md` and use the root docs as the review map. | Inputs section records `ARCHITECTURE.md`, root `RISKS.md`, `REVIEW_GUIDE.md`, and `USER_JOURNEYS.md`; this coverage table and the readiness checklist are derived from those docs. | COVERED |
 | Pay attention to every repo's `RISKS.md` and docs. | Workspace doc inventory found repo-local `REVIEW_GUIDE.md`, `RISKS.md`, and `USER_JOURNEYS.md` for every in-scope active EVM repo and for `nana-project-payer-v6`; current edge cases challenge accepted risks where evidence contradicted deploy readiness. | COVERED |
-| Go deep, broad, and hard across personas and composed attack paths. | Current open edge cases cover the prompt personas: MEV/routing (X, AG, AH, AR), malicious owner and ruleset/config surfaces (D, E, I, AD, AP), bridge operator/cross-chain (S, Y, AH, AM, AQ), grief/runbook/deployment failure (A, AB, AC, V, W, AL), fee evasion (Z, AA, AO), flash/accounting consistency (AF), permission escalation (C, L, M, O, P), oracle/external provenance (F, G), decimals/currency assumptions (J, U, AN), and broad theft/accounting paths (AE, AF, Z, AA). | COVERED |
-| Triage verified edge cases into `AUDIT_REPORT.md` with recommended mitigations/fixes. | Confirmed issue queue lists 36 immediate deploy-all blockers, 2 deferred future/expanded rollout blockers, and 7 accepted-by-design items; every current edge case A-AR has severity, status, affected code, why it is real, impact, and recommended fix. | COVERED |
+| Go deep, broad, and hard across personas and composed attack paths. | The reviewed edge cases cover the prompt personas: MEV/routing (X, AG, AH, AR), malicious owner and ruleset/config surfaces (D, E, I, AD, AP), bridge operator/cross-chain (S, Y, AH, AM, AQ), grief/runbook/deployment failure (A, AB, AC, V, W, AL), fee evasion (Z, AA, AO), flash/accounting consistency (AF), permission escalation (C, L, M, O, P), oracle/external provenance (F, G), decimals/currency assumptions (J, U, AN), and broad theft/accounting paths (AE, AF, Z, AA). S/AH are now resolved, not current open blockers. | COVERED |
+| Triage verified edge cases into `AUDIT_REPORT.md` with recommended mitigations/fixes. | Confirmed issue queue lists 36 immediate deploy-all blockers, 2 future/expanded rollout swap issues now resolved, and 7 accepted-by-design items; every current edge case A-AR has severity, status, affected code, why it is real, impact, and recommended fix. | COVERED |
 | Ensure green tests/verifiers are not treated as proxy proof. | Readiness checklist explicitly rejects current proxy signals where fork tests do not run Sphinx-gated `Deploy.s.sol`, phases 06-11, `Verify.s.sol`, or the exact Safe/resume execution path. | COVERED / BLOCKED |
 | Produce user/developer/AI reliability notes, not only fund-theft edge cases. | Separate `jb-directory` publication edge cases JD-1/JD-2 and optional cleanup items cover static interface safety, stale docs, ABI/permission metadata, runbook clarity, ERC-721 read semantics, and generated manifest quality. | COVERED |
 | Flag gas edge cases if noticed. | No dedicated gas pass was required by `REVIEW_GUIDE.md`; no gas-only issue was promoted to the current blocker queue, while accounting/solvency impacts with gas-repeatability dimensions remain covered by AA and AE. | BEST-EFFORT |
@@ -374,7 +374,7 @@ This checklist maps the review objective to concrete gates and current evidence.
 | 721 reward snapshot correctness | Snapshot rewards must prove token existence at the reward snapshot block. | `ownerOfAt(...)` returns `address(0)` for unenrolled tokens; holders enroll via `delegate(address, uint256[])`. | FIXED by Edge Case Q (nana-721-hook-v6 PR #129). |
 | Project handle reliability | `JBProjectHandles.handleOf(...)` must be non-reverting soft metadata on every chain where `deploy-all-v6` requires the extension, and returned handles must verify the same ENS node they visually represent. | `JBProjectHandles` hardcodes the canonical ENS registry and `handleOf` does not catch registry-call failures; a local no-code registry review test confirmed stored handles revert instead of returning empty. Stored parts can also display `name.eth` while verifying `name.eth.eth`. | BLOCKED by Edge Case R |
 | Distributor timing semantics | Reward distributor rounds and 52-round vesting must use the intended wall-clock duration consistently across target chains. | `JBDistributor` measures rounds with `block.timestamp`, but `deploy-all-v6` sets `50_400`, `302_400`, and `2_419_200` as if they were block-count-derived one-week values; the verifier mirrors those values, so it approves 14-hour L1 rounds, 3.5-day OP/Base rounds, and 28-day Arbitrum rounds. | BLOCKED by Edge Case U |
-| Swap-enabled CCIP claim liveness | Out-of-order CCIP delivery and native-token swap settlement must be safe before swap-enabled suckers are enabled. | `JBSwapCCIPSucker` records per-nonce batch/conversion metadata only when `fromRemote` advances the inbox nonce; a PoC shows nonce `2` before nonce `1` leaves nonce `1` tokens delivered but unclaimable. Its swap library also normalizes native-token inputs to WETH for discovery, but when V4 is selected it tries to `withdraw(amountIn)` from WETH even though the sucker received raw ETH from `prepare()`. Current `deploy-all-v6` Phase 03 deploys plain `JBCCIPSucker`, with Tempo/cross-currency `JBSwapCCIPSucker` called out as a later phase. | ECOSYSTEM BLOCKER by Edge Cases S and AH; not current Phase 03 deploy path |
+| Swap-enabled CCIP claim liveness | Out-of-order CCIP delivery and native-token swap settlement must be safe because swap-enabled suckers are initial-rollout scope. | `JBSwapCCIPSucker` now records per-nonce batch/conversion metadata independently from inbox nonce advancement, so nonce `1` metadata can be recorded even if nonce `2` advanced the canonical inbox first. `JBSwapPoolLib` now checks wrapped-native balance before unwrapping, so raw-ETH suckers settle V4 native input directly while wrapped-native callers still unwrap. Local `deploy-all-v6/script` still references plain `JBCCIPSucker`; if the live initial rollout uses swap-enabled suckers, deploy evidence must identify the selected `JBSwapCCIPSucker` deployers and fixed source. | FIXED by Edge Cases S and AH; manifest/source verification required for initial rollout |
 | Full deployment rehearsal evidence | Full-stack deploy/resume tests should pass on every target production chain with archive-capable RPCs at pinned blocks, and the evidence must either run the real `Deploy.s.sol` / `Resume.s.sol` / `Verify.s.sol` path or prove exact equivalence. | `DeployFullStack.t.sol` hand-replicates infrastructure phases 01-05 only, explicitly excludes phases 06-09, and does not run `Verify.s.sol`; Ethereum, Optimism, and Base passed that limited slice, while Arbitrum failed before test logic due missing archive trie state. `DeployResumeRehearsalFork.t.sol` passes normal harnessed resume slices, but its "after Phase 07" path only reserves CPN/REV project IDs and does not execute real Croptop/Revnet/Banny phases. Testnet verifier runs also permit optional late-periphery env omissions that production-chain verifier runs reject. | INCOMPLETE |
 
 ## Current Open Edge Cases
@@ -647,7 +647,7 @@ Why it is real:
 
 - `Deploy.s.sol` hardcodes Permit2 and per-chain WETH, Uniswap V3 Factory, Uniswap V4 PoolManager, and Uniswap V4 PositionManager addresses, then passes them into `JBMultiTerminal`, `JBUniswapV4Hook`, `JBBuybackHook`, `JBRouterTerminal`, and `JBUniswapV4LPSplitHook`.
 - `Deploy.s.sol` also hardcodes a per-chain `_typeface` address, passes it into `DefifaTokenUriResolver`, and `DefifaTokenUriResolver.TYPEFACE()` stores that external renderer dependency immutably for Defifa NFT metadata.
-- The CCIP path deploys one deployer per remote chain and one-time-sets `remoteChainId`, `remoteChainSelector`, and the local `ccipRouter`; deployed `JBCCIPSucker` instances then copy those values into immutable `REMOTE_CHAIN_ID`, `REMOTE_CHAIN_SELECTOR`, and `CCIP_ROUTER` fields.
+- The CCIP path deploys one deployer per remote chain and one-time-sets `remoteChainId`, `remoteChainSelector`, and the local `ccipRouter`; deployed `JBCCIPSucker` / `JBSwapCCIPSucker` instances then copy those values into immutable `REMOTE_CHAIN_ID`, `REMOTE_CHAIN_SELECTOR`, and `CCIP_ROUTER` fields.
 - The deploy risk register explicitly calls out hardcoded Uniswap, WETH, Chainlink, bridge, CCIP router, and Permit2 addresses as permanent misconfiguration risks, and requires bridge contracts, CCIP selectors, and CCIP routers to be verified per chain. `DEPLOY.md` separately tells operators to confirm the chain-specific typeface and lists typeface among external dependencies to verify.
 - `Verify.s.sol` currently checks that the buyback registry has a default hook, the router terminal registry has a default terminal, the router terminal is feeless, the omnichain deployer / sucker registry point at each other, and project terminal lists include the router terminal registry.
 - The verifier does not compare `terminal.PERMIT2()`, `routerTerminal.WETH()`, `routerTerminal.FACTORY()`, `routerTerminal.POOL_MANAGER()`, `routerTerminal.PERMIT2()`, buyback-hook `POOL_MANAGER()` / `ORACLE_HOOK()`, Uniswap V4 oracle-hook `DIRECTORY()` / `TOKENS()` / `PRICES()` / PoolManager, LP-split-hook `POOL_MANAGER()` / `POSITION_MANAGER()` / `PERMIT2()` / `ORACLE_HOOK()`, sucker deployer bridge constants, CCIP router / selector getters, or `DefifaTokenUriResolver.TYPEFACE()` against a per-chain expected manifest.
@@ -658,7 +658,7 @@ Impact:
 
 - A one-shot deployment can pass post-deploy verification while routing swaps, LP initialization, wrapped native payments, bridge sends, or CCIP messages through a wrong-but-live external contract.
 - For Uniswap and WETH inputs, the bad address is part of CREATE2 init code and constructor state; fixing it requires redeployment with new salts or a new deployment path.
-- For CCIP, a wrong selector or router can bake bad immutable values into the singleton `JBCCIPSucker`, so the deployer being configured does not prove deployed suckers route to the intended remote chain.
+- For CCIP, a wrong selector or router can bake bad immutable values into the singleton `JBCCIPSucker` / `JBSwapCCIPSucker`, so the deployer being configured does not prove deployed suckers route to the intended remote chain.
 - For Defifa, a wrong typeface can make token URI rendering revert or produce non-canonical on-chain metadata for every game launched through the verified Defifa deployer.
 - This creates the same false-confidence issue as the oracle gap: liveness and internal wiring checks do not prove the immutable external trust boundary is canonical.
 
@@ -1216,31 +1216,29 @@ Affected code and docs:
 - [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Deploy.s.sol:2924)
 - [RISKS.md](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/RISKS.md:33)
 - [RISKS.md](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/RISKS.md:42)
-- [RegressionSkippedNonceMetadata.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/regression/RegressionSkippedNonceMetadata.t.sol:188)
+- [swap_ccip.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/unit/swap_ccip.t.sol:428)
+- [SwapQueueOrder.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/regression/SwapQueueOrder.t.sol:159)
+- [StaleNonceMetadataOverwrite.t.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/test/regression/StaleNonceMetadataOverwrite.t.sol:206)
 
 Why it is real:
 
 - Base `JBSucker.fromRemote(...)` accepts any per-token nonce greater than the current inbox nonce and silently rejects lower/equal nonces. This is explicitly documented as an accepted out-of-order bridge tradeoff because a later append-only Merkle root can still prove earlier leaves.
 - `JBSwapCCIPSucker` adds per-nonce `_batchStartOf`, `_batchEndOf`, and `_conversionRateOf` metadata so each claim can scale source-chain leaf amounts into the received local token amount.
-- `JBSwapCCIPSucker.ccipReceive(...)` calls `this.fromRemote(root)`, then writes the batch range, highest received nonce, pending swap, and conversion rate only if `_inboxOf[localToken].nonce > inboxNonceBefore`.
-- If CCIP delivers nonce `2` before nonce `1`, nonce `2` advances the inbox and stores metadata for its batch. When nonce `1` later arrives with real bridged tokens, `fromRemote` treats it as stale, emits `StaleRootRejected`, and the swap wrapper skips all nonce-`1` batch/conversion metadata.
-- `_findNonceForLeafIndex(...)` can then scan down from the highest received nonce and still never find the leaf range for nonce `1`, so `_addToBalance(...)` reverts with `JBSwapCCIPSucker_BatchNotReceived(0)`.
-- The existing untracked PoC `test/regression/RegressionSkippedNonceMetadata.t.sol` passes on current code and asserts exactly this state: nonce `2` metadata exists, nonce `1` metadata and conversion rate are zero after late delivery, and a nonce-`1` claim reverts. Scope recheck on 2026-05-06: `forge test --match-path test/regression/RegressionSkippedNonceMetadata.t.sol -vv` passes in `nana-suckers-v6` (1 test).
-- Fresh source recheck on 2026-05-06 confirms the swap wrapper still only stores `_batchStartOf`, `_batchEndOf`, `_highestReceivedNonce`, `_pendingSwapOf`, and `_conversionRateOf` when `fromRemote(...)` advances `_inboxOf[localToken].nonce`.
+- Before PR #120, `JBSwapCCIPSucker.ccipReceive(...)` called `this.fromRemote(root)`, then wrote batch metadata only if the inbox nonce advanced. If CCIP delivered nonce `2` before nonce `1`, nonce `1` could later be stale-rejected by `fromRemote` and never receive batch/conversion metadata.
+- Current `JBSwapCCIPSucker.ccipReceive(...)` calls `this.fromRemote(root)` first, then writes metadata when that nonce has not already been processed, using existing `_batchEndOf`, `_conversionRateOf.leafTotal`, and `pendingSwapOf.leafTotal` as the duplicate guard. This decouples metadata recording from inbox nonce advancement while preserving canonical inbox monotonicity.
+- Current tests on 2026-05-09 passed: `forge test --root nana-suckers-v6 --match-path test/unit/swap_ccip.t.sol --match-test 'test_scaling_gap' -vv` (2 tests), `forge test --root nana-suckers-v6 --match-path test/regression/SwapQueueOrder.t.sol -vv` (3 tests), and `forge test --root nana-suckers-v6 --match-path test/regression/StaleNonceMetadataOverwrite.t.sol -vv` (3 tests).
 
 Impact:
 
 - CCIP explicitly does not guarantee in-order delivery, and the repo risk register already accepts skipped nonces for base suckers. For swap-enabled CCIP suckers, that acceptance is incomplete: later roots may keep proofs valid, but the per-batch swap accounting needed to pay claims is missing.
 - Earlier batch funds delivered after a higher nonce can remain stuck in the sucker while every claim for that batch reverts.
-- This breaks cross-chain claim liveness for any project using `JBSwapCCIPSucker`, especially cross-denomination routes where the received token amount sets the batch conversion rate. Current `deploy-all-v6` does not deploy this implementation in Phase 03, but the ecosystem should not enable it until the metadata acceptance bug is fixed or explicitly isolated from production routes.
+- Pre-fix, this broke cross-chain claim liveness for any project using `JBSwapCCIPSucker`, especially cross-denomination routes where the received token amount sets the batch conversion rate. Because swap-enabled suckers are initial-rollout scope, deploy evidence must prove the selected `JBSwapCCIPSucker` deployers use PR #120 or later.
 
-Recommended fix:
+Resolution / rollout gate:
 
-- Decouple swap batch metadata acceptance from inbox nonce advancement. If a message is authentic and its nonce has not already had metadata recorded, store its batch range and conversion/pending-swap data even when `fromRemote` does not advance the canonical inbox root.
-- Add an explicit per-token/per-nonce received-metadata guard so duplicate or replayed stale messages cannot overwrite the first recorded conversion rate.
-- Keep the canonical inbox root monotonic for proof verification, but let `_findNonceForLeafIndex(...)` see every valid delivered batch range.
-- Until fixed, keep `JBSwapCCIPSucker` out of the production deploy manifest and verifier allowlists, and document that only plain `JBCCIPSucker` routes are in scope for the initial one-shot deployment.
-- Promote `RegressionSkippedNonceMetadata.t.sol` or an equivalent regression into the tracked test suite, and test both swap-success and swap-pending stale-by-inbox deliveries.
+- Implemented by `nana-suckers-v6` PR #120: metadata acceptance is decoupled from inbox nonce advancement, duplicate/stale metadata overwrite is guarded, and claims resolve by nonce-specific batch ranges.
+- Initial rollout must verify the actual deployed swap-enabled sucker source and manifest use this fixed implementation.
+- Keep the current gap-fill, out-of-order rate, and stale-replay regressions in the launch test gate.
 
 ### T. `deploy-all-v6` + `nana-project-payer-v6`: verifier accepts arbitrary ProjectPayer implementation code
 
@@ -1898,19 +1896,19 @@ Why it is real:
 - `JBSwapCCIPSucker._sendRootOverAMB(...)` swaps local tokens into the bridge token before CCIP bridging when `token != BRIDGE_TOKEN`.
 - Native-token routes pass the raw native-token sentinel into `_executeSwap(...)` after `prepare()` has delivered raw ETH to the sucker.
 - `JBSwapPoolLib.executeSwap(...)` normalizes the native-token sentinel to WETH for V3/V4 pool discovery.
-- When discovery selects a V4 pool, `executeV4UnlockCallback(...)` sees the V4 input currency as native (`address(0)`) and calls `IWrappedNativeToken(weth).withdraw(amountIn)` before settling. The sucker holds raw ETH, not WETH, so the withdraw reverts before settlement.
-- Fresh source recheck on 2026-05-06 confirms `_sendRootOverAMB(...)` still calls `_executeSwap({tokenIn: token, tokenOut: bridgeTokenAddr, amount})` for cross-token sends, `executeSwap(...)` still normalizes `NATIVE_TOKEN` to WETH before V4 discovery, and `executeV4UnlockCallback(...)` still unconditionally withdraws WETH before `poolManager.settle{value: amountIn}()` when the V4 input currency is native.
-- A temporary local review test `RegressionNativeV4SettlementRevert.t.sol` called the V4 unlock settlement path with raw ETH on the caller and no WETH balance; it reverted on the pre-settlement `withdraw(...)`, then the temporary file was removed after the proof run.
+- Before PR #120, when discovery selected a V4 pool, `executeV4UnlockCallback(...)` saw the V4 input currency as native (`address(0)`) and unconditionally called `IWrappedNativeToken(weth).withdraw(amountIn)` before settling. The sucker held raw ETH, not WETH, so the withdraw reverted before settlement.
+- Current `JBSwapPoolLib.executeV4UnlockCallback(...)` checks `IERC20(wrappedNativeToken).balanceOf(address(this)) >= amountIn` before unwrapping. Callers holding WETH still unwrap; suckers already holding raw ETH skip the unwrap and call `poolManager.settle{value: amountIn}()`.
+- Current source and nearest regression checks on 2026-05-09 passed: `forge test --root nana-suckers-v6 --match-path test/regression/FreshV3LiquidityOverrideDoS.t.sol -vv` (1 test), `forge test --root nana-suckers-v6 --match-path test/regression/FreshV3TwapOverride.t.sol -vv` (1 test), and `forge test --root nana-suckers-v6 --match-path test/regression/CCIPWrappedNativeMisunwrap.t.sol -vv` (1 test). A dedicated raw-ETH V4 settlement regression remains the best rollout-gate proof for this exact path.
 
 Impact:
 
-- Swap-enabled native-token sends can revert whenever the best route is a V4 pool, blocking cross-chain bridge operations for that route.
-- Because route selection is liquidity-based, a V4 pool can become the selected route as liquidity moves even if the path previously worked through V3.
+- Pre-fix, swap-enabled native-token sends could revert whenever the best route was a V4 pool, blocking cross-chain bridge operations for that route. Because route selection is liquidity-based, a V4 pool could become selected as liquidity moved even if the path previously worked through V3.
+- Current source removes the pre-settlement WETH-withdraw failure mode. Initial rollout still needs manifest/source evidence proving the deployed swap-enabled suckers include PR #120 or later.
 
-Recommended fix:
+Resolution / rollout gate:
 
-- Wrap raw native ETH to WETH before entering the V4 swap path, or treat native V4 settlement as raw ETH without attempting a WETH withdraw.
-- Add a regression that exercises `JBSwapCCIPSucker` native-token outbound swap with a V4-selected pool and proves settlement succeeds without requiring pre-existing WETH.
+- Implemented by `nana-suckers-v6` PR #120 by treating raw-native V4 settlement as raw ETH unless the caller actually holds enough wrapped native token to unwrap.
+- Add or keep a focused rollout regression that exercises `JBSwapCCIPSucker` native-token outbound swap with a V4-selected pool and proves settlement succeeds without requiring pre-existing WETH.
 
 ### AI. `deploy-all-v6`: verifier does not authenticate the 721 hook clone surface
 
@@ -5312,8 +5310,10 @@ The following targeted checks were run while triaging:
 - Temporary local review test `RegressionLauncherTerminalCallback.t.sol` in `defifa`; launched a Defifa game with a fake caller-selected terminal and confirmed that terminal could call `afterPayRecordedWith(...)` directly to mint a Defifa NFT without a real terminal payment, then the temporary file was removed
 - `forge test --match-path 'test/regression/*.t.sol' -vv` in `defifa`; 53 review tests passed across 17 suites, including fixed accounting/governance regressions and the still-open one-tier zero-timeout launch proofs
 - `forge test --no-match-path 'test/Fork.t.sol' -vv` in `defifa`; 208 non-fork tests passed across 35 suites, including Defifa security, governance hardening, BWA comparison, no-contest, ERC-20/USDC, accounting, audit, regression, and invariant coverage
-- `forge test --match-path test/regression/RegressionSkippedNonceMetadata.t.sol -vv` in `nana-suckers-v6`; 1 test passed, confirming swap-enabled CCIP nonce `2` before nonce `1` leaves nonce `1` without batch metadata
-- Temporary local review test `RegressionNativeV4SettlementRevert.t.sol` in `nana-suckers-v6`; confirmed the native-token V4 settlement path withdraws WETH before using raw ETH and reverts when the sucker has no WETH balance, then the temporary file was removed
+- `forge test --root nana-suckers-v6 --match-path test/unit/swap_ccip.t.sol --match-test 'test_scaling_gap' -vv`; 2 tests passed on 2026-05-09, confirming late nonce gap-fill unblocks claims and missing ranges still revert.
+- `forge test --root nana-suckers-v6 --match-path test/regression/SwapQueueOrder.t.sol -vv`; 3 tests passed on 2026-05-09, confirming out-of-order root arrival and out-of-order claims use nonce-specific conversion rates.
+- `forge test --root nana-suckers-v6 --match-path test/regression/StaleNonceMetadataOverwrite.t.sol -vv`; 3 tests passed on 2026-05-09, confirming stale/replayed nonce metadata does not overwrite the first recorded batch metadata.
+- `forge test --root nana-suckers-v6 --match-path test/regression/FreshV3LiquidityOverrideDoS.t.sol -vv`, `forge test --root nana-suckers-v6 --match-path test/regression/FreshV3TwapOverride.t.sol -vv`, and `forge test --root nana-suckers-v6 --match-path test/regression/CCIPWrappedNativeMisunwrap.t.sol -vv`; 3 total tests passed on 2026-05-09, covering V4 route execution and CCIP wrapped/native-token interop near AH. A dedicated raw-ETH V4 settlement regression is still recommended as initial-rollout gate evidence.
 - `forge test --match-path test/regression/RemoteLoanStateOmission.t.sol`
 - `forge test --match-path test/regression/SameTimestampSnapshotPinned.t.sol`
 - `forge test --match-path test/regression/LocalLoanStateOmissionCashout.t.sol`
@@ -5357,9 +5357,9 @@ The following targeted checks were run while triaging:
 - `forge test --match-path test/regression/RegistryPeerAuthBreak.t.sol` in `nana-suckers-v6`
 - `forge test --match-path test/unit/deployer.t.sol` in `nana-suckers-v6`
 - `forge test --match-path test/unit/multi_chain_evolution.t.sol` in `nana-suckers-v6`
-- `forge test --match-path 'test/regression/*.t.sol' -vv` in `nana-suckers-v6`; 64 tests passed across 37 review suites, including CCIP typed-message compatibility, explicit-peer support, registry aggregate regressions, fee/refund retention, native interop, zero-output swap pending/retry behavior, and the still-open skipped-nonce metadata proof
+- `forge test --match-path 'test/regression/*.t.sol' -vv` in `nana-suckers-v6`; 64 tests passed across 37 review suites, including CCIP typed-message compatibility, explicit-peer support, registry aggregate regressions, fee/refund retention, native interop, zero-output swap pending/retry behavior, and the pre-fix skipped-nonce metadata proof later superseded by PR #120 regressions
 - `forge test --match-path 'test/unit/*.t.sol' -vv` in `nana-suckers-v6`; 119 tests passed across 17 unit suites, including Merkle equivalence, CCIP native interop, fee fallback/refund behavior, peer-chain snapshots, pool discovery, swap scaling, deployer paths, emergency/deprecation behavior, and 8 invariant properties
-- `forge test --match-path test/regression/RegressionSkippedNonceMetadata.t.sol` in `nana-suckers-v6`; 1 PoC passed, confirming late delivery of nonce `1` after nonce `2` leaves swap batch metadata missing and claims reverting
+- Historical temporary/local skipped-nonce PoC in `nana-suckers-v6`; confirmed late delivery of nonce `1` after nonce `2` left swap batch metadata missing and claims reverting before PR #120. Current tracked gap-fill/out-of-order/stale-replay tests are listed above and pass on 2026-05-09.
 - `forge test --match-path test/regression/ProjectDeployerAuth.t.sol` in `nana-721-hook-v6`
 - `forge test --match-path test/regression/ProjectDeployerRulesets.t.sol` in `nana-721-hook-v6`
 - Temporary local review test `RegressionProjectDeployerControllerValidation.t.sol` in `nana-721-hook-v6`; confirmed `JB721TiersHookProjectDeployer.launchProjectFor(...)` can return a reserved project and project-owned hook while a no-op supplied controller leaves `JBDirectory.controllerOf(projectId) == address(0)`, then the temporary file was removed
@@ -5434,7 +5434,7 @@ The following targeted checks were run while triaging:
 
 ## Bottom Line
 
-Of the seventy-eight numbered historical edge cases, edge cases 7, 48, 49, 50, 51, 52, 54, 56, 59, 60, 61, 62, 64, 68, and 70 are now promoted into current open edge cases AD, AE, AF, AG, AH, AD, AC, AB, AE, J, AD, AD, Y, R, and Z respectively; edge case 53 is documented as an accepted Croptop liveness tradeoff, edge case 55 is fixed in current omnichain-deployer code, edge case 63 is fixed in current Defifa code, edge case 78 is a standalone ERC-20 metadata robustness cleanup, and the remaining numbered rows are standalone, low-severity, accepted, or unsupported-token cleanup rather than current deploy blockers. Thirty blockers remain open for the immediate `deploy-all-v6` one-shot path, spanning the script/runbook/verifier gates, canonical project identity and restartability, package provenance, Safe/admin convergence, core CREATE2 idempotency, REV runtime singleton provenance, buyback/router/core terminal fee integrity, product/periphery wiring, 721 and ERC-20 clone provenance, Defifa terminal/game-phase trust, distributor accounting, permission/approval exactness, ProjectHandles reliability, ProjectPayer identity, and distributor timing. Four previously listed blockers (D, E, AA, AF) have been closed as ACCEPTED per documented RISKS.md design decisions. The separate ecosystem blockers (S, AH) are deferred: swap-enabled CCIP suckers are not in the initial rollout. Treat the codebase as not ready for final deployment rehearsal until the immediate deploy gaps are fixed or explicitly accepted with an operator-only recovery plan.
+Of the seventy-eight numbered historical edge cases, edge cases 7, 48, 49, 50, 51, 52, 54, 56, 59, 60, 61, 62, 64, 68, and 70 were promoted into current edge cases AD, AE, AF, AG, AH, AD, AC, AB, AE, J, AD, AD, Y, R, and Z respectively; edge case 53 is documented as an accepted Croptop liveness tradeoff, edge case 55 is fixed in current omnichain-deployer code, edge case 63 is fixed in current Defifa code, edge case 78 is a standalone ERC-20 metadata robustness cleanup, and the remaining numbered rows are standalone, low-severity, accepted, or unsupported-token cleanup rather than current deploy blockers. All immediate `deploy-all-v6` one-shot blockers are now fixed or accepted. Four previously listed blockers (D, E, AA, AF) have been closed as ACCEPTED per documented RISKS.md design decisions. The swap-enabled CCIP blockers S and AH are initial-rollout scope and are resolved by `nana-suckers-v6` PR #120; launch evidence must still prove the deployed swap-enabled sucker manifest/source includes that fixed implementation.
 
 Remaining optional non-security cleanup (not blocking deployment):
 
