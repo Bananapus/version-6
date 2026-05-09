@@ -132,6 +132,9 @@ Target every boundary where decimal precision, currency identity, or token addre
 - `groupId` (uint256) vs `currency` (uint32) — both derive from token addresses but have different bit widths. Can you exploit the truncation?
 - In `JBTerminalStore`, do cross-currency surplus calculations via `JBPrices` lose precision when converting between tokens with different decimals (e.g. 18-decimal ETH vs 6-decimal USDC)?
 - Can you exploit `mulDiv` rounding direction in fee calculations, bonding curve math, or LP positioning to extract dust across many transactions?
+- In `JBSuckerLib.convertPeerValue`, is the price in the numerator or denominator? Compare to `JBTerminalStore`'s conversion at line 389 — they must match.
+- In `REVDeployer._tryInitializeBuybackPoolFor`, does the sqrtPriceX96 calculation use the terminal token's actual decimals or a hardcoded `1e18`?
+- In `JBUniswapV4LPSplitHook._createAndInitializePool`, when a pool is already initialized, is the existing price validated against computed bounds?
 
 **10. Ruthless thief**
 No constraints, no persona — just steal money by any means. Start from the highest-value targets and work down. Trace:
@@ -142,6 +145,15 @@ No constraints, no persona — just steal money by any means. Start from the hig
 - Look for any state where `balanceOf[project]` in the terminal store can diverge from actual token balances — then exploit the gap
 - Check every `unchecked` block — can any overflow or underflow be triggered to wrap a balance, amount, or index?
 - Look at every `try/catch` — if the try fails and funds are returned to the project balance instead of the intended recipient, can you trigger the failure deliberately and then claim those funds?
+
+**11. Input monoculture breaker**
+Target every code path that handles token amounts, decimal precision, or currency conversion. Trace:
+- Does the code hardcode `1e18`, `18`, or any specific decimal count? Test with 6-decimal (USDC) and 8-decimal (WBTC) tokens.
+- If two components compute the same conversion (e.g., sucker lib and terminal store), do they use the same formula? Build a test that feeds identical inputs to both and asserts parity.
+- For every try-catch: does a test assert the try-path succeeded, or only that the outer call didn't revert? If only the latter, the catch block may be silently masking bugs.
+- For every boolean flag that branches behavior: are both states tested? Check `scopeCashOutsToLocalBalances`, `useDataHookForPay`, `useDataHookForCashOut`, and any project-scoped flags.
+- For every permission granted at deploy time: what happens after the project NFT is transferred? Is there a revocation path?
+- For any code that reads pre-existing external state (pool prices, oracle values, registry entries): can an adversary set that state before the legitimate caller?
 
 The user can pick one to focus on, several to combine, or let the AI pick randomly for maximum diversity across community runs. If the user has their own attacker model or specialization (e.g. "I know Uniswap V4 hooks well"), they should say so — it gets woven into the audit.
 
@@ -247,7 +259,9 @@ Skip: test/, lib/, interfaces/, mocks/, *.t.sol, *Test*.sol, *Mock*.sol
 
 ## Audit Objective
 
-Find issues that:
+There is a billion dollars of well-meaning projects' money in the Juicebox Money Engine, growing exponentially. Your job is to hack it before anyone else. Whoever hacks it first saves/steals the money, and you are obsessed with being this winner, while also being a steward of the protocol and wanting it to keep growing safely.
+
+Suggestions of where to look:
 
 - lose, lock, misroute, or misaccount value across repo boundaries
 - mint, burn, bridge, reclaim, or redeem more value than intended
@@ -382,6 +396,11 @@ The main audit mindset here is composition:
 9. Preview and execution coherence
    Any repo that consumes a preview, estimate, or hook-produced spec as execution truth must remain safe when execution actually happens.
 
+10. Conversion formula parity
+    Any two components that convert between currencies or decimal precisions for the same
+    economic purpose must produce identical results for identical inputs. Cross-component
+    conversion divergence is a critical bug class (ref: AM).
+
 ## Attack Surfaces
 
 - `nana-core-v6` settlement entrypoints consumed by downstream hooks
@@ -390,6 +409,10 @@ The main audit mindset here is composition:
 - deployers and helpers that retain one privilege too many after launch
 - wildcard permissions, project-owner abstractions, and shared registries
 - chain-specific constants and singleton wiring in deployment orchestration
+- hardcoded decimal assumptions in pool initialization, conversion libraries, and fee math
+- try-catch blocks that silently absorb reverts from adversarial inputs (address(0), extreme prices)
+- pre-existing external state (pool prices, registry entries) that an attacker can set before legitimate initialization
+- permission grants that persist across NFT ownership transfers
 
 Replay these ecosystem sequences:
 
@@ -399,6 +422,10 @@ Replay these ecosystem sequences:
 4. sucker prepare -> out-of-order root delivery -> claim or emergency exit
 5. deployer launch -> ownership transfer -> registry write -> privileged runtime callback
 6. swap-versus-mint or swap-versus-cash-out routing under adversarial liquidity
+7. cross-currency sucker conversion with non-18-decimal tokens -> compare result to terminal store conversion for same inputs
+8. pool initialization where attacker front-runs with extreme sqrtPriceX96 -> observe LP position creation
+9. mintFrom with address(0) feeBeneficiary -> observe fee collection vs. refund
+10. project NFT transfer -> attempt to use deployer-scoped permissions as old owner
 
 ## Accepted Risks Or Behaviors
 
