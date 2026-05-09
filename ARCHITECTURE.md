@@ -199,7 +199,7 @@ If a bug crosses one of these seams, assume the blast radius may be larger than 
 | `nana-distributor-v6` | Round-based reward distribution for 721 or `IVotes` staking bases |
 | `univ4-router-v6` | Uniswap V4 hook plus TWAP oracle surface for routing decisions |
 | `univ4-lp-split-hook-v6` | Reserved-token liquidity automation and LP fee routing |
-| `revnet-core-v6` | Ownerless staged project pattern with loans, hidden tokens, and hook composition |
+| `revnet-core-v6` | Ownerless staged project pattern with loans and hook composition |
 | `croptop-core-v6` | Permissioned NFT publishing product |
 | `banny-retail-v6` | Composable avatar rendering and attachment-custody system |
 | `defifa` | Prediction-game product with phased rulesets, scorecard governance, and game-piece cash-out logic |

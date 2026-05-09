@@ -23,7 +23,7 @@ Primary repos and roles:
 - `nana-buyback-hook-v6`: buyback-vs-mint routing
 - `univ4-router-v6`: shared Uniswap V4 routing and oracle hook
 - `univ4-lp-split-hook-v6`: LP deployment and liquidity management
-- `revnet-core-v6`: revnet deployer, owner logic, loans, hidden tokens, fee handling
+- `revnet-core-v6`: revnet deployer, owner logic, loans, fee handling
 - `nana-suckers-v6`: cross-chain bridge and registry surfaces
 - `nana-omnichain-deployers-v6`: omnichain deployer logic
 - `nana-router-terminal-v6`: router terminal and registry

@@ -30,8 +30,6 @@ Use this file when you need the fastest path from a user-facing flow or debuggin
 | Router cash-out recursion | `JBRouterTerminal._previewCashOutLoop()` / `_cashOutLoopOf()` | Iterates project-token cashouts until a terminal-accepted asset is found or routing continues |
 | V4 hook routing | `JBUniswapV4Hook._beforeSwap()` | Chooses JB vs V4 path, subject to preview availability and signed-delta limits |
 | Loan creation | `REVLoans.borrowFrom()` | Collateral lock, bonding curve valuation. Supports operator delegation via `holder` param (OPEN_LOAN permission). |
-| Hide tokens | `REVHiddenTokens.hideTokensOf()` | Burns tokens, tracks hidden balance. Reduces totalSupply, increases cash-out value for remaining holders. |
-| Reveal tokens | `REVHiddenTokens.revealTokensOf()` | Re-mints previously hidden tokens to beneficiary. |
 | Cross-chain prepare | `JBSucker.prepare()` | Cash out + insert into outbox merkle tree |
 | Cross-chain claim | `JBSucker.claim()` | Verify merkle proof + mint/transfer |
 | Cross-chain snapshot/root send | `JBSucker.toRemote()` / `_sendRoot()` | Drains outbox into a snapshot message and advances claim safety boundaries |
