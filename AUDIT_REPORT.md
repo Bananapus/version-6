@@ -33,9 +33,9 @@ Correlated edge cases and PoCs were checked against current code, current tests,
 Bottom line under the current threat model:
 
 - All twenty-two immediate `deploy-all-v6` one-shot blockers are now FIXED. Two ecosystem blockers (S, AH) remain deferred for swap-enabled CCIP suckers in a future rollout. See "Current Open Edge Case A" through "Current Open Edge Case AS" below.
-- Eight items (D, E, AF, AA, AD, 74, 66, 69) have been closed as ACCEPTED — all are explicitly documented and accepted in their respective RISKS.md files.
+- Eleven items (D, E, AF, AA, AD, 74, 66, 69, AV, AW, AY) have been closed as ACCEPTED — all are explicitly documented and accepted in their respective RISKS.md files.
 - Two items (Z, AQ) have been RESOLVED — Z via per-project feeless system (nana-core-v6 v0.0.44), AQ via `scopeCashOutsToLocalBalances` flag (revnet-core-v6 v0.0.45, omnichain-deployers-v6 v0.0.39).
-- Thirty-two items are now FIXED: AL, AM, AN, AO, AP, AE, R, U, AR, Q (previously fixed), plus A, AC, B, C, F, G, H, I, J, K, L, M, N, O, P, T, V, W, X, Y, AI, AJ, AK (deploy-all-v6 deploy/resume identity gates, verifier extensions, package bumps, and runbook rewrite).
+- Thirty-seven items are now FIXED: AL, AM, AN, AO, AP, AE, R, U, AR, Q (previously fixed), plus A, AC, B, C, F, G, H, I, J, K, L, M, N, O, P, T, V, W, X, Y, AI, AJ, AK (deploy-all-v6 deploy/resume identity gates, verifier extensions, package bumps, and runbook rewrite), plus AS, AT, AU, AX, AZ (regression audit fixes).
 - Two items (S, AH) are deferred — swap-enabled CCIP suckers and native routes are not in the initial rollout.
 - Two items (JD-1, JD-2) are out of EVM scope (frontend/jb-directory).
 - One item (58) has been accepted/deferred by admin.
@@ -92,6 +92,14 @@ Immediate `deploy-all-v6` blockers:
 | AP | ~~`CTDeployer` never revoking deployer-scoped hook permissions when a project NFT is transferred so former owners retain tier/metadata control.~~ | FIXED. Permissions revoked in `claimCollectionOwnershipOf` (croptop-core-v6 PR #125). |
 | AQ | ~~`REVOwner.beforeCashOutRecordedWith` unconditionally adds `remoteSurplusOf` and `remoteTotalSupplyOf` to cash-out calculations regardless of `useTotalSurplus` flag.~~ | RESOLVED. `scopeCashOutsToLocalBalances` flag gates remote surplus/supply addition in REVOwner and REVLoans (revnet-core-v6 PR #144, v0.0.45; omnichain-deployers-v6 PR #102). |
 | AR | ~~`JBUniswapV4LPSplitHook._createAndInitializePool` accepts an existing pool's attacker-chosen `sqrtPriceX96` without bounds validation, enabling DoS or price manipulation at pool initialization.~~ | FIXED. Bounds validation added (univ4-lp-split-hook-v6 PR #120, v0.0.32). |
+| AS | ~~`JBOmnichainDeployer.peerChainAdjustedAccountsOf` masks cross-chain adjusted supply/surplus/balance from `REVOwner` because the deployer's override only calls the store, not the hook.~~ | FIXED. Override now forwards to the hook's `peerChainAdjustedAccountsOf` (nana-omnichain-deployers-v6 PR #104, v0.0.41). |
+| AT | ~~`DefifaHook._currentPhase` uses `tokenTotalSupply()` instead of `totalMintCost` for `minParticipation` threshold, so `addToBalanceOf` inflates participation count.~~ | FIXED. Now uses `totalMintCost` (defifa PR #106, v0.0.32). |
+| AU | ~~`JBDistributor._vestTokenIds` pushes zero-amount vesting entries that pin `latestVestedIndexOf`, permanently blocking token claim advancement.~~ | FIXED. Zero-amount entries skipped (nana-distributor-v6 PR #21, v0.0.13). |
+| AV | `JBOwnable` NFT round-trip (transfer away and back) reactivates ownership. | ACCEPTED. By design; documented in `nana-ownable-v6/RISKS.md` (PR #74). |
+| AW | Defifa commitment payout failures are finalized as fulfilled when the try-catch swallows the revert. | ACCEPTED. By design; documented in `defifa/RISKS.md` section 8.7. |
+| AX | ~~`DefifaHook.mintReservesFor` mints from the store's naive `numberOfPendingReservesFor` count, which ignores refund burns, inflating `totalMintCost` with ghost reserves.~~ | FIXED. Count now capped by `adjustedPendingReservesFor(tierId)` (defifa PR #107, v0.0.33). |
+| AY | `CTPublisher` allowlist bypass via EIP-7702 delegated EOAs. | ACCEPTED. Documented in `croptop-core-v6/RISKS.md` section 7.5 (PR #127). |
+| AZ | ~~`Resume.s.sol._resumeBuybackHook` unconditionally calls `setHookFor`, reverting on re-runs when the hook is already pinned.~~ | FIXED. Idempotent check added (deploy-all-v6 PR #84, v0.0.19). |
 
 Future / expanded rollout blockers:
 
@@ -181,18 +189,18 @@ Suggested owner/workstream routing:
 
 | Workstream | Edge Case IDs | Primary repos/artifacts to assign |
 | --- | --- | --- |
-| Deploy execution and runbook | B, V, W, ~~AL~~, A, AB, AC, H, X | AL: FIXED (deploy-all-v6 PR #103). `deploy-all-v6`, Sphinx execution path, `DEPLOY.md`, canonical project phase scripts. |
+| Deploy execution and runbook | B, V, W, ~~AL~~, A, AB, AC, H, X, ~~AZ~~ | AL: FIXED (deploy-all-v6 PR #103). AZ: FIXED. Idempotent setHookFor (deploy-all-v6 PR #84, v0.0.19). `deploy-all-v6`, Sphinx execution path, `DEPLOY.md`, canonical project phase scripts. |
 | Deployment verifier and manifest exactness | C, F, G, I, J, K, L, M, N, O, P, T, Y, AI, AJ, AK | `deploy-all-v6/script/Verify.s.sol`, deploy manifests/env, per-chain address manifests, ownership/permission reports. |
 | Core terminal and router economics | ~~Z~~ | RESOLVED. Per-project feeless system (nana-core-v6 v0.0.44). (AA and AF closed as ACCEPTED.) |
-| Cross-chain and sucker protocol fixes | ~~AM~~, ~~AQ~~ | AM: FIXED. Conversion formula inverted (nana-suckers-v6 PR #118, v0.0.37). AQ: RESOLVED via `scopeCashOutsToLocalBalances` (revnet-core-v6 v0.0.45, omnichain-deployers-v6 v0.0.39). |
+| Cross-chain and sucker protocol fixes | ~~AM~~, ~~AQ~~, ~~AS~~ | AM: FIXED. Conversion formula inverted (nana-suckers-v6 PR #118, v0.0.37). AQ: RESOLVED via `scopeCashOutsToLocalBalances` (revnet-core-v6 v0.0.45, omnichain-deployers-v6 v0.0.39). AS: FIXED. Deployer forwards to hook (nana-omnichain-deployers-v6 PR #104, v0.0.41). |
 | Revnet product economics | ~~AN~~, ~~D, E~~ | AN: FIXED. Now uses terminal token decimals (revnet-core-v6 PR #143). D, E: ACCEPTED per `revnet-core-v6/RISKS.md` §4 and §8. |
-| Product/periphery runtime safety | ~~AD~~, ~~AE~~, AG, ~~AO~~, ~~AP~~, ~~AR~~, ~~Q~~, ~~R~~, ~~U~~ | AE: FIXED (nana-distributor-v6 PR #18). AO, AP: FIXED (croptop-core-v6 PR #125). R: FIXED (nana-project-handles-v6 PRs #11, #14). U: FIXED (604,800s round duration). AR: FIXED (univ4-lp-split-hook-v6 PR #120, v0.0.32). AD: ACCEPTED (`defifa/RISKS.md` §1, §8.5). Q: FIXED (nana-721-hook-v6 PR #129, v0.0.47). All closed. |
+| Product/periphery runtime safety | ~~AD~~, ~~AE~~, AG, ~~AO~~, ~~AP~~, ~~AR~~, ~~Q~~, ~~R~~, ~~U~~, ~~AT~~, ~~AU~~, ~~AX~~ | AE: FIXED (nana-distributor-v6 PR #18). AO, AP: FIXED (croptop-core-v6 PR #125). R: FIXED (nana-project-handles-v6 PRs #11, #14). U: FIXED (604,800s round duration). AR: FIXED (univ4-lp-split-hook-v6 PR #120, v0.0.32). AD: ACCEPTED (`defifa/RISKS.md` §1, §8.5). Q: FIXED (nana-721-hook-v6 PR #129, v0.0.47). AT: FIXED (defifa PR #106, v0.0.32). AU: FIXED (nana-distributor-v6 PR #21, v0.0.13). AX: FIXED (defifa PR #107, v0.0.33). AV, AW, AY: ACCEPTED per RISKS.md. All closed. |
 | Cross-chain future rollout | S, AH | DEFERRED. Not in initial rollout. `nana-suckers-v6`, swap-enabled CCIP manifest policy. |
 | Static interface publication | JD-1, JD-2 | OUT OF SCOPE (frontend). `jb-directory`, ABI/address manifest generation, token/chain UX, publication build checks. |
 
 ## Implementation Handoff TLDR
 
-Current status: `NOT READY`. `AUDIT_REPORT.md` contains 23 confirmed open immediate `deploy-all-v6` blockers, 2 deferred future/expanded swap-enabled sucker blockers (S, AH), 9 items closed as ACCEPTED per RISKS.md (D, E, AA, AF, AD, Q, 66, 69, 74), 2 items RESOLVED (Z via per-project feeless, AQ via `scopeCashOutsToLocalBalances`), 9 items FIXED (AL, AM, AN, AO, AP, AE, R, U, AR), and 1 accepted/deferred (58). Separate `jb-directory` publication edge cases JD-1 and JD-2 are not EVM deployment blockers (frontend scope), but should gate publication of the static interface.
+Current status: `NOT READY`. `AUDIT_REPORT.md` contains 23 confirmed open immediate `deploy-all-v6` blockers, 2 deferred future/expanded swap-enabled sucker blockers (S, AH), 12 items closed as ACCEPTED per RISKS.md (D, E, AA, AF, AD, Q, 66, 69, 74, AV, AW, AY), 2 items RESOLVED (Z via per-project feeless, AQ via `scopeCashOutsToLocalBalances`), 14 items FIXED (AL, AM, AN, AO, AP, AE, R, U, AR, AS, AT, AU, AX, AZ), and 1 accepted/deferred (58). Separate `jb-directory` publication edge cases JD-1 and JD-2 are not EVM deployment blockers (frontend scope), but should gate publication of the static interface.
 
 Start implementation with deploy execution and runbook blockers: B, V, W, A, AB, AC, H, and X. (AL is now FIXED.) These determine whether the audited source graph is used, whether Sphinx/Safe execution preserves deterministic CREATE2 semantics, whether resume can actually be run, whether canonical projects `1-4` are recoverable/idempotent, whether Defifa verification can pass a correct deploy, and whether canonical buyback hooks/pools are present.
 
