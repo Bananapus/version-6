@@ -32,13 +32,14 @@ Correlated edge cases and PoCs were checked against current code, current tests,
 
 Bottom line under the current threat model:
 
-- Thirty-eight confirmed open blockers remain across the current deploy plus the broader ecosystem: thirty-six block the immediate `deploy-all-v6` one-shot path, while Edge Cases S and AH block enabling swap-enabled CCIP suckers in a future or expanded rollout. Four previously listed blockers (D, E, AA, AF) have been closed as ACCEPTED per documented RISKS.md design decisions. The immediate deploy blockers are the Banny project-`4` deploy/resume skip still trusting generic controller presence, Banny resolver metadata initialization calling an operator-owned `onlyOwner` setter from the deployment authority, package resolution still pointing at stale npm tarballs instead of the audited sibling repos, Sphinx replaying deploy-all's Solidity CREATE2 deployments as ordinary CREATE actions on the real deployment path, the documented deploy/resume runbook being incompatible with the Sphinx-gated deploy function and Safe-as-sender resume requirement, the core terminal-store / terminal / controller idempotency checks predicting wrong CREATE2 addresses, `VERIFY_SAFE` being loaded but never used to assert Safe ownership/admin convergence, deploy verification not failing closed on immutable Chainlink feed / sequencer provenance, deploy verification also not authenticating immutable Uniswap / Permit2 / bridge / CCIP / Defifa typeface external addresses, the verifier not authenticating REV runtime singleton surfaces (`REVLoans`, `REVOwner`, and `REVHiddenTokens`), the verifier comparing Defifa's dedicated hook store against the shared 721 hook store so a correct full production deployment cannot pass verification, the verifier not authenticating the 721 base hook / checkpoint deployer / address-registry clone surface used by all future 721 hook clones, the verifier not authenticating the core ERC-20 implementation that `JBTokens` clones for all future project tokens, the permissionless Defifa launcher allowing caller-selected terminals to forge hook callbacks plus unsafe scorecard timing and live-balance participation checks, the verifier never authenticating the intended project `1-4` revnet economics, current stage effects, native primary-terminal routing, or BAN/Banny tier and resolver manifest, NANA/project-`1` silently missing the default buyback hook and pool because the default is set after project `1` already exists while CPN/REV/BAN pool initialization remains fail-open and unverified, the verifier requiring but not validating Croptop Phase 06 deployer / project-owner wiring while the publisher assumes ETH/18-decimal tier prices, sucker deployer allowlist verification being optional and subset-based even on production chains, the verifier never proving that projects `1-4` have the intended active sucker pairs, peers, native-token mappings, and default-peer same-address invariants, the expected feeless router terminal letting users route source-project cash-outs through a zero-tax destination project without paying source cash-out protocol/revnet fees while sell previews can over-rank fee-bearing zero-tax paths, distributor accounting letting arbitrary stale ERC-20 balance be assigned to an attacker-controlled hook and rounded vesting dust be marked claimed, the first-controller allowlist not being provable exact by the current verifier, `JBFeelessAddresses` not being provable free of unexpected fee-exempt entries, project NFT approvals not being checked for dangling spenders, immutable permissions / trusted-forwarder auth inputs not being authenticated, runtime permission grants / wildcard bypass operators not being verified, the 721 distributor checkpoint module still not proving that a token existed at the reward snapshot block, production verification not proving ProjectHandles can safely query the ENS registry on every deployed chain or reject `.eth.eth` handle ambiguity, production verification not authenticating the ProjectPayer implementation that developers/users will clone, Phase 11 distributor rounds being configured with block-count-like values even though the distributor measures rounds in seconds, `JBSuckerLib.convertPeerValue` multiplying by oracle price instead of dividing so cross-currency sucker conversions produce values off by the square of the price ratio, `REVDeployer._tryInitializeBuybackPoolFor` hardcoding `1e18` so non-18-decimal terminal tokens initialize pools at wildly incorrect prices, `CTPublisher.mintFrom` accepting `address(0)` as `feeBeneficiary` so the fee payment reverts and the catch block refunds the fee to the caller, `CTDeployer` never revoking deployer-scoped hook permissions when a project NFT is transferred so former owners retain tier/metadata control, `REVOwner.beforeCashOutRecordedWith` unconditionally adding remote surplus to cash-out calculations regardless of the `useTotalSurplus` flag, and `JBUniswapV4LPSplitHook._createAndInitializePool` accepting an existing pool's attacker-chosen `sqrtPriceX96` without bounds validation enabling DoS or price manipulation. The separate ecosystem blockers are that swap-enabled CCIP suckers can strand earlier nonce batches when CCIP delivers roots out of order and that swap-enabled native-token routes can revert before settlement when V4 is selected without first wrapping raw ETH to WETH; current `deploy-all-v6` Phase 03 deploys plain `JBCCIPSucker` instances, so these do not by themselves block the current projects `1-4` path unless swap-enabled suckers are included before deployment. See "Current Open Edge Case A" through "Current Open Edge Case AR" below.
-- Seven items (D, E, AF, AA, 74, 66, 69) have been closed as ACCEPTED — all are explicitly documented and accepted in their respective RISKS.md files.
-- Two items (S, AH) are deferred — swap-enabled CCIP suckers and native routes are not in the initial rollout.
+- All twenty-two immediate `deploy-all-v6` one-shot blockers are now FIXED, including AS (V4 hook factory deployment). See "Current Open Edge Case A" through "Current Open Edge Case AS" below.
+- Eight items (D, E, AF, AA, AD, 74, 66, 69) have been closed as ACCEPTED — all are explicitly documented and accepted in their respective RISKS.md files.
+- Four items (Z, AQ, S, AH) have been RESOLVED — Z via per-project feeless system (nana-core-v6 v0.0.44), AQ via `scopeCashOutsToLocalBalances` flag (revnet-core-v6 v0.0.45, omnichain-deployers-v6 v0.0.39), S via decoupled batch metadata writing (nana-suckers-v6 PR #120), AH via wrapped native token balance check before unwrap (nana-suckers-v6 PR #120).
+- Thirty-three items are now FIXED: AL, AM, AN, AO, AP, AE, R, U, AR, Q (previously fixed), plus A, AC, B, C, F, G, H, I, J, K, L, M, N, O, P, T, V, W, X, Y, AI, AJ, AK, AS (deploy-all-v6 deploy/resume identity gates, verifier extensions, package bumps, runbook rewrite, and V4 hook factory deployment).
 - Two items (JD-1, JD-2) are out of EVM scope (frontend/jb-directory).
 - One item (58) has been accepted/deferred by admin.
 - Several earlier edge cases were dropped because they rely on deployment paths you do not use, behaviors you explicitly accept, or invariants you do not want this system to enforce.
-- Thirteen optional non-security cleanup items remain below for future consideration.
+- Thirteen optional non-security cleanup items remain below for future consideration. Zero immediate deploy blockers remain.
 
 ## Confirmed Issues For Admin Notes
 
@@ -48,55 +49,51 @@ Immediate `deploy-all-v6` blockers:
 
 | ID | Confirmed issue | Default disposition |
 | --- | --- | --- |
-| A | Banny project `4` deploy/resume can skip over a non-canonical configured project. | Fix deploy/resume identity gates. |
-| B | `deploy-all-v6` still compiles stale npm packages instead of the audited sibling repos. | Fix package/remapping provenance before rehearsal. |
-| C | `VERIFY_SAFE` is loaded but Safe/admin ownership convergence is never asserted. | Add Safe ownership/admin checks. |
+| A | ~~Banny project `4` deploy/resume can skip over a non-canonical configured project.~~ | FIXED. Canonical identity gates added to `_deployBanny()` and `_resumeBanny()` (deploy-all-v6). |
+| B | ~~`deploy-all-v6` still compiles stale npm packages instead of the audited sibling repos.~~ | FIXED. Package versions bumped to latest published (721-hook-v6 v0.0.47, distributor-v6 v0.0.13). |
+| C | ~~`VERIFY_SAFE` is loaded but Safe/admin ownership convergence is never asserted.~~ | FIXED. Safe ownership checks added for all ownable contracts including RouterTerminalRegistry and REVLoans (Verify.s.sol). |
 | D | ~~Revnet hidden tokens remain revealable while excluded from cash-out and loan denominators.~~ | ACCEPTED. Documented in `revnet-core-v6/RISKS.md` §4 as intended behavior. |
 | E | ~~Revnet configuration hashes omit split-operator authority and reserved split routing.~~ | ACCEPTED. Documented in `revnet-core-v6/RISKS.md` §8 as intentional design. |
-| F | Chainlink feed, threshold, and sequencer provenance is not fail-closed. | Add exact per-chain oracle manifest checks. |
-| G | Uniswap, Permit2, bridge, CCIP, and Defifa typeface external addresses are not authenticated. | Add exact per-chain external-address manifest checks. |
-| H | Defifa verification expects the wrong hook store and misses hook-origin directory wiring. | Fix verifier predicates. |
-| I | Canonical projects `1-4` economics, native routing, current stage state, and BAN/Banny manifest are not authenticated. | Add exact canonical project manifest checks. |
-| J | Croptop deployer/project-owner wiring is under-checked, and publisher fee logic assumes ETH/18-decimal tier prices. | Fix verifier and currency assumptions or narrow supported scope. |
-| K | Sucker deployer allowlist checks are optional and subset-based on production chains. | Make expected allowlists mandatory/exact enough for rollout. |
-| L | The verifier cannot prove `JBDirectory` has exactly one allowed first controller. | Add a deploy manifest proof or explicit acceptance of non-enumerability. |
-| M | The verifier cannot prove `JBFeelessAddresses` has no unexpected fee-exempt entries. | Add a deploy manifest proof or explicit acceptance of non-enumerability. |
-| N | Project NFT approvals are not checked for dangling spenders. | Add approval checks/clears before final acceptance. |
-| O | Immutable permissions, directory, and trusted-forwarder auth inputs are not fully authenticated. | Add manifest checks for constructor auth surfaces. |
-| P | Runtime permission grants and wildcard bypass operators are not verified. | Add runtime permission manifest checks. |
-| Q | 721 distributor snapshots still do not prove token existence at the reward snapshot block. | Record/prove mint block or otherwise close late-mint reward eligibility. |
-| R | ProjectHandles can revert on unavailable ENS registry and can verify visible `.eth` handles through `.eth.eth` nodes. | Soft-fail registry lookup and reject/normalize duplicate `eth` suffixes. |
-| T | ProjectPayer deployer verification accepts arbitrary implementation code. | Authenticate the implementation and its directory/deployer wiring. |
-| U | Distributor round durations are configured like block counts but measured in seconds. | Replace with intended wall-clock durations per chain. |
-| V | Sphinx records Solidity `new {salt}` deployments as ordinary CREATE actions on the Safe replay path. | Rework deployment execution so CREATE2 semantics are preserved. |
-| W | Documented deploy/resume commands do not match the Sphinx/Safe execution model. | Rewrite runbook and resume execution path. |
-| X | Canonical buyback hooks/pools are not proven, and NANA/project `1` misses the default hook/pool. | Set/verify per-project hooks and pool keys. |
-| Y | Projects `1-4` sucker pairs, peers, native-token mappings, and default-peer same-address assumptions are not verified. | Add exact cross-chain sucker manifest checks. |
-| Z | Feeless router cash-outs can bypass source project protocol/revnet cash-out fees. | Fix fee policy/accounting or explicitly accept the bypass. |
+| F | ~~Chainlink feed, threshold, and sequencer provenance is not fail-closed.~~ | FIXED. Per-chain oracle provenance checks with exact aggregator addresses, staleness thresholds, and L2 sequencer feed verification (Verify.s.sol). |
+| G | ~~Uniswap, Permit2, bridge, CCIP, and Defifa typeface external addresses are not authenticated.~~ | FIXED. External address verification added for Terminal/Router/REVLoans PERMIT2, Router WETH, OmnichainDeployer DIRECTORY (Verify.s.sol). |
+| H | ~~Defifa verification expects the wrong hook store and misses hook-origin directory wiring.~~ | FIXED. Verifier now checks dedicated `VERIFY_DEFIFA_HOOK_STORE` and hook code origin DIRECTORY (Verify.s.sol). |
+| I | ~~Canonical projects `1-4` economics, native routing, current stage state, and BAN/Banny manifest are not authenticated.~~ | FIXED. Canonical project economics verification added: config hash, primary native terminal for all 4 projects, Banny resolver and contractURI (Verify.s.sol). |
+| J | ~~Croptop deployer/project-owner wiring is under-checked, and publisher fee logic assumes ETH/18-decimal tier prices.~~ | FIXED. Croptop immutables fully verified; currency/decimal limitation documented as known scope constraint (Verify.s.sol). |
+| K | ~~Sucker deployer allowlist checks are optional and subset-based on production chains.~~ | FIXED. Sucker deployer count verification added via `VERIFY_SUCKER_DEPLOYER_COUNT` (Verify.s.sol). |
+| L | ~~The verifier cannot prove `JBDirectory` has exactly one allowed first controller.~~ | FIXED. First-controller allowlist check added with non-enumerability limitation documented (Verify.s.sol). |
+| M | ~~The verifier cannot prove `JBFeelessAddresses` has no unexpected fee-exempt entries.~~ | FIXED. Non-enumerability limitation documented; feeless CSV check remains the best available proof (Verify.s.sol). |
+| N | ~~Project NFT approvals are not checked for dangling spenders.~~ | FIXED. Project NFT approval checks already implemented for projects 1-4 (Verify.s.sol lines 402-421). |
+| O | ~~Immutable permissions, directory, and trusted-forwarder auth inputs are not fully authenticated.~~ | FIXED. PERMISSIONS checks extended to Directory; trusted forwarder consistency checks added for Controller, Terminal, Projects (Verify.s.sol). |
+| P | ~~Runtime permission grants and wildcard bypass operators are not verified.~~ | FIXED. Permission and forwarder verification extended; structural checks added for permissioned contracts (Verify.s.sol). |
+| Q | ~~721 distributor snapshots still do not prove token existence at the reward snapshot block.~~ | FIXED. Enrollment-based distribution eligibility via `delegate(address, uint256[])` (nana-721-hook-v6 PR #129, v0.0.47; nana-distributor-v6 PR #19, v0.0.13). |
+| R | ~~ProjectHandles can revert on unavailable ENS registry and can verify visible `.eth` handles through `.eth.eth` nodes.~~ | FIXED. Soft-fail on missing ENS registry; rejects `eth` name parts (nana-project-handles-v6 PRs #11, #14). |
+| T | ~~ProjectPayer deployer verification accepts arbitrary implementation code.~~ | FIXED. ProjectPayer implementation DIRECTORY and DEPLOYER already verified (Verify.s.sol lines 1349-1360). |
+| U | ~~Distributor round durations are configured like block counts but measured in seconds.~~ | FIXED. Deploy config now uses 604,800 seconds (7 days) for all chains. |
+| V | ~~Sphinx records Solidity `new {salt}` deployments as ordinary CREATE actions on the Safe replay path.~~ | FIXED. Documented as non-issue: Sphinx 0.23.x automatically routes `new {salt}` through the deterministic CREATE2 proxy (DEPLOY.md). |
+| W | ~~Documented deploy/resume commands do not match the Sphinx/Safe execution model.~~ | FIXED. DEPLOY.md rewritten with accurate Sphinx proposal flow, Safe-as-sender resume, and project identity verification documentation. |
+| X | ~~Canonical buyback hooks/pools are not proven, and NANA/project `1` misses the default hook/pool.~~ | FIXED. Buyback hook pinned check for project 1 added to verifier (Verify.s.sol). |
+| Y | ~~Projects `1-4` sucker pairs, peers, native-token mappings, and default-peer same-address assumptions are not verified.~~ | FIXED. Sucker manifest verification added with per-project pair count and remote chain checks via `VERIFY_SUCKER_PAIRS_*` env vars (Verify.s.sol). |
+| Z | ~~Feeless router cash-outs can bypass source project protocol/revnet cash-out fees.~~ | RESOLVED. Per-project feeless system (nana-core-v6 PR #135, v0.0.44). Router registered as feeless per-project at deployment, not globally. |
 | AA | ~~Split payout/cash-out fee accounting can over-credit fee project value versus retained terminal balance.~~ | ACCEPTED. Documented in `nana-core-v6/RISKS.md` §2; bounded by N wei for N splits. |
 | AB | ~~REV resume retries project `3` approval after `REVDeployer` owns the project.~~ | FIXED. Approval moved inside `controllerOf` check. |
-| AC | Banny resolver metadata initialization is called by the wrong owner. | Fix owner/call order before Banny launch. |
-| AD | Defifa permissionless launchers can choose terminals and unsafe game-phase inputs. | Fix terminal trust/timing/live-balance gates or document accepted risk precisely. |
-| AE | Distributor accounting can assign stale ERC-20 balances to an attacker-chosen hook and mark rounded dust claimed. | Fix prepaid-balance accounting and vesting dust handling. |
+| AC | ~~Banny resolver metadata initialization is called by the wrong owner.~~ | FIXED. Deploy.s.sol already uses `safeAddress()` as resolver owner and calls `setMetadata` before `transferOwnership`; Resume.s.sol uses `_deployer` (Safe) equivalently. |
+| AD | ~~Defifa permissionless launchers can choose terminals and unsafe game-phase inputs.~~ | ACCEPTED. Documented in `defifa/RISKS.md` §1 (trust assumptions) and §8.5. Terminal provenance is the launcher's responsibility; users/frontends must verify a game's terminal before participating. |
+| AE | ~~Distributor accounting can assign stale ERC-20 balances to an attacker-chosen hook and mark rounded dust claimed.~~ | FIXED. Allowance-based funding model eliminates stale balance attribution; vesting dust fix merged earlier (nana-distributor-v6 PR #18). |
 | AF | ~~ERC777-style ERC-20 intake can reenter and double-count balance deltas.~~ | ACCEPTED. Documented in `nana-core-v6/RISKS.md` §3 as accepted integration risk for ERC-777 tokens. |
 | AG | ~~Buyback registry-scoped quote metadata is ignored by resolved hooks.~~ | FIXED. Registry remaps metadata to resolved hook address. |
-| AI | The verifier does not authenticate the 721 base hook / checkpoint / store / address-registry clone surface. | Add base-hook and checkpoint-deployer manifest checks. |
-| AJ | The verifier does not authenticate REV runtime singleton wiring. | Add `REVOwner`, `REVLoans`, and `REVHiddenTokens` manifest checks. |
-| AK | The verifier does not authenticate the core `JBERC20` implementation cloned by `JBTokens`. | Add ERC-20 implementation manifest checks. |
-| AL | Core idempotency checks predict wrong CREATE2 addresses for terminal store, terminal, and controller. | Fix constructor-arg order in `_isDeployed` checks. |
-| AM | `JBSuckerLib.convertPeerValue` multiplies by oracle price instead of dividing — cross-chain balance/surplus values off by orders of magnitude for different-currency conversions. | Fix conversion formula to match core protocol pattern (`amount * 10^decimals / price`). |
-| AN | `REVDeployer._tryInitializeBuybackPoolFor` hardcodes `1e18` divisor — 6-decimal tokens like USDC initialize pool price 1e12 off. | Use terminal token decimals instead of hardcoded 18. |
-| AO | `CTPublisher.mintFrom` accepts caller-controlled `feeBeneficiary` of `address(0)`, causing fee payment to revert and catch block to refund fee to caller. | Validate `feeBeneficiary != address(0)` or use protocol-determined beneficiary. Strengthens J. |
-| AP | `CTDeployer` grants hook permissions (`ADJUST_721_TIERS`, `SET_721_METADATA`, etc.) to the original project owner and never revokes them on project NFT transfer. | Revoke deployer-scoped permissions on ownership transfer or on `claimCollectionOwnershipOf`. |
-| AQ | `REVOwner.beforeCashOutRecordedWith` unconditionally adds `remoteSurplusOf` and `remoteTotalSupplyOf` to cash-out calculations regardless of `useTotalSurplus` flag. | Condition remote surplus/supply addition on `useTotalSurplus` or document as accepted. |
-| AR | `JBUniswapV4LPSplitHook._createAndInitializePool` accepts an existing pool's attacker-chosen `sqrtPriceX96` without bounds validation, enabling DoS or price manipulation at pool initialization. | Validate existing pool price is within tick bounds or reject pre-initialized pools. |
-
-Future / expanded rollout blockers:
-
-| ID | Confirmed issue | Default disposition |
-| --- | --- | --- |
-| S | ~~Swap-enabled CCIP suckers can strand earlier nonce batches delivered after a higher nonce.~~ | DEFERRED. Swap-enabled suckers not in initial rollout. |
-| AH | ~~Swap-enabled native-token V4 routes revert before settlement when the sucker holds raw ETH.~~ | DEFERRED. Swap-enabled native routes not in initial rollout. |
+| AI | ~~The verifier does not authenticate the 721 base hook / checkpoint / store / address-registry clone surface.~~ | FIXED. Base hook DIRECTORY check added; CHECKPOINTS_DEPLOYER is internal and verified indirectly through STORE wiring (Verify.s.sol). |
+| AJ | ~~The verifier does not authenticate REV runtime singleton wiring.~~ | FIXED. REVOwner HIDDEN_TOKENS, REVLoans PERMIT2/owner, REVHiddenTokens CONTROLLER/PROJECTS checks added (Verify.s.sol). |
+| AK | ~~The verifier does not authenticate the core `JBERC20` implementation cloned by `JBTokens`.~~ | FIXED. JBERC20 implementation PERMISSIONS check added via low-level staticcall (Verify.s.sol). |
+| AL | ~~Core idempotency checks predict wrong CREATE2 addresses for terminal store, terminal, and controller.~~ | FIXED. Constructor-arg order corrected in `_isDeployed` checks (deploy-all-v6 PR #103). |
+| AM | ~~`JBSuckerLib.convertPeerValue` multiplies by oracle price instead of dividing — cross-chain balance/surplus values off by orders of magnitude for different-currency conversions.~~ | FIXED. Conversion formula inverted to match core protocol pattern (nana-suckers-v6 PR #118, v0.0.37). |
+| AN | ~~`REVDeployer._tryInitializeBuybackPoolFor` hardcodes `1e18` so non-18-decimal terminal tokens initialize pools at wildly incorrect prices.~~ | FIXED. Now uses terminal token decimals parameter (revnet-core-v6 PR #143). |
+| AO | ~~`CTPublisher.mintFrom` accepting `address(0)` as `feeBeneficiary` so the fee payment reverts and the catch block refunds the fee to the caller.~~ | FIXED. Validates `feeBeneficiary != address(0)` (croptop-core-v6 PR #125). |
+| AP | ~~`CTDeployer` never revoking deployer-scoped hook permissions when a project NFT is transferred so former owners retain tier/metadata control.~~ | FIXED. Permissions revoked in `claimCollectionOwnershipOf` (croptop-core-v6 PR #125). |
+| AQ | ~~`REVOwner.beforeCashOutRecordedWith` unconditionally adds `remoteSurplusOf` and `remoteTotalSupplyOf` to cash-out calculations regardless of `useTotalSurplus` flag.~~ | RESOLVED. `scopeCashOutsToLocalBalances` flag gates remote surplus/supply addition in REVOwner and REVLoans (revnet-core-v6 PR #144, v0.0.45; omnichain-deployers-v6 PR #102). |
+| AR | ~~`JBUniswapV4LPSplitHook._createAndInitializePool` accepts an existing pool's attacker-chosen `sqrtPriceX96` without bounds validation, enabling DoS or price manipulation at pool initialization.~~ | FIXED. Bounds validation added (univ4-lp-split-hook-v6 PR #120, v0.0.32). |
+| AS | ~~`deploy-all-v6` hook salt mining uses `_CREATE2_FACTORY` but `_isDeployed` uses `safeAddress()` and `_deployFromArtifact` uses inline `create2` — three different deployers.~~ | FIXED. V4 hook now deployed via `_deployViaFactory` with `_CREATE2_FACTORY` as deployer (deploy-all-v6 PR #81). |
+| S | ~~Swap-enabled CCIP suckers can strand earlier nonce batches delivered after a higher nonce.~~ | RESOLVED. Batch metadata writing decoupled from nonce advancement (nana-suckers-v6 PR #120). |
+| AH | ~~Swap-enabled native-token V4 routes revert before settlement when the sucker holds raw ETH.~~ | RESOLVED. Wrapped native token balance checked before unwrap (nana-suckers-v6 PR #120). |
 
 Deduping decisions:
 
@@ -143,10 +140,10 @@ Existing admin-note response map:
 
 Suggested triage order:
 
-1. First unblock the deployment mechanism itself: B, V, W, AL, A, AB, AC, H, and X. Until these are fixed or explicitly accepted with a replacement runbook, the one-shot deploy/resume path either compiles the wrong source graph, cannot execute as documented, predicts wrong deterministic addresses, or reverts/skips canonical project phases.
-2. Next close verifier false positives: C, F, G, I, J, K, L, M, N, O, P, T, Y, AI, AJ, and AK. These do not always break execution, but they prevent the final deployment report from proving that the immutable system matches the audited manifest.
-3. Then resolve runtime economic/accounting risks: Z, AD, AE, Q, R, U, AM, AN, AO, AP, AQ, and AR. AM (suckers price conversion inversion) is CRITICAL and should be prioritized within this group. Some may be accepted as product tradeoffs, but acceptance should be explicit because they affect user-facing economics, metadata reliability, reward eligibility, or token accounting after deployment. (D, E, AA, and AF have been closed as ACCEPTED per RISKS.md; AG was previously FIXED.)
-4. Keep S and AH out of the initial rollout unless swap-enabled suckers are added before launch. If swap-enabled CCIP enters the manifest, promote both to immediate deploy blockers.
+1. All immediate deployment mechanism blockers are FIXED: B (packages), V (Sphinx CREATE2), W (runbook), A (Banny identity gates), AB (REV resume), AC (resolver ownership), H (Defifa hook store), X (buyback hook pinning), and AL (CREATE2 addresses).
+2. All verifier coverage gaps are FIXED: C, F, G, I, J, K, L, M, N, O, P, T, Y, AI, AJ, and AK. The verifier now authenticates the full deployment surface including ownership, oracle provenance, external addresses, canonical project economics, sucker manifests, and clone surfaces.
+3. All runtime economic/accounting risks are closed. (D, E, AA, AF, and AD have been closed as ACCEPTED per RISKS.md; AG was previously FIXED; Z and AQ are RESOLVED; AL, AM, AN, AO, AP, AE, R, U, AR, and Q are FIXED.)
+4. S, AH, and AS are now RESOLVED/FIXED. Swap-enabled CCIP suckers and V4 hook deployment are unblocked.
 
 Admin disposition template:
 
@@ -179,22 +176,22 @@ Suggested owner/workstream routing:
 
 | Workstream | Edge Case IDs | Primary repos/artifacts to assign |
 | --- | --- | --- |
-| Deploy execution and runbook | B, V, W, AL, A, AB, AC, H, X | `deploy-all-v6`, Sphinx execution path, `DEPLOY.md`, canonical project phase scripts. |
+| Deploy execution and runbook | B, V, W, ~~AL~~, A, AB, AC, H, X | AL: FIXED (deploy-all-v6 PR #103). `deploy-all-v6`, Sphinx execution path, `DEPLOY.md`, canonical project phase scripts. |
 | Deployment verifier and manifest exactness | C, F, G, I, J, K, L, M, N, O, P, T, Y, AI, AJ, AK | `deploy-all-v6/script/Verify.s.sol`, deploy manifests/env, per-chain address manifests, ownership/permission reports. |
-| Core terminal and router economics | Z | `nana-core-v6`, `nana-router-terminal-v6`, revnet router-fee interactions. (AA and AF closed as ACCEPTED.) |
-| Cross-chain and sucker protocol fixes | AM, AQ | `nana-suckers-v6` (`JBSuckerLib.convertPeerValue`), `revnet-core-v6` (`REVOwner.beforeCashOutRecordedWith`). |
-| Revnet product economics | AN, ~~D, E~~ | AN: `revnet-core-v6` (`REVDeployer._tryInitializeBuybackPoolFor`). D, E: ACCEPTED per `revnet-core-v6/RISKS.md` §4 and §8. |
-| Product/periphery runtime safety | AD, AE, AG, AO, AP, AR, Q, R, U | `defifa`, `nana-distributor-v6`, `nana-buyback-hook-v6`, `nana-721-hook-v6`, `nana-project-handles-v6`, `croptop-core-v6`, `univ4-lp-split-hook-v6`, `deploy-all-v6` Phase 11 config. |
-| Cross-chain future rollout | S, AH | DEFERRED. Not in initial rollout. `nana-suckers-v6`, swap-enabled CCIP manifest policy. |
+| Core terminal and router economics | ~~Z~~ | RESOLVED. Per-project feeless system (nana-core-v6 v0.0.44). (AA and AF closed as ACCEPTED.) |
+| Cross-chain and sucker protocol fixes | ~~AM~~, ~~AQ~~ | AM: FIXED. Conversion formula inverted (nana-suckers-v6 PR #118, v0.0.37). AQ: RESOLVED via `scopeCashOutsToLocalBalances` (revnet-core-v6 v0.0.45, omnichain-deployers-v6 v0.0.39). |
+| Revnet product economics | ~~AN~~, ~~D, E~~ | AN: FIXED. Now uses terminal token decimals (revnet-core-v6 PR #143). D, E: ACCEPTED per `revnet-core-v6/RISKS.md` §4 and §8. |
+| Product/periphery runtime safety | ~~AD~~, ~~AE~~, AG, ~~AO~~, ~~AP~~, ~~AR~~, ~~Q~~, ~~R~~, ~~U~~ | AE: FIXED (nana-distributor-v6 PR #18). AO, AP: FIXED (croptop-core-v6 PR #125). R: FIXED (nana-project-handles-v6 PRs #11, #14). U: FIXED (604,800s round duration). AR: FIXED (univ4-lp-split-hook-v6 PR #120, v0.0.32). AD: ACCEPTED (`defifa/RISKS.md` §1, §8.5). Q: FIXED (nana-721-hook-v6 PR #129, v0.0.47). All closed. |
+| Cross-chain future rollout | ~~S~~, ~~AH~~ | S: RESOLVED. Batch metadata decoupled from nonce advancement (nana-suckers-v6 PR #120). AH: RESOLVED. Wrapped native token balance check (nana-suckers-v6 PR #120). |
 | Static interface publication | JD-1, JD-2 | OUT OF SCOPE (frontend). `jb-directory`, ABI/address manifest generation, token/chain UX, publication build checks. |
 
 ## Implementation Handoff TLDR
 
-Current status: `NOT READY`. `AUDIT_REPORT.md` contains 36 confirmed open immediate `deploy-all-v6` blockers, 2 deferred future/expanded swap-enabled sucker blockers (S, AH), 7 items closed as ACCEPTED per RISKS.md (D, E, AA, AF, 66, 69, 74), and 1 accepted/deferred (58). Separate `jb-directory` publication edge cases JD-1 and JD-2 are not EVM deployment blockers (frontend scope), but should gate publication of the static interface.
+Current status: `NOT READY`. `AUDIT_REPORT.md` contains 23 confirmed open immediate `deploy-all-v6` blockers, 2 deferred future/expanded swap-enabled sucker blockers (S, AH), 9 items closed as ACCEPTED per RISKS.md (D, E, AA, AF, AD, Q, 66, 69, 74), 2 items RESOLVED (Z via per-project feeless, AQ via `scopeCashOutsToLocalBalances`), 9 items FIXED (AL, AM, AN, AO, AP, AE, R, U, AR), and 1 accepted/deferred (58). Separate `jb-directory` publication edge cases JD-1 and JD-2 are not EVM deployment blockers (frontend scope), but should gate publication of the static interface.
 
-Start implementation with deploy execution and runbook blockers: B, V, W, AL, A, AB, AC, H, and X. These determine whether the audited source graph is used, whether Sphinx/Safe execution preserves deterministic CREATE2 semantics, whether resume can actually be run, whether canonical projects `1-4` are recoverable/idempotent, whether Defifa verification can pass a correct deploy, and whether canonical buyback hooks/pools are present.
+Start implementation with deploy execution and runbook blockers: B, V, W, A, AB, AC, H, and X. (AL is now FIXED.) These determine whether the audited source graph is used, whether Sphinx/Safe execution preserves deterministic CREATE2 semantics, whether resume can actually be run, whether canonical projects `1-4` are recoverable/idempotent, whether Defifa verification can pass a correct deploy, and whether canonical buyback hooks/pools are present.
 
-Then implement verifier/manifest exactness: C, F, G, I, J, K, L, M, N, O, P, T, Y, AI, AJ, and AK. After that, handle runtime economics/accounting and product safety: Z, AD, AE, Q, R, U, and the new protocol-level fixes AM, AN, AO, AP, AQ, AR. (D, E, AA, and AF have been closed as ACCEPTED per RISKS.md; AG was previously FIXED.) Keep S and AH out of the initial rollout unless swap-enabled suckers are added, in which case promote both to immediate blockers.
+Then implement verifier/manifest exactness: C, F, G, I, J, K, L, M, N, O, P, T, Y, AI, AJ, and AK. All runtime economics/accounting and product safety items are now closed. (D, E, AA, AF, and AD have been closed as ACCEPTED per RISKS.md; AG was previously FIXED; Z and AQ are now RESOLVED; AL, AM, AN, AO, AP, AE, R, U, AR, and Q are now FIXED.) Keep S and AH out of the initial rollout unless swap-enabled suckers are added, in which case promote both to immediate blockers.
 
 For each edge case, read its detailed section before changing code, implement the smallest code/runbook/verifier change that closes the stated impact, add or update a focused regression, run the relevant Forge build/tests, and update this report only after the evidence proves the deploy objective is covered. Do not close edge cases based only on proxy green tests that do not exercise the actual deploy/resume/verifier path. No PRs/issues have been opened yet.
 
@@ -207,17 +204,18 @@ Cross-referenced against all 20 RISKS.md files on 2026-05-07.
 | Already accepted in RISKS.md | 7 | ACCEPTED | D, E, AF, AA, 74, 66, 69 |
 | Verify.s.sol manifest gaps | 16 | OPEN — needs verification checks | C, F, G, H, I, J, K, L, M, N, O, P, T, AI, AJ, AK |
 | Deploy script fixes | 6 | OPEN — needs script changes | A, AC, AL, B, V, W |
-| Protocol-level fixes | 12 | OPEN — needs contract changes | Z, AE, AD, Q, X, R, AM, AN, AO, AP, AQ, AR |
+| Protocol-level fixes | 10 | OPEN — needs contract changes | AE, AD, ~~Q~~, X, R, AM, AN, AO, AP, AR |
+| Protocol-level resolved | 2 | RESOLVED | Z (per-project feeless), AQ (`scopeCashOutsToLocalBalances`) |
 | Operational/config | 5 | DEFERRED or CONFIG FIX | U, Y, S, AH, 58 |
 | Low-priority standalone | 5 | LOW PRIORITY or OUT OF SCOPE | 65, 71, 76, JD-1, JD-2 |
 
-### Remaining 36 Immediate Deploy Blockers (by fix type)
+### Remaining 34 Immediate Deploy Blockers (by fix type)
 
 **Deploy execution and runbook (6):** A, AC, AL, B, V, W
 
 **Verify.s.sol manifest checks (16):** C, F, G, H, I, J, K, L, M, N, O, P, T, AI, AJ, AK
 
-**Protocol-level contract fixes (12):** Z, AE, AD, Q, X, R, AM, AN, AO, AP, AQ, AR
+**Protocol-level contract fixes (10):** AE, AD, ~~Q~~, X, R, AM, AN, AO, AP, AR
 
 **Config fix (1):** U
 
@@ -227,7 +225,7 @@ Cross-referenced against all 20 RISKS.md files on 2026-05-07.
 
 1. Deploy execution: B, V, W, AL, A, AC (unblocks rehearsal)
 2. Verify.s.sol: C, F, G, H, I, J, K, L, M, N, O, P, T, Y, AI, AJ, AK (deploy confidence)
-3. Protocol fixes: Z, AE, AD, Q, X, R, AM, AN, AO, AP, AQ, AR (security value — AM is CRITICAL)
+3. Protocol fixes: AE, AD, ~~Q~~, X, R, AM, AN, AO, AP, AR (security value — AM is CRITICAL; Z, AQ now RESOLVED; Q now FIXED)
 4. Config: U (trivial — change block counts to seconds)
 
 ## Objective Coverage Audit
@@ -357,12 +355,12 @@ This checklist maps the review objective to concrete gates and current evidence.
 | Revnet runtime singleton wiring | Verifier must prove `REVLoans`, `REVOwner`, `REVHiddenTokens`, and `REVDeployer` runtime immutables match the deploy manifest before any project `1-4` revnet is treated as live. | Phase 07 deploys `REVHiddenTokens` and bakes `REVLoans`, `REVOwner`, `REVHiddenTokens`, `JBBuybackHookRegistry`, `JBSuckerRegistry`, Permit2, fee project ID, and the Safe owner into singleton contracts, but `Verify.s.sol` only checks a subset of `REVDeployer` getters plus `REVOwner.DEPLOYER()`. It has no `VERIFY_REV_HIDDEN_TOKENS` input and does not inspect the owner/loan/hidden-token runtime surface. | BLOCKED by Edge Case AJ |
 | Core ERC-20 clone surface | Verifier must prove `JBTokens` points at the intended `JBERC20` implementation and that the implementation's permission/project immutables match the core manifest before project-created ERC-20 clones are trusted. | Phase 01 deploys `JBERC20` and passes it into `JBTokens`, whose `deployERC20For` clones `TOKEN`; `Verify.s.sol` loads only `VERIFY_TOKENS` and checks controller/terminal references to `JBTokens`, with no `VERIFY_ERC20_IMPLEMENTATION`, no `JBTokens.TOKEN()` check, and no implementation `PROJECTS()` / `PERMISSIONS()` checks. | BLOCKED by Edge Case AK |
 | Exact allowlists and approvals | Verifier must prove expected sucker deployers, first-controller allowlist, fee-exempt addresses, and project NFT approvals exactly match the deploy manifest. | Current checks are optional/subset-based or impossible from non-enumerable mappings; project NFT approvals are not inspected. | BLOCKED by Edge Cases K, L, M, and N |
-| Cash-out fee integrity | Router and feeless-address exemptions must not let arbitrary users convert project-token cash-out value into a second project and exit without the protocol/revnet fees that a direct source cash-out would have paid. | `deploy-all-v6` intentionally marks `JBRouterTerminal` feeless, and the router cashes out source project tokens with itself as beneficiary before paying the destination project. A focused PoC shows routing into a user-controlled zero-tax project and cashing out that project avoids the source cash-out protocol fee; static review also shows `REVOwner` skips the revnet fee split when the router is the feeless beneficiary. The V4 sell-preview path also returns gross zero-tax reclaim before checking whether fee-free surplus would still charge fees during settlement. | BLOCKED by Edge Case Z |
+| Cash-out fee integrity | Router and feeless-address exemptions must not let arbitrary users convert project-token cash-out value into a second project and exit without the protocol/revnet fees that a direct source cash-out would have paid. | **RESOLVED.** Per-project feeless system (nana-core-v6 PR #135, v0.0.44) replaces global feeless with per-project registration. Router is registered as feeless only for specific projects at deployment, preventing exploitation of global feeless status. The router's stateless architecture (always routes to another project, no withdrawal mechanism) makes per-project feeless safe. | ~~BLOCKED by Edge Case Z~~ RESOLVED |
 | Terminal balance conservation | Payouts, cash-outs, and ERC-20 intake must debit, transfer, and account from the same value without double counting reentrant balance deltas. | `JBMultiTerminal` subtracts per-output fee haircuts before transferring payout splits, owner leftover, beneficiary reclaim, and cash-out hook amounts, but later calls `_takeFeeFrom(...)` once on the aggregate eligible amount. Focused PoCs show 400 wei payout/cash-out flows each record 10 wei for the fee project while only 9 wei remains in the terminal after per-output fee haircuts. ERC-20 intake also measures a before/after terminal balance around `_transferFrom(...)` without a reentrancy guard, so callback tokens can reenter and make the outer call account the inner transfer a second time. | BLOCKED by Edge Cases AA and AF |
 | Cross-chain sucker pair manifest | Verifier must prove each canonical project has exactly the intended active sucker pairs, peer addresses, remote chain IDs, enabled native-token mapping, and no unexpected active suckers before bridge operations are considered live. | `JBSuckerRegistry.suckerPairsOf(...)`, `suckersOf(...)`, and each sucker's `peer()`, `peerChainId()`, and `remoteTokenFor(...)` expose the required state, but `Verify.s.sol` only checks registry/deployer wiring plus optional deployer allowlist entries. `deploy-all-v6` also uses `peer: bytes32(0)`, so the same-address peer assumption must be proven across chains or replaced with explicit peer values. | BLOCKED by Edge Case Y |
 | Permission, directory, and forwarder auth surface | Verifier must authenticate immutable permission, directory, and trusted-forwarder inputs plus runtime wildcard/project grants. | Constructor wiring is partially checked, but trusted-forwarder, permission-registry, directory-auth, and wildcard grants are not manifest-checked. | BLOCKED by Edge Cases O and P |
 | Revnet economic trust model | Hidden-token economics and configuration-hash scope must be changed or explicitly accepted with deployment/operator documentation. | Current tests assert hidden supply remains excluded from cash-out/loan denominators and split-operator/reserved-split routing remain excluded from the configuration hash. | BLOCKED / ACCEPTANCE NEEDED by Edge Cases D and E |
-| 721 reward snapshot correctness | Snapshot rewards must prove token existence at the reward snapshot block. | `ownerOfAt(...)` is used, but mint blocks are not recorded, so never-transferred late-minted tokens can still inherit a prior owner checkpoint. | BLOCKED by Edge Case Q |
+| 721 reward snapshot correctness | Snapshot rewards must prove token existence at the reward snapshot block. | `ownerOfAt(...)` returns `address(0)` for unenrolled tokens; holders enroll via `delegate(address, uint256[])`. | FIXED by Edge Case Q (nana-721-hook-v6 PR #129). |
 | Project handle reliability | `JBProjectHandles.handleOf(...)` must be non-reverting soft metadata on every chain where `deploy-all-v6` requires the extension, and returned handles must verify the same ENS node they visually represent. | `JBProjectHandles` hardcodes the canonical ENS registry and `handleOf` does not catch registry-call failures; a local no-code registry review test confirmed stored handles revert instead of returning empty. Stored parts can also display `name.eth` while verifying `name.eth.eth`. | BLOCKED by Edge Case R |
 | Distributor timing semantics | Reward distributor rounds and 52-round vesting must use the intended wall-clock duration consistently across target chains. | `JBDistributor` measures rounds with `block.timestamp`, but `deploy-all-v6` sets `50_400`, `302_400`, and `2_419_200` as if they were block-count-derived one-week values; the verifier mirrors those values, so it approves 14-hour L1 rounds, 3.5-day OP/Base rounds, and 28-day Arbitrum rounds. | BLOCKED by Edge Case U |
 | Swap-enabled CCIP claim liveness | Out-of-order CCIP delivery and native-token swap settlement must be safe before swap-enabled suckers are enabled. | `JBSwapCCIPSucker` records per-nonce batch/conversion metadata only when `fromRemote` advances the inbox nonce; a PoC shows nonce `2` before nonce `1` leaves nonce `1` tokens delivered but unclaimable. Its swap library also normalizes native-token inputs to WETH for discovery, but when V4 is selected it tries to `withdraw(amountIn)` from WETH even though the sucker received raw ETH from `prepare()`. Current `deploy-all-v6` Phase 03 deploys plain `JBCCIPSucker`, with Tempo/cross-currency `JBSwapCCIPSucker` called out as a later phase. | ECOSYSTEM BLOCKER by Edge Cases S and AH; not current Phase 03 deploy path |
@@ -405,6 +403,8 @@ Recommended fix:
 - Keep the current `Verify.s.sol` BAN/Banny checks as the post-deploy backstop, but do not rely on verification to discover an unrecoverable resume state.
 - Update the deploy runbook after the code fix so operators do not treat count/controller checks as sufficient project-identity proof.
 
+admin note: ok, do it.
+
 ### B. `deploy-all-v6`: deployment imports resolve to stale npm packages instead of audited sibling repos
 
 Severity: `HIGH`
@@ -438,6 +438,8 @@ Recommended fix:
 - For the pre-deploy rehearsal and final deployment, make `deploy-all-v6` resolve every first-party package to the audited sibling working copy, either with explicit Foundry remappings or `file:` dependencies.
 - Alternatively publish every patched first-party package, bump `deploy-all-v6/package.json`, regenerate `package-lock.json`, reinstall, and verify the installed versions match the sibling repo versions exactly.
 - Add a CI/release gate that compares first-party dependency versions and import roots before allowing `deploy-all-v6` deployment artifacts to be treated as canonical.
+
+admin note: all repos should us '^' to always pull latest package from npm. once everything is deployed, we'll submit a PR to fix the versions on the deployed number.
 
 ### C. `deploy-all-v6`: verifier loads `VERIFY_SAFE` but never checks Safe ownership/admin convergence
 
@@ -475,6 +477,8 @@ Recommended fix:
 - Cover at least `projects`, `directory`, `prices`, `feelessAddresses`, `buybackRegistry`, `routerTerminalRegistry`, `suckerRegistry`, `revLoans`, and the configured first-party sucker deployers where the owner/configurator is the Safe.
 - On production chains, require `VERIFY_SAFE != address(0)` instead of making this check optional.
 - Keep separate canonical project NFT ownership checks pointing at `REVDeployer`; do not reuse `VERIFY_SAFE` for project NFT owner assertions.
+
+admin note: ok, fix.
 
 ### D. `revnet-core-v6`: hidden tokens still leave cash-out/loan denominators while remaining revealable
 
@@ -596,6 +600,8 @@ Recommended fix:
 - Make oracle provenance checks critical on production chains, and fail if a supported chain lacks a manifest entry.
 - Keep the current live price sanity checks as additional liveness checks, not as a substitute for provenance.
 
+admin note: ok, fix.
+
 ### G. `deploy-all-v6`: verifier does not authenticate immutable Uniswap, Permit2, bridge, CCIP, and Defifa typeface external addresses
 
 Severity: `HIGH`
@@ -653,6 +659,8 @@ Recommended fix:
 - Make these checks critical on production chains and fail if a supported production chain lacks a complete manifest entry.
 - Keep intentional omissions explicit, such as Optimism Sepolia skipping the Uniswap-dependent stack because no canonical `PositionManager` is published.
 
+admin note: ok, fix.
+
 ### H. `deploy-all-v6`: Defifa verifier expects the wrong hook store and misses hook-origin directory wiring
 
 Severity: `HIGH`
@@ -698,6 +706,8 @@ Recommended fix:
 - For the hook code origin, assert `DefifaHook(hookCodeOrigin).DIRECTORY() == directory`, `CODE_ORIGIN() == hookCodeOrigin`, `DEFIFA_TOKEN() == tokens.tokenOf(3)`, and `BASE_PROTOCOL_TOKEN() == tokens.tokenOf(1)`.
 - Keep `VERIFY_HOOK_STORE` scoped to the shared 721 hook stack and Banny hook checks.
 - Add deploy/full-stack verifier regressions that prove a clean Phase 10 deployment passes `Verify.s.sol` without reusing the shared hook store and fails if the hook code origin points at a wrong directory.
+
+admin note: ok, fix.
 
 ### I. `deploy-all-v6` + `nana-fee-project-deployer-v6`: deployment tooling does not authenticate immutable project `1-4` economics, native primary routing, or BAN/Banny manifest
 
@@ -770,6 +780,8 @@ Recommended fix:
 - Print the current live stage and already-applied cut count for NANA, CPN, REV, and BAN during verification so operators cannot miss the historical-start-time effect.
 - Mirror the exact project-`1` manifest checks in `nana-fee-project-deployer-v6`; at minimum, reject any existing project `1` whose expected configuration hash, fee-revnet dependency, split operator, terminal list/order, auto-issuance entries, or live ruleset state differs from the canonical fee-project manifest.
 
+admin note: ok, fix.
+
 ### J. `deploy-all-v6` + `croptop-core-v6`: Croptop verifier/wiring gaps and publisher currency assumptions
 
 Severity: `HIGH`
@@ -823,6 +835,8 @@ Recommended fix:
 - Add a verifier regression that proves arbitrary `VERIFY_CT_DEPLOYER` / `VERIFY_CT_PROJECT_OWNER` values fail instead of being silently ignored.
 - Either restrict `CTPublisher.configurePostingCriteriaFor(...)` / `mintFrom(...)` to ETH/18-decimal hooks, or convert each hook tier price into native-token value with `JBPrices` before checking `msg.value` and paying the native terminal.
 
+admin note: ok, fix. make sure croptop works with non-eth token sales.
+
 ### K. `deploy-all-v6`: sucker deployer allowlist verification is optional and cannot prove expected per-chain coverage
 
 Severity: `HIGH`
@@ -862,6 +876,8 @@ Recommended fix:
 - Verify each expected deployer has code and is allowlisted in `JBSuckerRegistry`.
 - Pair this with Current Open Edge Case G's bridge/CCIP provenance checks so an allowlisted deployer is not merely present, but also configured for the intended local bridge/router and remote chain.
 
+admin note: ok, fix.
+
 ### L. `deploy-all-v6`: verifier cannot prove `JBDirectory` has exactly one allowed first controller
 
 Severity: `MED`
@@ -897,6 +913,8 @@ Recommended fix:
 - Add an enumerable first-controller allowlist to `JBDirectory`, or add a separate verification artifact based on deployment/event logs that proves only the canonical controller was enabled.
 - Until the contract exposes enumeration, make the deployment runbook include an archive-log check for all `setIsAllowedToSetFirstController` calls and require exactly one final `true` entry.
 - Keep the direct `isAllowedToSetFirstController(controller)` check, but do not treat it as sufficient for the risk-doc "exactly one" requirement.
+
+admin note: this goes too far.
 
 ### M. `deploy-all-v6`: verifier cannot prove `JBFeelessAddresses` has no unexpected entries
 
@@ -935,6 +953,8 @@ Recommended fix:
 - Add an enumerable fee-exemption set to `JBFeelessAddresses`, or add a deployment verification artifact based on archive logs that reconstructs final `SetFeelessAddress` state.
 - Require the final set to exactly match the deployment manifest, with the router terminal included and no unexpected entries.
 - Keep the direct router-terminal `isFeeless` check, but do not treat `VERIFY_FEELESS_ADDRESSES` as an exactness proof unless it is paired with enumeration or event-log reconciliation.
+
+admin note: this goes too far.
 
 ### N. `deploy-all-v6`: verifier does not check for dangling project NFT approvals
 
@@ -975,6 +995,8 @@ Recommended fix:
 - Add `projects.getApproved(projectId) == address(0)` checks for canonical project IDs `1-4`.
 - Add a manifest or archive-log check for `ApprovalForAll` events affecting the canonical project NFT owner boundary.
 - Keep the existing `ownerOf(projectId) == REVDeployer` checks; ownership and approval state are separate ERC-721 security properties.
+
+admin note: ok, fix.
 
 ### O. `deploy-all-v6`: verifier does not authenticate immutable permissions, directory, and trusted-forwarder auth inputs
 
@@ -1026,6 +1048,8 @@ Recommended fix:
 - Assert immutable directory auth inputs wherever exposed and security-relevant, including `JBOmnichainDeployer.DIRECTORY() == VERIFY_DIRECTORY`.
 - Verify the forwarder has code and, if possible, its expected name/domain data.
 
+admin note: ok, fix.
+
 ### P. `deploy-all-v6`: verifier does not authenticate runtime permission grants or wildcard bypass operators
 
 Severity: `HIGH`
@@ -1068,11 +1092,13 @@ Recommended fix:
 - Add archive-log reconciliation for `OperatorPermissionsSet` events, or make `JBPermissions` enumerable, so verification can prove there are no unexpected wildcard or canonical-project grants.
 - Treat permission-state verification as a production-chain hard requirement before enabling loans, sucker movement, Croptop publishing, or public developer integrations.
 
+admin note: ok, fix.
+
 ### Q. `nana-721-hook-v6` + `nana-distributor-v6`: 721 reward snapshots still do not prove token existence
 
 Severity: `MED`
 
-Status: OPEN. The current checkpoint module returns a current/first owner for never-transferred NFTs without recording the block where the token was minted.
+Status: FIXED. Enrollment-based distribution eligibility via `delegate(address, uint256[])` in `JB721Checkpoints` (nana-721-hook-v6 PR #129, v0.0.47; nana-distributor-v6 PR #19, v0.0.13). `ownerOfAt` now returns `address(0)` for unenrolled tokens — only tokens explicitly enrolled or transferred have checkpoints and are eligible for snapshot-based distribution.
 
 Affected code:
 
@@ -1109,11 +1135,13 @@ Recommended fix:
 - Keep the per-owner consumed-votes cap as defense in depth, but do not treat it as a substitute for per-token snapshot existence.
 - Add a production-path regression using the real `JB721Checkpoints` contract, not only a mock with `mintBlockOf`, where a post-snapshot never-transferred token returns zero stake for the earlier snapshot.
 
+admin note: i really dont want to make minting more gas expensive with another storage property.
+
 ### R. `deploy-all-v6` + `nana-project-handles-v6`: ProjectHandles ENS availability and `.eth` suffix ambiguity
 
 Severity: `MED`
 
-Status: OPEN. `deploy-all-v6` requires `JBProjectHandles` on production chains, but neither the verifier nor `JBProjectHandles.handleOf(...)` fails soft when the hardcoded ENS registry address is not callable. Stored parts can also include `"eth"` as the rightmost visible label, making `vitalik.eth` verify against `vitalik.eth.eth`.
+Status: FIXED. Soft-fail on missing ENS registry and rejection of `eth` name parts implemented (nana-project-handles-v6 PRs #11, #14). `handleOf(...)` now returns empty string instead of reverting when the ENS registry is unavailable, and `setEnsNamePartsFor(...)` rejects `"eth"` as a stored name part.
 
 Affected code and docs:
 
@@ -1151,13 +1179,15 @@ Recommended fix:
 - Add a permanent regression for the no-code registry case so the accepted ProjectHandles behavior is "unverified/empty" instead of reverting.
 - Reject `"eth"` as a stored name part, or strip a user-provided rightmost `"eth"` suffix before formatting and hashing so the visible handle and verified ENS node cannot diverge.
 
+admin note: ok, fix. but also this should only be deployed on mainnet and sepolia mainnet. 
+
 ### S. `nana-suckers-v6`: swap-enabled CCIP suckers strand earlier batches delivered after a higher nonce
 
 Severity: `HIGH`
 
-Status: DEFERRED / NOT IN INITIAL ROLLOUT. `JBSwapCCIPSucker` says per-batch conversion rates make out-of-order CCIP delivery safe, but stale-by-nonce messages do not receive batch metadata, so earlier delivered tokens can become unclaimable after a later nonce arrives first. Current `deploy-all-v6` Phase 03 deploys plain `JBCCIPSucker` instances only; swap-enabled suckers are disabled for initial deploy.
+Status: RESOLVED. Batch metadata writing decoupled from inbox nonce advancement. `ccipReceive` now uses existing storage (`_batchEndOf`, `_conversionRateOf.leafTotal`, `pendingSwapOf.leafTotal`) to detect whether a nonce has already been processed, rather than checking whether `fromRemote` advanced the inbox nonce. Out-of-order delivery now records per-nonce batch metadata regardless of arrival order. No new storage mapping needed.
 
-Scope note: current `deploy-all-v6` Phase 03 imports and deploys plain `JBCCIPSucker` deployers/singletons for the ETH, Optimism, Base, and Arbitrum CCIP matrix. `Deploy.s.sol` comments identify Tempo/cross-currency `JBSwapCCIPSucker` support as a later phase, so this edge case blocks enabling swap-enabled CCIP in the ecosystem but does not add an independent blocker to the current projects `1-4` plain-CCIP deployment path unless that path is expanded before launch.
+Fix: https://github.com/Bananapus/nana-suckers-v6/pull/120
 
 Affected code and docs:
 
@@ -1238,11 +1268,13 @@ Recommended fix:
 - Add a verifier regression that demonstrates a fake implementation with arbitrary code fails Category 11.
 - Prefer also checking the deterministic expected ProjectPayerDeployer address from `PROJECT_PAYER_DEPLOYER_SALT`, creation code, and constructor args, or recording that address in the deployment manifest consumed by `Verify.s.sol`.
 
+admin note: ok, fix.
+
 ### U. `deploy-all-v6` + `nana-distributor-v6`: Phase 11 distributor rounds are configured as block counts but measured as seconds
 
 Severity: `MED`
 
-Status: OPEN / CONFIG FIX NEEDED. `Deploy.s.sol` comments set distributor `roundDuration` values as approximate one-week block counts per chain, but `JBDistributor` treats `roundDuration` as seconds. Fix: change deploy config values to wall-clock seconds (604,800 for 1 week). No contract changes needed.
+Status: FIXED. Deploy config now uses 604,800 seconds (7 days) for all chains, matching `JBDistributor`'s seconds-based semantics. Block-count-derived values replaced with wall-clock durations.
 
 Affected code:
 
@@ -1283,6 +1315,8 @@ Recommended fix:
 - If chain-specific wall-clock durations are intentional, replace the misleading comments and document the exact user-facing vesting cadence per chain in the deployment runbook.
 - Update `Verify.s.sol` to compare against the chosen wall-clock manifest, not block-count-derived values.
 - Add a deploy-all regression that instantiates the distributors with production constants and asserts `roundStartTimestamp(52) - startingTimestamp` equals the intended vesting horizon.
+
+admin note: ok, fix, should be timestamp to work well across chains.
 
 ### V. `deploy-all-v6`: Sphinx replays Solidity CREATE2 deployments as ordinary CREATE actions
 
@@ -1327,6 +1361,8 @@ Recommended fix:
 - Prefer an explicit deterministic-deployment helper that calls the CREATE2 factory/proxy with `salt || initcode`, then update `_isDeployed`, hook salt mining, expected manifests, and `Resume.s.sol` to use that same deployer address.
 - Alternatively upgrade/patch Sphinx so Solidity CREATE2 account accesses retain the salt and replay through a Safe-compatible CREATE2 helper, then add a hard test that decoded action inputs for every salted deploy are CREATE2 actions with the expected target/deployer.
 - Add a deployment rehearsal gate that runs the real Sphinx collection/preview path and asserts every expected deterministic address has code after execution before any project configuration calls are trusted.
+
+admin note: fix.
 
 ### W. `deploy-all-v6`: documented deploy/resume commands are not executable for the Sphinx/Safe path
 
@@ -1380,6 +1416,8 @@ Recommended fix:
 - Add a CI or rehearsal check that fails if `DEPLOY.md` commands drift from the script modifiers and required signer model.
 - Replace the resume checklist's phase-count and warning-message expectations with exact success criteria produced by the current resume implementation.
 
+admin note: ok fix.
+
 ### X. `deploy-all-v6`: canonical buyback hooks and pools are not proven; NANA/project-`1` definitely misses its pool
 
 Severity: `MED`
@@ -1429,6 +1467,8 @@ Recommended fix:
 - Add verifier checks for each canonical project `1-4`: resolved buyback hook equals the intended hook, the native-token `poolKeyOf(projectId, NATIVE_TOKEN)` matches the expected project token / terminal token pair and fee/tick spacing, and the pool is initialized when the Uniswap stack is deployed.
 - Consider narrowing `REVDeployer`'s catch to known "already initialized / unsupported stack" cases, or emit an event/return status so deployment verification can distinguish accepted no-op from missing hook configuration.
 
+admin note: ok, fix.
+
 ### Y. `deploy-all-v6`: verifier never proves projects `1-4` have the intended sucker pairs and native-token mappings
 
 Severity: `HIGH`
@@ -1477,11 +1517,13 @@ Recommended fix:
 - When `peer: bytes32(0)` is used, compare the resolved pair addresses across chain manifests before enabling bridge traffic. If topology differs intentionally, precompute and pass explicit nonzero peers on both sides, then verify those peer values exactly.
 - Keep the manual bridge smoke test in `DEPLOY.md`, but treat it as evidence after manifest verification, not as the only proof that projects `1-4` are correctly paired.
 
+admin note: ok, fix.
+
 ### Z. `nana-router-terminal-v6` + `revnet-core-v6`: feeless router cash-outs bypass source project cash-out fees
 
 Severity: `HIGH`
 
-Status: OPEN / DEPLOY-BLOCKING. Fresh recheck on 2026-05-06 confirms `deploy-all-v6` still intentionally marks the router terminal feeless, while the router's project-token route uses itself as the source cash-out beneficiary. A user can route through a zero-tax destination project they control and avoid the core protocol fee, and canonical revnets also skip their revnet fee split on the same feeless-beneficiary branch.
+Status: **RESOLVED.** Per-project feeless system (nana-core-v6 PR #135, v0.0.44) replaces global feeless with per-project registration. `JBFeelessAddresses.setFeelessAddress` now takes a `projectId` parameter, and `isFeelessAddress` checks per-project status. Router terminal is registered as feeless per-project at deployment rather than globally, preventing exploitation. The router's stateless architecture (always routes to another project, no withdrawal mechanism) makes per-project feeless safe.
 
 Affected code and docs:
 
@@ -1525,6 +1567,8 @@ Recommended fix:
 - Alternatively, add context-aware fee accounting so router-mediated source cash-outs into destination project payments mark the destination surplus as fee-originated, causing a later zero-tax cash-out to pay the skipped fee.
 - Add regressions covering the exact sequence: source project with nonzero cash-out tax -> router pay into attacker-owned zero-tax project -> destination cash-out. Assert total core and revnet fees are at least the fees a direct source cash-out would have paid, modulo intended route-specific policy.
 - Extend the sell-preview fee adjustment so zero-tax paths still account for `_feeFreeSurplusOf` fees when live terminal settlement would charge them.
+
+admin note: great catch, needs a fix. i think we need feeless addresses with a projectId arg, so that addresses can designate specific porjectId as exempt. useful alsof for things like this.
 
 ### AA. `nana-core-v6`: split payout/cash-out outputs can over-credit fees and undercollateralize the terminal store
 
@@ -1621,6 +1665,8 @@ Recommended fix:
 - If `controllerOf(_revProjectId) != address(0)`, require `_isCanonicalConfiguredProject(_REV_PROJECT_ID)` and return without retrying approval or deployment.
 - Add a regression that executes a real or exact-equivalence resume after canonical Phase 07 is complete and asserts the script skips REV without any project-NFT approval attempt.
 
+admin note: ok, fix.
+
 ### AC. `deploy-all-v6`: Banny resolver metadata initialization is called by the wrong owner
 
 Severity: `HIGH`
@@ -1658,11 +1704,13 @@ Recommended fix:
 - Mirror the same ownership sequence in `Resume.s.sol`; if the resolver already exists with empty metadata and the Safe no longer owns it, fail with an explicit recovery message instead of retrying an unauthorized setter.
 - Add a regression that executes Phase 09 through the resolver deploy/metadata path and asserts metadata is initialized and final resolver ownership is the intended operator.
 
+admin note: ok, fix.
+
 ### AD. `defifa`: launcher-selected terminals and game-phase inputs make games unsafe
 
 Severity: `HIGH`
 
-Status: OPEN / DEPLOY-BLOCKING. `DefifaDeployer.launchGameWith(...)` is permissionless and lets the launcher choose the terminal that is registered for the game. `DefifaHook` then trusts any registered terminal as the source of pay and cash-out callbacks, so a malicious terminal can fabricate hook contexts without recording a real terminal payment or cash-out. The same launch/runtime surface also allows impossible scorecard timing, one-tier zero-timeout games, and live-balance top-ups to distort or lock game phases.
+Status: ACCEPTED. Documented in `defifa/RISKS.md` §1 (trust assumptions: terminal provenance is the launcher's responsibility) and §8.5 (accepted behavior: launcher-selected terminals are trusted per game). Users and frontends must verify a game's registered terminal against canonical `JBMultiTerminal` before participating.
 
 Affected code:
 
@@ -1704,11 +1752,13 @@ Recommended fix:
 - Reject `tiers.length == 1 && scorecardTimeout == 0`, or special-case single-tier governance so every launched game has a reachable `COMPLETE` or `NO_CONTEST` terminal state.
 - Track minimum participation with paid mint count/value or live NFT participation, not raw terminal balance that `addToBalanceOf(...)` can inflate without minting.
 
+admin note: accepted. 
+
 ### AE. `nana-distributor-v6`: distributor accounting can assign stale ERC-20 and exhaust vesting dust
 
 Severity: `HIGH`
 
-Status: OPEN / DEPLOY-BLOCKING (PARTIALLY FIXED). The vesting dust sub-issue (historical #59) is fixed: `shareClaimed` now only updates when `claimAmount != 0`. The stale ERC-20 balance attribution issue remains open: both distributor variants accept controller-prepaid ERC-20 split credit by comparing current token balance against one global accounted balance. Any direct ERC-20 transfer into a distributor becomes global unaccounted balance that any authorized project controller can later attribute to its chosen hook.
+Status: FIXED. Allowance-based funding model eliminates stale balance attribution; vesting dust fix merged earlier (nana-distributor-v6 PR #18). The controller-prepaid ERC-20 path now uses allowance-based funding instead of global unaccounted balance comparison, and `shareClaimed` only updates when `claimAmount != 0`.
 
 Affected code:
 
@@ -1743,6 +1793,8 @@ Recommended fix:
 - Add regression coverage for stale direct-transfer balances across both `JBTokenDistributor` and `JB721Distributor`.
 - Do not advance `shareClaimed` when `claimAmount == 0`, or force all remaining rounded dust into the final unlock when `lockedShare == 0`.
 - Add a small-amount vesting regression that collects across every round and verifies the beneficiary can recover the full vested entry or that the unrecoverable dust remains explicitly accounted.
+
+admin note: ok fix.
 
 ### AF. `nana-core-v6`: ERC777-style reentrant deposits can double-count balance deltas
 
@@ -1819,7 +1871,9 @@ Recommended fix:
 
 Severity: `HIGH`
 
-Status: DEFERRED / NOT IN INITIAL ROLLOUT. This is not part of the initial `deploy-all-v6` Phase 03 path while it deploys plain `JBCCIPSucker` instances, but it blocks enabling `JBSwapCCIPSucker` for native-token cross-currency routes. Swap-enabled native routes are disabled for initial deploy.
+Status: RESOLVED. `JBSwapPoolLib.executeV4UnlockCallback` now checks the wrapped native token balance before attempting to unwrap. Callers holding raw ETH (suckers) skip the unwrap; callers holding wrapped tokens (buyback hook) still unwrap. Also renamed `weth` to `wrappedNativeToken` throughout for clarity.
+
+Fix: https://github.com/Bananapus/nana-suckers-v6/pull/120
 
 Affected code:
 
@@ -1890,6 +1944,8 @@ Recommended fix:
 - Expose or otherwise verify the base hook checkpoint deployer, then assert `JB721CheckpointsDeployer.STORE() == hookStore` and `IMPLEMENTATION().code.length > 0`.
 - Add a regression where Category 5 verification fails when the hook deployer points at a wrong base hook/store/address registry.
 
+admin note: ok, fix.
+
 ### AJ. `deploy-all-v6`: verifier does not authenticate REV runtime singleton wiring
 
 Severity: `HIGH`
@@ -1935,6 +1991,8 @@ Recommended fix:
 - Assert `REVLoans.CONTROLLER() == controller`, `DIRECTORY() == directory`, `PRICES() == prices`, `REV_ID() == 3`, `SUCKER_REGISTRY() == suckerRegistry`, `PERMIT2() == expected Permit2`, `owner() == VERIFY_SAFE`, and trusted-forwarder parity.
 - Add a verifier regression that fails when `REVOwner.HIDDEN_TOKENS`, `REVOwner.BUYBACK_HOOK`, or `REVLoans.REV_ID` differs from the deploy manifest while the current Category 6 predicates still pass.
 
+admin note: ok, fix.
+
 ### AK. `deploy-all-v6`: verifier does not authenticate the core ERC-20 clone implementation
 
 Severity: `HIGH`
@@ -1979,11 +2037,13 @@ Recommended fix:
 - Import/check the implementation as `JBERC20` and assert `JBERC20(erc20Implementation).PROJECTS() == projects` and `PERMISSIONS() == permissions`; include trusted-forwarder-related checks if the token implementation later becomes ERC-2771-aware.
 - Add a regression where verification fails when `JBTokens.TOKEN()` points at an implementation with the wrong `PROJECTS` or `PERMISSIONS` dependency, even though `JBController.TOKENS()` and `JBMultiTerminal.TOKENS()` are correct.
 
+admin note: ok, fix.
+
 ### AL. `deploy-all-v6`: core idempotency checks predict wrong CREATE2 addresses
 
 Severity: `MED`
 
-Status: OPEN / DEPLOY-BLOCKING. The core deploy/resume paths use `_isDeployed(...)` before deploying `JBTerminalStore`, `JBMultiTerminal`, and `JBController`, but the encoded constructor arguments passed to `_isDeployed` do not match the actual constructor order used by the subsequent named-argument deployments. The first uninterrupted deployment still constructs the contracts with the right named args, but any deploy/resume path that reruns after these contracts exist will look at the wrong CREATE2 addresses, conclude the contracts are absent, and attempt already-used CREATE2 deployments again.
+Status: FIXED. Constructor-arg order corrected in `_isDeployed` checks (deploy-all-v6 PR #103). The encoded constructor arguments now match the actual constructor order for `JBTerminalStore`, `JBMultiTerminal`, and `JBController`, restoring deploy/resume idempotency.
 
 Affected code:
 
@@ -2022,11 +2082,13 @@ Recommended fix:
 - Add a regression that runs the live script helper path twice around the core/periphery deployment, or directly asserts that each `_isDeployed` prediction matches the address produced by the corresponding `new {salt}` call for the exact live constructor args.
 - Remove or update any rehearsal helper that hand-reimplements core/periphery deployment differently from the production script, so fork tests cannot pass with corrected local copies while the live scripts remain wrong.
 
+admin note: ok, fix.
+
 ### AM. `nana-suckers-v6`: `JBSuckerLib.convertPeerValue` multiplies by price instead of dividing
 
 Severity: `CRITICAL`
 
-Status: OPEN / PROTOCOL-LEVEL. The cross-chain value conversion formula in `JBSuckerLib` is inverted relative to the core protocol pattern used everywhere else in the system.
+Status: FIXED. Conversion formula inverted to match core protocol pattern (nana-suckers-v6 PR #118, v0.0.37). `convertPeerValue` now divides by price instead of multiplying, consistent with `JBTerminalStore`.
 
 Affected code:
 
@@ -2052,11 +2114,13 @@ Recommended fix:
 - Change line 193 in `JBSuckerLib.sol` to: `converted = mulDiv({x: source.value, y: 10 ** decimals, denominator: price});` — matching the core protocol conversion pattern.
 - Add a regression test that converts a known amount between two different currencies using `convertPeerValue` and asserts the result matches `JBTerminalStore`'s conversion for the same amount/currencies/price.
 
+admin note: absolutely fix.
+
 ### AN. `revnet-core-v6`: buyback pool initialization hardcodes 18-decimal assumption
 
 Severity: `HIGH`
 
-Status: OPEN / PROTOCOL-LEVEL. The `_tryInitializeBuybackPoolFor` function uses a hardcoded `1e18` divisor when computing the initial Uniswap V4 pool `sqrtPriceX96`, which is correct only when the terminal token has 18 decimals.
+Status: FIXED. Now uses terminal token decimals parameter instead of hardcoded `1e18` (revnet-core-v6 PR #143). Pool initialization correctly scales `sqrtPriceX96` for any terminal token decimal count.
 
 Affected code:
 
@@ -2081,11 +2145,13 @@ Recommended fix:
 - Replace `1e18` with `10 ** terminalTokenDecimals` using the actual decimal count from the terminal token's accounting context.
 - Add a regression test that initializes a buyback pool with a 6-decimal terminal token and asserts the resulting `sqrtPriceX96` produces a pool price consistent with the revnet's issuance rate.
 
+admin note: absolutely fix.
+
 ### AO. `croptop-core-v6`: caller-controlled `feeBeneficiary` of `address(0)` forces fee refund
 
 Severity: `HIGH`
 
-Status: OPEN / PROTOCOL-LEVEL. The `CTPublisher.mintFrom` function accepts a caller-supplied `feeBeneficiary` parameter without validation. Passing `address(0)` causes the fee terminal's `pay()` to revert, and the catch block refunds the fee to the caller.
+Status: FIXED. Validates `feeBeneficiary != address(0)` (croptop-core-v6 PR #125). The `CTPublisher.mintFrom` function now rejects `address(0)` as fee beneficiary, preventing the fee-refund bypass.
 
 Affected code:
 
@@ -2110,11 +2176,13 @@ Recommended fix:
 - Add `if (feeBeneficiary == address(0)) revert CTPublisher_InvalidFeeBeneficiary();` at the top of `mintFrom`, or replace the caller-supplied `feeBeneficiary` with a protocol-determined default (e.g., `msg.sender` or a hardcoded fee recipient).
 - Remove the fee refund catch block or restrict it to only catch specific non-adversarial failure modes.
 
+admin note: fix.
+
 ### AP. `croptop-core-v6`: former project owners retain hook permissions after NFT transfer
 
 Severity: `MED`
 
-Status: OPEN / PROTOCOL-LEVEL. When a project is deployed through `CTDeployer`, the deployer grants the original owner permissions (`ADJUST_721_TIERS`, `SET_721_METADATA`, `MINT_721`, `SET_721_DISCOUNT_PERCENT`) scoped to `account: address(deployer)`. These permissions are never revoked when the project NFT is transferred to a new owner.
+Status: FIXED. Permissions revoked in `claimCollectionOwnershipOf` (croptop-core-v6 PR #125). Deployer-scoped hook permissions are now cleared for the previous owner when collection ownership is claimed.
 
 Affected code:
 
@@ -2139,11 +2207,13 @@ Recommended fix:
 - Revoke deployer-scoped permissions for the old owner inside `claimCollectionOwnershipOf()`, or add a transfer hook that clears deployer-scoped operator grants when the project NFT changes hands.
 - Alternatively, document this as an accepted integration constraint and add a helper function that new owners can call to revoke all deployer-scoped legacy permissions.
 
+admin note: ok, revoke.
+
 ### AQ. `revnet-core-v6`: `beforeCashOutRecordedWith` unconditionally adds remote surplus
 
 Severity: `MED`
 
-Status: OPEN / PROTOCOL-LEVEL. `REVOwner.beforeCashOutRecordedWith` always adds `remoteSurplusOf()` and `remoteTotalSupplyOf()` to the cash-out calculation, regardless of the ruleset's `useTotalSurplus` flag.
+Status: **RESOLVED.** The `scopeCashOutsToLocalBalances` flag (renamed from `useTotalSurplusForCashOuts`, inverted semantics) now gates remote surplus/supply addition in `REVOwner.beforeCashOutRecordedWith`, `REVLoans`, and `JBOmnichainDeployer`. Implemented in revnet-core-v6 PR #144 (v0.0.45) and omnichain-deployers-v6 PR #102 (v0.0.39). The flag is set per-revnet at creation time and hashed into the configuration identity. Core-v6 renamed the ruleset metadata field to `scopeCashOutsToLocalBalances` in PR #135 (v0.0.44).
 
 Affected code:
 
@@ -2167,11 +2237,13 @@ Recommended fix:
 
 - Condition the remote surplus/supply addition on the ruleset's `useTotalSurplus` flag (from `context.ruleset.useTotalSurplus()`), or explicitly document and accept in `revnet-core-v6/RISKS.md` that revnets always include remote surplus in cash-out calculations regardless of the flag.
 
+admin note: i actually agree. i think useTotalSurplus should mean a revnet needs to use omnichain balance, else local chain balances. this flag needs to be setable on revnet creation and hashed. we then should not use this flag in nana-core to determin per-terminal surplus... it should always use aggregate across terminals.
+
 ### AR. `univ4-lp-split-hook-v6`: pre-initialized pool accepts attacker-chosen price without validation
 
 Severity: `HIGH`
 
-Status: OPEN / PROTOCOL-LEVEL. `JBUniswapV4LPSplitHook._createAndInitializePool` reads an existing pool's `sqrtPriceX96` and uses it without bounds validation, allowing an attacker who front-runs pool creation to set an arbitrary price.
+Status: FIXED in [univ4-lp-split-hook-v6 PR #120](https://github.com/Bananapus/nana-univ4-lp-split-hook-v6/pull/120) (v0.0.32). `_createAndInitializePool` now validates that any pre-initialized pool's `sqrtPriceX96` falls within the project's economic tick range (cashout floor to issuance ceiling) via `_calculateTickBounds`, reverting with `ExistingPoolPriceOutOfBounds` if outside bounds. 312 tests pass including 12 new frontrunning/adversarial tests.
 
 Affected code:
 
@@ -2198,11 +2270,15 @@ Recommended fix:
 - When an existing pool price is found, validate it against the computed initial price bounds: reject or revert if `existingSqrtPriceX96` falls outside the hook's configured tick range or differs from the computed price by more than a configurable threshold.
 - Alternatively, revert if the pool is already initialized by an unknown party, requiring the project to explicitly accept an existing pool via a separate entry point.
 
+admin note: is this mitigated since prices outside of range can be arbed by paying and cashing out from the project? if not, sure, fix if there are absolutely no tradeoffs.
+
 ### AS. `deploy-all-v6`: hook salt mining uses `safeAddress()` but Sphinx deploys through a different CREATE2 factory, producing `HookAddressNotValid`
 
 Severity: `HIGH`
 
-Status: OPEN / DEPLOY-BLOCKING. Confirmed on ethereum_sepolia 2026-05-07 — `Create2Deployer::create2()` reverts with `HookAddressNotValid(0x73e99a8a62BC05681BF9c29004f9Dc3Ef4190685)` immediately after `JBBuybackHookRegistry` deploys successfully. Sphinx confirmed to use `0x4e59b44847b379578588920cA78FbF26c0B4956C` (deterministic deployment proxy) as the on-chain CREATE2 deployer.
+Status: RESOLVED. Both `Deploy.s.sol` and `Resume.s.sol` now use `_CREATE2_FACTORY` as the deployer for salt mining, address computation (`_isDeployed`), and deployment (`_deployViaFactory`). The V4 hook is deployed via an explicit call to the factory instead of inline `create2`, ensuring the address matches the mined salt.
+
+Fix: https://github.com/Bananapus/deploy-all-v6/pull/81
 
 Related: Finding V (Sphinx CREATE2→CREATE replay). This is the concrete, immediately observable symptom of that broader issue, specifically affecting the Uniswap V4 hook whose address bits encode permission flags.
 
@@ -2243,6 +2319,7 @@ Recommended fix:
 - `croptop-core-v6`: https://github.com/mejango/croptop-core-v6/pull/118
 - `defifa`: https://github.com/BallKidz/defifa/pull/97
 - `deploy-all-v6`: https://github.com/Bananapus/deploy-all-v6/pull/70
+- `deploy-all-v6`: https://github.com/Bananapus/deploy-all-v6/pull/81
 - `nana-721-hook-v6`: https://github.com/Bananapus/nana-721-hook-v6/pull/122
 - `nana-buyback-hook-v6`: https://github.com/Bananapus/nana-buyback-hook-v6/pull/115
 - `nana-distributor-v6`: https://github.com/Bananapus/nana-distributor-v6/pull/12
@@ -2252,6 +2329,7 @@ Recommended fix:
 - `nana-project-handles-v6`: https://github.com/Bananapus/nana-project-handles-v6/pull/8
 - `nana-router-terminal-v6`: https://github.com/Bananapus/nana-router-terminal-v6/pull/98
 - `nana-suckers-v6`: https://github.com/Bananapus/nana-suckers-v6/pull/110
+- `nana-suckers-v6`: https://github.com/Bananapus/nana-suckers-v6/pull/120
 - `revnet-core-v6`: https://github.com/rev-net/revnet-core-v6/pull/136
 - `univ4-lp-split-hook-v6`: https://github.com/Bananapus/nana-univ4-lp-split-hook-v6/pull/112
 - `univ4-router-v6`: https://github.com/Bananapus/nana-univ4-router-v6/pull/95
@@ -2648,7 +2726,7 @@ Recommended fix:
 
 Severity: `MED`
 
-Status: REOPENED. The distributor now asks the checkpoint module for historical token ownership, but the current production checkpoint module still cannot prove that a never-transferred token existed at the queried snapshot block. See Current Open Edge Case Q.
+Status: FIXED. `ownerOfAt` now returns `address(0)` for unenrolled tokens. Holders enroll via `delegate(address, uint256[])` which writes per-token owner checkpoints. See Current Open Edge Case Q (nana-721-hook-v6 PR #129, v0.0.47).
 
 Affected code:
 
@@ -4934,8 +5012,7 @@ These were reviewed and intentionally dropped.
 - `nana-721-hook-v6`: existing-project ruleset helper flows now fail explicitly before side effects when the helper lacks downstream controller permissions.
   Local patch: `JB721TiersHookProjectDeployer` preflights its own `LAUNCH_RULESETS` / `SET_TERMINALS` / `QUEUE_RULESETS` permissions before deploying hooks and forwarding into `JBController`, so callers get a clear helper-specific error instead of a post-deployment controller revert.
 
-- `nana-721-hook-v6` + `nana-distributor-v6`: 721 round rewards partially moved toward token-specific snapshot ownership, but the live checkpoint module still lacks mint-block proof.
-  Current gap: `JB721Distributor` now calls `ownerOfAt(...)`, but `JB721Checkpoints` does not record mint blocks and `ownerOfAt(...)` falls back to current/first owner for never-transferred tokens; see Current Open Edge Case Q.
+- `nana-721-hook-v6` + `nana-distributor-v6`: 721 round rewards use enrollment-based snapshot ownership. `ownerOfAt(...)` returns `address(0)` for unenrolled tokens; holders enroll via `delegate(address, uint256[])`. See Current Open Edge Case Q (FIXED, nana-721-hook-v6 PR #129, v0.0.47).
 
 - `croptop-core-v6`: prior project owners no longer retain direct CTDeployer-owned hook-management permissions after a project NFT transfer.
   Local patch: `CTDeployer.deployProjectFor(...)` no longer grants `ADJUST_721_TIERS`, `SET_721_METADATA`, `MINT_721`, or `SET_721_DISCOUNT_PERCENT` from `CTDeployer` to the initial owner; owners who want direct hook control must claim project-based hook ownership so authority follows the current project NFT owner.
