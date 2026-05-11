@@ -162,9 +162,9 @@ MAP_SUCKER_TOKEN         = 31    Map cross-chain tokens
 DEPLOY_SUCKERS           = 32    Deploy sucker pairs
 SUCKER_SAFETY            = 33    Emergency hatch control
 SET_SUCKER_DEPRECATION   = 34    Deprecate suckers
-OPEN_LOAN                = 37    Open loan on behalf of holder (REVLoans)
-REALLOCATE_LOAN          = 38    Reallocate loan collateral on behalf of owner (REVLoans)
-REPAY_LOAN               = 39    Repay loan on behalf of owner (REVLoans)
+OPEN_LOAN                = 36    Open loan on behalf of holder (REVLoans)
+REALLOCATE_LOAN          = 37    Reallocate loan collateral on behalf of owner (REVLoans)
+REPAY_LOAN               = 38    Repay loan on behalf of owner (REVLoans)
 ```
 
 ## Libraries
