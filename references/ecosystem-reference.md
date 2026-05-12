@@ -35,7 +35,7 @@ Use this file after the workspace-level `SKILLS.md` has already routed you to th
 | `allowAddPriceFeed` | `bool` | |
 | `ownerMustSendPayouts` | `bool` | |
 | `holdFees` | `bool` | |
-| `useTotalSurplusForCashOuts` | `bool` | |
+| `scopeCashOutsToLocalBalances` | `bool` | When true, cash outs use only local terminal balances |
 | `useDataHookForPay` | `bool` | |
 | `useDataHookForCashOut` | `bool` | |
 | `dataHook` | `address` | Data hook contract |
@@ -123,7 +123,6 @@ Use this file after the workspace-level `SKILLS.md` has already routed you to th
 25. **Router-terminal refunds and receipt checks are protocol behavior.** Partial-fill leftovers, baseline snapshots, and final terminal-facing receipt enforcement are not implementation garnish.
 26. **UniV4 routing has a signed-delta ceiling.** Even when Juicebox would return more output, V4 settlement cannot exceed its `int128` delta domain.
 27. **Sucker token mappings are economically one-way after activity starts.** They can be disabled, but not safely remapped to a new remote asset.
-28. **Hidden revnet tokens reduce visible supply.** They are a supply-management primitive that changes redemption and loan-relative economics until revealed.
 
 ## Permission IDs
 
@@ -162,11 +161,9 @@ MAP_SUCKER_TOKEN         = 31    Map cross-chain tokens
 DEPLOY_SUCKERS           = 32    Deploy sucker pairs
 SUCKER_SAFETY            = 33    Emergency hatch control
 SET_SUCKER_DEPRECATION   = 34    Deprecate suckers
-HIDE_TOKENS              = 35    Hide tokens on behalf of holder (REVHiddenTokens)
 OPEN_LOAN                = 36    Open loan on behalf of holder (REVLoans)
 REALLOCATE_LOAN          = 37    Reallocate loan collateral on behalf of owner (REVLoans)
 REPAY_LOAN               = 38    Repay loan on behalf of owner (REVLoans)
-REVEAL_TOKENS            = 39    Reveal hidden tokens on behalf of holder (REVHiddenTokens)
 ```
 
 ## Libraries

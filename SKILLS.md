@@ -16,7 +16,7 @@
 | Multi-hop token routing, router-terminal previews, callback guards, or project-specific router overrides | [`nana-router-terminal-v6/SKILLS.md`](./nana-router-terminal-v6/SKILLS.md) |
 | ERC-20 voter rewards, 721 holder rewards, vesting rounds, or split-hook-funded distributions | [`nana-distributor-v6/SKILLS.md`](./nana-distributor-v6/SKILLS.md) |
 | Cross-chain token bridging, token mapping, Merkle roots, or chain-specific transport logic | [`nana-suckers-v6/SKILLS.md`](./nana-suckers-v6/SKILLS.md) |
-| Revnet deployment, staged issuance, ownerless runtime hooks, hidden tokens, or loans | [`revnet-core-v6/SKILLS.md`](./revnet-core-v6/SKILLS.md) |
+| Revnet deployment, staged issuance, ownerless runtime hooks, or loans | [`revnet-core-v6/SKILLS.md`](./revnet-core-v6/SKILLS.md) |
 | Omnichain project launch wrappers or deploying suckers together with 721 hooks | [`nana-omnichain-deployers-v6/SKILLS.md`](./nana-omnichain-deployers-v6/SKILLS.md) |
 | Full ecosystem deployment, resume flows, verification, or cross-package orchestration failures | [`deploy-all-v6/SKILLS.md`](./deploy-all-v6/SKILLS.md), [`nana-fee-project-deployer-v6/SKILLS.md`](./nana-fee-project-deployer-v6/SKILLS.md) |
 | V4 LP accumulation, burn-and-manage lifecycle, fee claims, or rebalancing | [`univ4-lp-split-hook-v6/SKILLS.md`](./univ4-lp-split-hook-v6/SKILLS.md) |

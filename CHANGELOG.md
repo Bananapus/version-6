@@ -71,8 +71,7 @@ Those repos exist in source form, but they were not part of the deployed v5 ecos
   - `deployWith721sFor(...)` is gone.
   - `deployFor(...)` now returns the deployed `IJB721TiersHook`.
   - `REVOwner` is a new runtime address that integrators may need to track.
-  - `REVHiddenTokens` lets holders temporarily burn (hide) tokens to boost cash-out value, then re-mint (reveal) them later.
-  - `REVLoans.borrowFrom`, `reallocateCollateralFromLoan`, and `repayLoan` now accept a `holder`/`loanOwner` parameter for operator delegation via JBPermissions (IDs 35-39).
+  - `REVLoans.borrowFrom`, `reallocateCollateralFromLoan`, and `repayLoan` now accept a `holder`/`loanOwner` parameter for operator delegation via JBPermissions (IDs 36-38).
   - `REVLoans` no longer takes a `projects` constructor parameter.
 - `nana-omnichain-deployers-v6`
   - `launch721ProjectFor(...)`, `launch721RulesetsFor(...)`, and `queue721RulesetsOf(...)` collapsed into overloads using `JBOmnichain721Config`.
@@ -84,7 +83,7 @@ Those repos exist in source form, but they were not part of the deployed v5 ecos
 - `LAUNCH_RULESETS` is a new dedicated permission.
 - `SET_ROUTER_TERMINAL` replaces the old swap-terminal-specific permissions.
 - `SET_SUCKER_DEPRECATION` was split out from `SUCKER_SAFETY`.
-- `HIDE_TOKENS` (35), `OPEN_LOAN` (36), `REALLOCATE_LOAN` (37), `REPAY_LOAN` (38), `REVEAL_TOKENS` (39) are new operator delegation permissions for `revnet-core-v6`.
+- `OPEN_LOAN` (36), `REALLOCATE_LOAN` (37), `REPAY_LOAN` (38) are new operator delegation permissions for `revnet-core-v6`.
 
 ## Excluded Repos
 
