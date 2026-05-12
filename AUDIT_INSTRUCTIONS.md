@@ -52,7 +52,7 @@ Ask the user three things. Present the options clearly so they can choose what t
 | 2 | NFT hooks | `nana-721-hook-v6`, `croptop-core-v6`, `banny-retail-v6` | Tier manipulation, credit vs cash interactions, metadata handling |
 | 3 | Routing & swaps | `nana-buyback-hook-v6`, `univ4-router-v6`, `univ4-lp-split-hook-v6`, `nana-router-terminal-v6` | Swap-vs-mint routing under adversarial liquidity, LP positioning, price coherence |
 | 4 | Cross-chain | `nana-suckers-v6`, `nana-omnichain-deployers-v6` | Bridge replay, double-claim, configuration drift, peer authentication |
-| 5 | Revnets | `revnet-core-v6` | Loan math, stage transitions, hidden tokens, cross-chain surplus |
+| 5 | Revnets | `revnet-core-v6` | Loan math, stage transitions, cross-chain surplus |
 | 6 | Games & apps | `defifa`, `croptop-core-v6`, `banny-retail-v6` | Game lifecycle, scoring, NFT minting rules |
 | 7 | Deployment | `deploy-all-v6`, `nana-fee-project-deployer-v6` | Privilege retention, ownership convergence, wiring correctness |
 
