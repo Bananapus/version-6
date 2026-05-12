@@ -2343,6 +2343,27 @@ Recommended fix:
 - `univ4-lp-split-hook-v6`: https://github.com/Bananapus/nana-univ4-lp-split-hook-v6/pull/112
 - `univ4-router-v6`: https://github.com/Bananapus/nana-univ4-router-v6/pull/95
 
+### Remediation PRs (codex-nemesis + Pashov pass, 2026-05-12) — ALL MERGED
+
+- `croptop-core-v6`: https://github.com/mejango/croptop-core-v6/pull/128 (NM-005 compile fix)
+- `nana-buyback-hook-v6`: https://github.com/Bananapus/nana-buyback-hook-v6/pull/122 (NM-001 zero-tax mis-compare)
+- `nana-core-v6`: https://github.com/Bananapus/nana-core-v6/pull/140 (Pashov #3 zero-token payout + RISKS docs)
+- `revnet-core-v6`: https://github.com/rev-net/revnet-core-v6/pull/148 (Pashov #2 ERC-777 reentrancy on repayLoan)
+- `defifa`: https://github.com/BallKidz/defifa/pull/108 (NM-001 reserve-mint revival + NM-002 one-tier launch guard)
+
+### Remediation PRs (codex-nemesis + Pashov re-pass, 2026-05-12 round 2) — ALL MERGED
+
+- `revnet-core-v6`: https://github.com/rev-net/revnet-core-v6/pull/149 (Pashov #2 cash-out fee scaling under local cap)
+- `nana-buyback-hook-v6`: https://github.com/Bananapus/nana-buyback-hook-v6/pull/123 (NM-002 buyback pool front-run defense)
+- `defifa`: https://github.com/BallKidz/defifa/pull/109 (RISKS docs commit-split revert policy)
+- `nana-permission-ids-v6`: https://github.com/Bananapus/nana-permission-ids-v6/pull/71 (SET_SUCKER_PEER permission)
+- `nana-suckers-v6`: https://github.com/Bananapus/nana-suckers-v6/pull/122 (Pashov #2 explicit-peer gate, HIGH)
+- `nana-suckers-v6`: https://github.com/Bananapus/nana-suckers-v6/pull/123 (Pashov #1 V4 native-swap intent + CCIP receive invariants)
+- `univ4-router-v6`: https://github.com/Bananapus/nana-univ4-router-v6/pull/102 (Pashov #2 fee rounding + NM-002 script sync)
+- `univ4-lp-split-hook-v6`: https://github.com/Bananapus/nana-univ4-lp-split-hook-v6/pull/123 (NM-001 accountingContext currency + NM-002 testnet PMs + Pashov #2 tick rounding)
+- `banny-retail-v6`: https://github.com/mejango/banny-retail-v6/pull/107 (NM-003 drop script tier-id drift guard)
+- `deploy-all-v6`: https://github.com/Bananapus/deploy-all-v6/pull/85 (CPN canonical-skip + (USD,ETH) feed critical)
+
 ### 1. `univ4-router-v6` + `univ4-lp-split-hook-v6`: persistent terminal approvals can leak later same-token balances
 
 Severity: `MED`
@@ -4894,6 +4915,472 @@ Why it is real:
 Recommended fix:
 
 - Update the REVHiddenTokens.sol NatSpec to say hidden tokens are intentionally excluded from economic denominators, matching the implementation comments.
+
+### 82. `nana-buyback-hook-v6`: zero-tax sell-side routing compared AMM minimum against gross direct reclaim
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/Bananapus/nana-buyback-hook-v6/pull/122
+
+Source: codex-nemesis NM-001 (2026-05-10).
+
+Affected code:
+
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:761)
+
+Why it is real:
+
+- `JBBuybackHook.beforeCashOutRecordedWith` only deducted the terminal fee from `directCashOutAmount` when `context.cashOutTaxRate != 0`. Core's `JBMultiTerminal` still charges the 2.5% fee on zero-tax cash-outs against `_feeFreeSurplusOf`, so the hook compared the AMM minimum against a gross direct amount that the beneficiary never actually receives.
+- When the AMM floor sat between net-of-fee direct and gross direct, the hook returned `noop = true` and routed the beneficiary to the direct path that paid less than the AMM floor.
+
+Impact:
+
+- A non-feeless beneficiary cashing out at `cashOutTaxRate == 0` could be routed to a path that paid less than the AMM floor the hook had promised.
+
+Fix:
+
+- Drop the `cashOutTaxRate != 0` guard so the terminal fee is deducted for any non-feeless beneficiary. Adds `test/regression/RegressionZeroTaxFeeFreeSurplus.t.sol` covering the fee-free-surplus path and updates four pre-existing assertions that locked in the previous gross-comparison behavior.
+
+### 83. `nana-core-v6`: cross-currency payouts with zero conversion still consume payout limit
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/Bananapus/nana-core-v6/pull/140
+
+Source: Pashov #3 / nana-core-v6 (2026-05-10).
+
+Affected code:
+
+- [JBTerminalStore.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBTerminalStore.sol:416)
+
+Why it is real:
+
+- `recordPayoutFor` converts `amount` (source currency) to `amountPaidOut` (terminal currency) via `mulDiv`, then unconditionally increments `usedPayoutLimitOf` by the original source-currency `amount`.
+- For low-decimal or high-priced terminal tokens, sub-unit payouts round to zero while still consuming the cycle's payout limit. A permissionless caller can repeatedly burn the limit without moving funds.
+
+Impact:
+
+- Permissionless payout-limit griefing for projects with cross-currency payout limits priced in tokens with very different decimals/price ratios.
+
+Fix:
+
+- Return early when `amountPaidOut == 0` so payout-limit usage matches actual movement.
+
+### 84. `revnet-core-v6`: repayLoan can burn the wrong loan NFT after an ERC-777 callback
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/rev-net/revnet-core-v6/pull/148
+
+Source: Pashov #2 / revnet-core-v6 (2026-05-10).
+
+Affected code:
+
+- [REVLoans.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVLoans.sol:821)
+
+Why it is real:
+
+- `repayLoan` caches `loanOwner = _ownerOf(loanId)` before `_acceptFundsFor`. If the source token's transfer hook (ERC-777 / ERC-1363) reenters and transfers the loan NFT to another account during the inbound transfer, the cached owner becomes stale.
+- `_repayLoan` then `_burn`s the loan NFT (now owned by the new account) while returning collateral to the payer-controlled `beneficiary`. A loan-NFT buyer paying for a loan they expect to own can be rugged this way.
+
+Impact:
+
+- For projects using callback-capable ERC-20s as a loan source, an attacker who sells the loan NFT mid-repay can keep the collateral while burning the buyer's NFT.
+
+Fix:
+
+- Re-check `_ownerOf(loanId) == loanOwner` after `_acceptFundsFor` and revert with new `REVLoans_LoanOwnerChanged` error if it changed. Reverts before any state change.
+
+### 85. `defifa`: free reserve mints can revive a game that failed `minParticipation`
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/BallKidz/defifa/pull/108
+
+Source: codex-nemesis NM-001 / defifa (2026-05-10).
+
+Affected code:
+
+- [DefifaHook.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaHook.sol:565)
+- [DefifaDeployer.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaDeployer.sol:255)
+
+Why it is real:
+
+- The scoring ruleset unpauses `mintReservesFor`, which mints free reserve NFTs and increments `totalMintCost`. `currentGamePhaseOf` then re-evaluates the `minParticipation` threshold against the same `totalMintCost`.
+- A game that legitimately failed `minParticipation` and would otherwise report `NO_CONTEST` can be revived back to `SCORING` by reserve mints, before `triggerNoContestFor` latches the failure.
+
+Impact:
+
+- A game that should refund participants can be locked in scoring instead, allowing a malicious scoring outcome or extending the resolution window.
+
+Fix:
+
+- Reject reserve mints with `DefifaHook_ReservedTokenMintingBlockedInNoContest` while `currentGamePhaseOf(PROJECT_ID) == NO_CONTEST`. The latched no-contest path is unaffected.
+
+### 86. `defifa`: BWA quorum is unreachable for low-tier games with `scorecardTimeout == 0`
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/BallKidz/defifa/pull/108
+
+Source: codex-nemesis NM-002 / defifa (2026-05-10).
+
+Affected code:
+
+- [DefifaDeployer.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaDeployer.sol:428)
+- [DefifaGovernor.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaGovernor.sol:643)
+
+Why it is real:
+
+- One-tier games cannot reach quorum because the BWA multiplier reduces the sole beneficiary tier's power to zero. RISKS.md previously documented this as a deploy-time invariant but it was not enforced.
+- Two-tier games have zero rounding headroom: the base quorum equals the maximum achievable BWA attestation power, so per-account `mulDiv` truncation (raw power → BWA reduction) leaves the accumulated count a few units below the quorum even under unanimous attestation.
+
+Impact:
+
+- Permanent lock if `scorecardTimeout == 0`. With a timeout the game can still fall to `NO_CONTEST` and refund mint costs.
+
+Fix:
+
+- `DefifaDeployer.launchGameWith` rejects one-tier games with `scorecardTimeout == 0`. Two-tier rounding fragility is documented in RISKS §8.6 as recommendation rather than enforced, because many real distributions can still reach quorum and stricter enforcement would over-constrain real deployments.
+
+### 87. `croptop-core-v6`: fee-project configuration script does not compile against current `@rev-net/core-v6`
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/mejango/croptop-core-v6/pull/128
+
+Source: codex-nemesis NM-005 / croptop-core-v6 (2026-05-10).
+
+Affected code:
+
+- [ConfigureFeeProject.s.sol](/Users/jango/Documents/jb/v6/evm/croptop-core-v6/script/ConfigureFeeProject.s.sol:229)
+
+Why it is real:
+
+- `script/ConfigureFeeProject.s.sol` constructs `REVConfig` with four fields. The resolved `@rev-net/core-v6` dependency requires five (added `scopeCashOutsToLocalBalances`). `forge build` fails on the missing field.
+
+Impact:
+
+- Fee-project deployment/configuration workflow is blocked until the script is updated.
+
+Fix:
+
+- Add `scopeCashOutsToLocalBalances: false` (matching the Croptop "shared treasury across chains via suckers" intent).
+
+### 88. `nana-core-v6`: matured held fees can be returned via `addToBalanceOf` (accepted)
+
+Severity: `LOW` (accepted as designed)
+
+Status: ACCEPTED. Documented in `nana-core-v6/RISKS.md §8.5` (https://github.com/Bananapus/nana-core-v6/pull/140).
+
+Source: Pashov #2 / nana-core-v6.
+
+Why it is real:
+
+- `JBMultiTerminal._returnHeldFees` does not check `unlockTimestamp`. After the 28-day holding window elapses, a project can still erase a now-processable held fee by calling `addToBalanceOf` before someone calls `processHeldFeesOf`.
+
+Accepted reasoning:
+
+- The held fee is a contingent claim against funds the project withdrew. Replenishing those funds rescinds the claim, which is the same trade-off held fees were designed to express. Maintaining the holdback costs the project the full withdrawal amount continually, so this is economically self-correcting. Anyone can call `processHeldFeesOf` after maturity to force collection; projects that want to keep delaying the fee must repeatedly front-run that call.
+
+### 89. `nana-core-v6`: extremely long ruleset durations are not a supported configuration (accepted)
+
+Severity: `INFO` (accepted as out-of-scope configuration)
+
+Status: ACCEPTED / DOCUMENTED. https://github.com/Bananapus/nana-core-v6/pull/140 (RISKS.md §2 "Ruleset Duration").
+
+Source: Pashov leads / nana-core-v6.
+
+Why it is real:
+
+- `JBRulesets._simulateCycledRulesetBasedOn` (line 1033) clamps `mustStartAtOrAfter` to `1` when `baseRuleset.duration >= block.timestamp`. This branch is only reached for durations on the order of decades or longer (block.timestamp is Unix seconds).
+
+Accepted reasoning:
+
+- Project owners are expected to choose durations on human-meaningful scales (hours to years). The branch never triggers in practice because no realistic deployment configures a duration > ~54 years. Documented in RISKS as a constraint on supported configuration rather than a code change.
+
+### 90. `revnet-core-v6`: local-surplus cap on non-fee reclaim zeroes the REV cash-out fee
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/rev-net/revnet-core-v6/pull/149
+
+Source: Pashov #2 / revnet-core-v6 (2026-05-12).
+
+Affected code:
+
+- [REVOwner.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVOwner.sol:220)
+
+Why it is real:
+
+- `beforeCashOutRecordedWith` capped the non-fee reclaim at local surplus first, then capped the fee at `localSurplus - reclaim`. When effective cross-chain surplus exceeded local liquidity and the non-fee reclaim consumed all local surplus, the fee cap evaluated to 0.
+- The 2.5% protocol fee was silently dropped on every omnichain cash-out where remote surplus exceeded local liquidity.
+
+Fix:
+
+- Compute gross reclaim and gross fee from effective surplus first; if their sum exceeds local liquidity, scale both proportionally instead of zeroing the fee.
+
+### 91. `nana-buyback-hook-v6` + `revnet-core-v6`: deterministic project token lets attacker lock the buyback pool at an arbitrary price
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/Bananapus/nana-buyback-hook-v6/pull/123 + https://github.com/rev-net/revnet-core-v6/pull/149
+
+Source: codex-nemesis NM-002 / revnet-core-v6 (2026-05-12).
+
+Affected code:
+
+- [JBBuybackHook.sol](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/src/JBBuybackHook.sol:443)
+- [REVDeployer.sol](/Users/jango/Documents/jb/v6/evm/revnet-core-v6/src/REVDeployer.sol:431)
+
+Why it is real:
+
+- The revnet project token is deployed deterministically via CREATE2 with a project-supplied salt, so the V4 pool address is predictable before configuration runs. An attacker can pre-initialize the pool at any `sqrtPriceX96`. The previous `initializePoolFor` wrapped V4 initialize in try/catch and unconditionally called `_setPoolFor`, locking the poisoned pool in.
+
+Fix:
+
+- After the initialize attempt, read the pool's actual `sqrtPriceX96` via `getSlot0` and revert with `JBBuybackHook_PoolInitializedAtWrongPrice` on mismatch. `REVDeployer._tryInitializeBuybackPoolFor` keeps its try/catch so an attacker pre-init cannot DoS the revnet deploy — the revnet ships without a buyback and can be configured manually later.
+
+### 92. `nana-suckers-v6` + `nana-permission-ids-v6`: DEPLOY_SUCKERS alone could register an attacker peer with mint authority
+
+Severity: `HIGH`
+
+Status: FIXED. https://github.com/Bananapus/nana-suckers-v6/pull/122 + https://github.com/Bananapus/nana-permission-ids-v6/pull/71
+
+Source: Pashov #2 / nana-suckers-v6 (2026-05-12).
+
+Affected code:
+
+- [JBSuckerRegistry.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSuckerRegistry.sol:484)
+- [JBPermissionIds.sol](/Users/jango/Documents/jb/v6/evm/nana-permission-ids-v6/src/JBPermissionIds.sol:34)
+
+Why it is real:
+
+- `deploySuckersFor` gated on `_requirePermissionFrom(account: owner, projectId, DEPLOY_SUCKERS)` and passed `configuration.peer` straight to the deployer. The project owner could delegate `DEPLOY_SUCKERS` to ops automation; that operator could then register a sucker with `peer = attacker_address`. The attacker peer can deliver fabricated outbox roots through the sucker's omnichain mint permission and mint project tokens with zero terminal-token backing.
+
+Fix:
+
+- Add a new `SET_SUCKER_PEER` permission (id 34, grouped with the other sucker permissions; the loan permission IDs shift up by one). Gate non-symmetric explicit peers (`peer != 0 && peer != address(this)`) behind this stronger permission. Default symmetric peering (`peer == 0 || peer == address(this)`) is unaffected.
+
+### 93. `defifa`: silent commit-split failures are by design (documented)
+
+Severity: `INFO` (accepted as designed)
+
+Status: ACCEPTED / DOCUMENTED. https://github.com/BallKidz/defifa/pull/109 (RISKS.md §8.7).
+
+Source: codex-nemesis NM-001 / Pashov #1 / defifa (2026-05-12).
+
+Affected code:
+
+- [DefifaDeployer.sol](/Users/jango/Documents/jb/v6/evm/defifa/src/DefifaDeployer.sol:311)
+
+Accepted reasoning:
+
+- `fulfillCommitmentsOf` calls `terminal.sendPayoutsOf`. Core processes splits inside a per-split try/catch — a reverting commit split is silently re-credited to the game terminal balance, and the outer call succeeds. Unpaid funds remain redeemable by game players via cash-out.
+- This means a single bad split cannot block the others from being paid. Failed funds are never lost. Game launchers are responsible for configuring splits that won't revert under their terminal/currency setup; recipients of commit splits should treat delivery as best-effort. The invariant `real terminal balance >= currentGamePotOf(true)` always holds.
+
+### 94. `univ4-lp-split-hook-v6`: cash-out rate used token-derived currency while issuance used accounting context
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/Bananapus/nana-univ4-lp-split-hook-v6/pull/123
+
+Source: codex-nemesis NM-001 / univ4-lp-split-hook-v6 (2026-05-12).
+
+Affected code:
+
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:480)
+
+Why it is real:
+
+- `_getCashOutRate` derived the currency identifier from the token address (`uint32(uint160(terminalToken))`), while `_getIssuanceRate` reads `accountingContextForTokenOf[token].currency`. For projects that declared a different currency for a token (e.g. USDC under a USD identity), issuance and cash-out priced the LP bounds against inconsistent references.
+
+Fix:
+
+- Read currency and decimals from `accountingContextForTokenOf` in the cash-out path, matching the issuance path.
+
+### 95. `univ4-router-v6`: V4 quote applied fee after ratio, overquoting low-decimal swaps
+
+Severity: `LOW`
+
+Status: FIXED. https://github.com/Bananapus/nana-univ4-router-v6/pull/102
+
+Source: Pashov #2 / univ4-router-v6 (2026-05-12).
+
+Affected code:
+
+- [JBUniswapV4Hook.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/src/JBUniswapV4Hook.sol:401)
+
+Why it is real:
+
+- `estimateUniswapOutput` computed the output via the price ratio first then subtracted the swap fee. Uniswap V4's actual math floors the fee-adjusted input then converts via the ratio. For very small inputs (e.g. `amountIn=2` at 0.3%) the rounding direction diverged and the estimator overquoted V4 by one unit, which could mis-route swaps from a path that would have been better.
+
+Fix:
+
+- Apply the swap fee to `amountIn` before the ratio computation, matching V4's order.
+
+### 96. `univ4-router-v6`: stale invalid-fee regression script asserted the old revert path
+
+Severity: `LOW` (script-only)
+
+Status: FIXED. https://github.com/Bananapus/nana-univ4-router-v6/pull/102
+
+Source: codex-nemesis NM-002 / univ4-router-v6 (2026-05-12).
+
+Affected code:
+
+- [RegressionInvalidFeeSellDoS.s.sol](/Users/jango/Documents/jb/v6/evm/univ4-router-v6/script/regression/RegressionInvalidFeeSellDoS.s.sol)
+
+Why it is real:
+
+- RISKS §9 changed runtime behavior so `calculateExpectedOutputFromSelling` returns 0 when fee > MAX_FEE, degrading the swap to V4. The regression script still asserted the old revert path.
+
+Fix:
+
+- Update the script to assert the V4 fall-through executes cleanly.
+
+### 97. `banny-retail-v6`: drop scripts could miswrite metadata on Sphinx proposal/execution tier ID drift
+
+Severity: `LOW` (drop-script-only)
+
+Status: FIXED. https://github.com/mejango/banny-retail-v6/pull/107
+
+Source: codex-nemesis NM-003 / banny-retail-v6 (2026-05-12).
+
+Affected code:
+
+- [Drop1.s.sol](/Users/jango/Documents/jb/v6/evm/banny-retail-v6/script/Drop1.s.sol)
+- [Add.Denver.s.sol](/Users/jango/Documents/jb/v6/evm/banny-retail-v6/script/Add.Denver.s.sol)
+
+Why it is real:
+
+- The drop scripts queue `setSvgHashesOf` / `setProductNames` keyed by `maxTierIdOf` after `adjustTiers`. If an authorized `ADJUST_721_TIERS` call lands between Sphinx proposal time and execution, the new tier IDs shift upward and the metadata writes silently target the wrong UPC range.
+
+Fix:
+
+- Capture `maxTierIdOf` before `adjustTiers` and assert the post-adjust value equals exactly `before + N` (47 for Drop1, 1 for Denver). Drift causes the script to revert rather than miswrite metadata.
+
+### 98. `deploy-all-v6`: CPN canonical-skip predicate was weaker than NANA/Banny/REV
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/Bananapus/deploy-all-v6/pull/85
+
+Source: Pashov lead / nana-omnichain-deployers-v6 (2026-05-12).
+
+Affected code:
+
+- [Resume.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Resume.s.sol:2336)
+
+Why it is real:
+
+- `_resumeCpnRevnet` skipped on bare `controllerOf(projectId) != 0`. The NANA/REV/Banny resume paths use the stronger `_isCanonicalConfiguredProject` check. An attacker who pre-configured project 2 with a generic controller would pass the weak check, and Resume would adopt the squat as the canonical CPN. The helper already supports CPN identity verification — it was just not used at the skip site.
+
+Fix:
+
+- Promote the CPN skip to the same predicate the other revnets use.
+
+### 99. `deploy-all-v6`: (USD, ETH) price feed marked non-critical; JBPrices does not compose paths
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/Bananapus/deploy-all-v6/pull/85
+
+Source: codex-nemesis NM-003 / deploy-all-v6 (2026-05-12). Sharpens existing §F rationale.
+
+Affected code:
+
+- [Verify.s.sol](/Users/jango/Documents/jb/v6/evm/deploy-all-v6/script/Verify.s.sol:1133)
+- [JBPrices.sol](/Users/jango/Documents/jb/v6/evm/nana-core-v6/src/JBPrices.sol)
+
+Why it is real:
+
+- `Verify.s.sol` marked the `(USD, ETH)` feed as `critical: false`, implicitly assuming `(ETH, USD)` could substitute. `JBPrices.pricePerUnitOf` only tries direct, inverse, and default-project entries — it does NOT compose paths through `(USD, NATIVE)` and `(ETH, NATIVE)` to derive `(USD, ETH)`. A missing `(USD, ETH)` is a hard DoS for ETH-base-currency projects that price in USD, not a redundancy gap.
+
+Fix:
+
+- Promote to `critical: true` and document the composition gap in the call-site comment.
+
+### 100. `univ4-lp-split-hook-v6`: stale testnet PositionManager addresses (fork-verified)
+
+Severity: `MED` (testnet-only)
+
+Status: FIXED. https://github.com/Bananapus/nana-univ4-lp-split-hook-v6/pull/123 (commit added 2026-05-12).
+
+Source: codex-nemesis NM-002 / univ4-lp-split-hook-v6 (2026-05-12).
+
+Affected code:
+
+- [Deploy.s.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/script/Deploy.s.sol:135)
+
+Why it is real:
+
+- The deploy script returned the Ethereum mainnet PositionManager address (`0xbD216513…`) for Sepolia, Base Sepolia, and Arbitrum Sepolia. The mainnet contract is not deployed at that address on those testnets, so the hook would store a non-existent PositionManager immutably and all position lifecycle calls would target an empty account.
+
+Fix:
+
+- Replaced the testnet entries with the per-chain PositionManagers from https://developers.uniswap.org/docs/protocols/v4/deployments. Added a fork test (`test/fork/DeployPositionManagerAddresses.t.sol`) that forks each of the 7 declared chains and asserts `extcodesize > 0` at the declared PositionManager address. All 7 fork tests pass.
+
+### 101. `univ4-lp-split-hook-v6`: LP `_calculateTickBounds` floored both ticks, expanding the lower range
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/Bananapus/nana-univ4-lp-split-hook-v6/pull/123 (commit added 2026-05-12).
+
+Source: Pashov #2 / univ4-lp-split-hook-v6 (2026-05-12).
+
+Affected code:
+
+- [JBUniswapV4LPSplitHook.sol](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol:1527)
+
+Why it is real:
+
+- `_calculateTickBounds` aligned both `tickLower` and `tickUpper` via the floor helper (`_alignTickToSpacing`). Flooring the lower tick expanded the LP range downward by up to one tick-spacing interval, exposing project liquidity at prices the bonding curve never sanctioned (and giving arb a free band at the lower boundary).
+
+Fix:
+
+- Added `_alignTickToSpacingCeil` and apply it to `tickLower`; `tickUpper` keeps the floor helper. Both moves contract the LP range toward the intended price band. Added unit-tested boundary cases (`test/TickAlignment.t.sol`, 9 cases passing) and updated the existing `TickBoundsInversion` regression test's exact-equality assertion to expect ceil alignment on the lower side.
+
+### 102. `nana-suckers-v6`: V4 native swap consumed unrelated WETH balance (intent missing)
+
+Severity: `MED`
+
+Status: FIXED. https://github.com/Bananapus/nana-suckers-v6/pull/123
+
+Source: Pashov #1 / nana-suckers-v6 (2026-05-12).
+
+Affected code:
+
+- [JBSwapPoolLib.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/libraries/JBSwapPoolLib.sol:189)
+
+Why it is real:
+
+- `executeV4UnlockCallback` unwrapped any wrapped-native-token balance the caller held whenever the V4 pool's input currency was native and `wrappedBalance >= amountIn`. The pre-fix comment claimed "suckers hold raw ETH, skip unwrap," but the predicate only inspected balance, not the caller's intent.
+- When the sucker's input is `NATIVE_TOKEN` (raw ETH already in hand for this swap), any WETH balance is held for unrelated reasons — typically backing inbound bridge claims for separate batches. The previous code would consume those WETH for the current swap, leaving the unrelated claims unbacked.
+
+Fix:
+
+- Thread `originalTokenIn` through `executeSwap` → `_quoteAndSwapV4` → `_executeV4Swap`. The unlock callback now receives the wrapped-native-token address only when the original input was the WETH ERC-20 (caller wants to unwrap). When the original input was the `NATIVE_TOKEN` sentinel, the callback receives `address(0)` and skips unwrap, settling the raw ETH balance directly.
+
+### 103. `nana-suckers-v6`: ccipReceive accepted positive root amounts without matching delivered tokens
+
+Severity: `MED` (defensive)
+
+Status: FIXED. https://github.com/Bananapus/nana-suckers-v6/pull/123
+
+Source: Pashov Lead / nana-suckers-v6 (2026-05-12).
+
+Affected code:
+
+- [JBSwapCCIPSucker.sol](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/src/JBSwapCCIPSucker.sol:261)
+
+Why it is real:
+
+- The ROOT-message branch processed the delivery even when `destTokenAmounts.length != 1` (length 0 → `localAmount` stayed zero; length > 1 silently ignored entries beyond index 0). A hostile peer or malformed CCIP delivery could surface a positive `root.amount` with zero or wrong-token backing, registering a zero-localTotal `ConversionRate` that lets claims mint project tokens against nothing.
+
+Fix:
+
+- Assert three invariants at the top of the ROOT-message branch: `destTokenAmounts.length <= 1`; if length == 1, the delivered token must equal `address(BRIDGE_TOKEN)`; if `root.amount > 0`, length must be 1. These match the honest send-side which only produces zero-length deliveries when `amount == 0` and always pairs positive roots with positive bridge-token deliveries.
 
 ### Regression Security Scan Bulk Triage (2026-05-06)
 
