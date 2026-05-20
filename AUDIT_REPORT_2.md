@@ -1795,12 +1795,18 @@ Fix applied:
 - The new `TestSplits` regression uses real core and `JBMultiTerminal` wiring: it deploys the project ERC-20, registers
   that ERC-20 as an accepted terminal token, creates pending reserves through a payment, and proves reserve distribution
   now reverts before self-project terminal payment.
+- The hook path remains explicitly allowed for same-project reserved-token splits. `TestSplits` now also covers the
+  risky topology where the source project accepts its own ERC-20, configures a same-project reserved split with a hook,
+  and the hook pulls the exact reserved-token allowance from `JBController` without routing those tokens through the
+  terminal-payment path.
 
 Verification:
 
 - `forge fmt --root nana-core-v6 --check`: passed.
 - `forge test --root nana-core-v6 --match-path test/TestSplits.sol --match-test testReservedPercentSplitTerminal_rejectsSelfProject --summary --detailed`:
   1 passed.
+- `forge test --root nana-core-v6 --match-path test/TestSplits.sol --match-test testReservedPercentSplitTerminal --summary --detailed`:
+  3 passed, including the same-project hook-path allowance regression.
 - `forge test --root nana-core-v6 --match-path 'test/{TestSplits.sol,units/static/JBController/TestSendReservedTokensToSplitsOf.sol,units/static/JBController/TestPayReservedTokenToTerminal.sol}' --summary --detailed`:
   13 passed.
 - `forge test --root nana-core-v6 --deny notes --skip '*/fork/**' --fail-fast --summary --detailed`: exit code
@@ -3182,6 +3188,10 @@ Progress against the plan:
 - Clarified the inline documentation around the core reserved-token self-payment guard. The comment now explains that a
   non-zero reserved-token split `projectId` uses the terminal-payment path and why targeting the source project would
   rebook freshly minted reserves as new revenue.
+- Added live coverage for the complementary same-project hook path in `TestSplits`: the project accepts its own ERC-20
+  through the terminal, sets a same-project reserved-token split with a hook, and the hook pulls the exact controller
+  allowance. This documents the intended distinction that hooked reserved splits are direct hook deliveries, while
+  no-hook same-project splits are terminal self-payments and must revert.
 - Extended `nana-core-v6/test/formal/HalmosSmoke.t.sol` with `check_cashOutBoundaryTaxRateTable()` and
   `nana-core-v6/test/formal/BondingCurveProperties.t.sol` with `test_cashOut_boundaryTaxRateTable()`, pinning
   audit-selected bonding-curve tax-rate edges in both the CI Halmos smoke target and the existing Forge property
