@@ -2251,7 +2251,7 @@ evidence, but they are not a substitute for a full formal proof of the composed 
 | Reproducible PoCs for promising threads | Verified findings include local or fork regression tests for core ERC-20 intake, distributor funding, ProjectPayer under-pulls, sucker callbacks, Revnet loan reentrancy, Croptop publish/deploy liveness, and deploy-all replay guards. | Temporary PoCs removed after fixes are documented, but final completion should ensure surviving PoCs/regressions remain in-repo for all fixed critical paths. |
 | Cross-component dynamics get fork/integration tests where feasible | Evidence includes deploy-all full-stack forks, ProjectPayer+terminal fork, buyback/V4 forks, router-terminal forks, LP split forks, sucker forks, Revnet forks, Croptop publish fork, Defifa/Banny broad non-fork coverage, and focused integration tests. | Some slow omnichain/fork suites are intentionally path-scoped; final completion should list any skipped suites and why they are not required. |
 | Prefer reduced surface over unnecessary code | Several fixes removed or narrowed configurable surfaces: Revnet terminal configs, `REVLoanSource`, duplicate groups/splits, leftover allowances, broad callback windows, and weak replay guards. | Continue challenging whether new abstractions are necessary before adding code. |
-| Formal verification “top to bottom” | Current evidence is adversarial review plus unit/regression/fork/invariant tests, with narrow Halmos smoke proofs added for core fee math, 721 bitmap updates, buyback slippage branches, and sucker same-currency peer-value conversion. | Not complete: no comprehensive formal spec, proof harness, or exhaustive composed-system verifier exists yet. |
+| Formal verification “top to bottom” | Current evidence is adversarial review plus unit/regression/fork/invariant tests, with narrow Halmos smoke proofs added for core fee math, 721 bitmap updates, buyback slippage branches, and sucker peer-value/merkle helper behavior. | Not complete: no comprehensive formal spec, proof harness, or exhaustive composed-system verifier exists yet. |
 
 ### Module-to-Invariant Coverage Manifest (pass 1)
 
@@ -2278,7 +2278,7 @@ boundaries; it does not replace a machine-checked formal spec.
 | `nana-721-hook-v6` | 38 files: hook base, tiered hook/store/deployers/project deployer, checkpoints, tier libraries, bitmap/IPFS/metadata helpers, interfaces, and tier/config structs. | 721-01/02/03 cover tier split/reserve/cash-out timing, forwarded-value conservation, split metadata conservation, reentrancy timing, removed-tier cleanup liveness, and fork-backed ERC-20/native split paths. | Complex tier policy remains covered by tests and invariants rather than a complete tier-state formal proof. |
 | `nana-buyback-hook-v6` | buyback hook/registry, swap library, oracle/registry/hook interfaces, callback/default-hook structs. | BUYBACK-01/02/03 and ROUTER-UNI-01 cover sell-side minimum semantics, default-hook cohort history, metadata rekeying, registry boundaries, and V3/V4 fork routing. | Route correctness depends on configured pools/oracles and documented market-manipulation assumptions. |
 | `nana-router-terminal-v6` | router terminal, registry, pay-route resolver, forwarding/swap libraries, route/terminal/pool structs, terminal/router interfaces. | ROUTER-TERM-01 and ROUTER-UNI-01 cover cold-start zero-terminal resolution, registry forwarding, FOT/partial-fill boundaries, V3/V4/JB terminal fork paths, and value-forwarding fail-fast behavior. | Router can bound but not eliminate arbitrary external swap-route and market-state risk. |
-| `nana-suckers-v6` | 58 files: base sucker, bridge-specific suckers/deployers, swap CCIP sucker/deployer, registry, Merkle utilities, relay/swap/CCIP libraries, enums, interfaces, bridge message/token/value structs, and scratch structs. | SUCKER-01/02, SUCKER-BRIDGE-01, SUCKER-REG-01, SUCKER-MAP-01, and SUCKER-ALLOW-01 cover bridge-bound accounting, initial swap callback timing, same-peer aggregation freshness, one-remote-inbox-per-local-token per sucker, approval cleanup, local-backed sucker cash-outs, and same-currency peer-value conversion via Foundry invariants plus a Halmos smoke proof. | Bridge/router/token honesty and remote-chain integrity remain explicit trust boundaries; local RPC gaps still gate some fork suites outside CI. |
+| `nana-suckers-v6` | 58 files: base sucker, bridge-specific suckers/deployers, swap CCIP sucker/deployer, registry, Merkle utilities, relay/swap/CCIP libraries, enums, interfaces, bridge message/token/value structs, and scratch structs. | SUCKER-01/02, SUCKER-BRIDGE-01, SUCKER-REG-01, SUCKER-MAP-01, and SUCKER-ALLOW-01 cover bridge-bound accounting, initial swap callback timing, same-peer aggregation freshness, one-remote-inbox-per-local-token per sucker, approval cleanup, local-backed sucker cash-outs, same-currency peer-value conversion, and merkle root helper behavior via Foundry invariants plus Halmos proofs. | Bridge/router/token honesty and remote-chain integrity remain explicit trust boundaries; local RPC gaps still gate some fork suites outside CI. |
 | `nana-omnichain-deployers-v6` | omnichain deployer/hook plus deployment config structs and interface. | OMNI-01/02 plus invariant/fork log cover controller/directory validation, hook composition, cash-out hook semantics, local invariant campaigns, and real fork integration. | Slow omnichain campaigns are split into local invariant and targeted fork coverage; no single exhaustive cross-chain campaign exists. |
 | `nana-distributor-v6` | shared distributor base, token and 721 distributors, vesting/snapshot structs, interfaces. | DIST-01/02/03/04/05 cover callback-capable reward funding, callback collection during funding, split-hook native value conservation, token mismatch handling, zero-reward 721 voting-budget accounting, and partial-vesting dust reserve cleanup. | Arbitrary reward-token behavior remains a boundary; tests defend callback windows but not every ERC-20 noncompliance shape. |
 | `univ4-router-v6` | V4 hook plus oracle library. | ROUTER-UNI-01/02 cover route selection, TWAP/spot assumptions, structural arbitrage classification, delta settlement, and forked V4/JB routing. | AMM/oracle manipulation remains bounded by documented economics, not eliminated. |
@@ -2754,6 +2754,63 @@ Repo evidence snapshot:
   exit code 0 across 3 suites and 39 tests.
 - Ran `forge build --root nana-omnichain-deployers-v6 --deny notes --skip '*/test/**'` after the deploy-script helper
   field fix; compile succeeded.
+- Reconciled `AUDIT_REPORT_2_REVIEW.md` and accepted review finding 1. `JBUniswapV4LPSplitHook._clearPermit2Approval`
+  now writes Permit2 `amount = 0` and `expiration = 1`, because Permit2 treats `expiration = 0` as valid through the
+  current block. Unit and fork coverage now assert the real Permit2 allowance amount is zero and the stored expiration
+  is the already-expired timestamp `1`.
+- Reconciled review finding 2. `JBProjectHandles._textRecordOf` now caps copied resolver text records at 256 bytes,
+  which is far above the expected `chainId:projectId` record while preventing a name-owner-controlled resolver from
+  forcing every on-chain reader to copy large but ultimately unverifiable strings. Added a harness regression proving
+  256 bytes is accepted and 257 bytes soft-fails to `""`.
+- Reconciled review finding 3. `JBDistributor._acceptErc20FundsFrom` now arms `_acceptingToken` before the first
+  external token call, including `balanceOf`, so a callback-capable or upgradeable reward token cannot reenter while
+  the intake guard is still clear. Full distributor unit, fork, regression, and invariant coverage passed.
+- Reconciled review finding 4. `REVLoans.liquidateExpiredLoansFrom` now uses `nonReentrantLoanAction`, matching the
+  other state-changing loan paths and preserving the loan-action invariant if liquidation later grows an external
+  callback. Full Revnet unit, fork, regression, and invariant coverage passed.
+- Triaged review finding 5 as non-blocking operational hygiene. Same-address `MULTI_TERMINAL` /
+  `ROUTER_TERMINAL_REGISTRY` constructor input would still fail downstream as duplicate terminals; since v6 is
+  pre-production and the user explicitly prefers constructor-level canonical terminals without extra constructor
+  argument accommodation, no additional deployer guard was added in this pass.
+- Triaged review finding 7 as intentionally redundant post-launch sanity checking. `JBOmnichainDeployer` already uses
+  immutable `CONTROLLER` and constructor-derived `DIRECTORY`; the directory post-check is gas-trivial and remains as a
+  documented assertion rather than removed dead code.
+- Reconciled `AUDIT_REPORT_2_AMEND.md` AMEND-01. Same-terminal split pays now mark the internal split source project
+  before `_efficientPay`, net non-feeless destination pay-hook forwards inline, add those forwarded gross amounts to
+  the source-side fee-eligible total, and cap `_feeFreeSurplusOf` back to only the value that remains in the destination
+  project's terminal balance. The new regression proves a 10 ETH same-terminal split whose destination data hook
+  forwards 9 ETH pays the 9 ETH hook-forward fee immediately, tracks only the 1 ETH residue as fee-free surplus, then
+  charges the remaining residue fee on zero-tax cashout for a total protocol fee of `10 ether / 40`.
+- Rechecked the stale Phase 3 token-supply invariant that failed during the AMEND run. The invariant now explicitly
+  applies only before owner-controlled outflows; payouts, surplus allowance, and cashouts can intentionally leave
+  nonzero token supply with zero terminal balance. The targeted invariant and full core suite both pass.
+- Re-ran contract-size builds after the review/amendment fixes. All edited packages remain below EIP-170:
+  `JBMultiTerminal` is very tight at 24,566 bytes with 10 bytes of runtime margin; `JBUniswapV4LPSplitHook` has 589
+  bytes of margin; `JBProjectHandles` has 18,705 bytes; `JBTokenDistributor` has 15,534 bytes;
+  `JB721Distributor` has 12,694 bytes; `REVLoans` has 2,202 bytes.
+- Verification for the review/amendment pass:
+  - `forge fmt --root nana-core-v6 --check`, `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`,
+    `forge build --root nana-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`, and
+    `halmos --root nana-core-v6 --contract HalmosSmoke --solver-threads 1 --solver-timeout-assertion 30s --statistics`:
+    core full suite passed; Halmos smoke proved 5 fee properties; size build passed with the 10-byte
+    `JBMultiTerminal` margin noted above.
+  - `forge fmt --root univ4-lp-split-hook-v6 --check`,
+    `forge test --root univ4-lp-split-hook-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`, and
+    `forge build --root univ4-lp-split-hook-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed,
+    including the Permit2 fork coverage.
+  - `forge fmt --root nana-project-handles-v6 --check`,
+    `forge test --root nana-project-handles-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`, and
+    `forge build --root nana-project-handles-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed.
+  - `forge fmt --root nana-distributor-v6 --check`,
+    `forge test --root nana-distributor-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`, and
+    `forge build --root nana-distributor-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed.
+  - `forge fmt --root revnet-core-v6 --check`,
+    `forge test --root revnet-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`, and
+    `forge build --root revnet-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed.
+- Bumped package metadata for the edited packages and direct `@bananapus/core-v6` consumers: `@bananapus/core-v6`
+  `0.0.57`, `@bananapus/univ4-lp-split-hook-v6` `0.0.43`, `@bananapus/project-handles-v6` `0.0.16`,
+  `@bananapus/distributor-v6` `0.0.22`, and `@rev-net/core-v6` `0.0.60`. `npm pack --dry-run` passed in each edited
+  package.
 
 ## Completion Audit Status
 
@@ -2790,7 +2847,7 @@ Prompt-to-artifact checklist:
 | Prefer reduced surface / no broad unnecessary diffs | PRs removed/narrowed Revnet terminal config and loan-source surface, cleaned stale docs/tests, added narrow guards/regressions, and documented non-obvious changes inline. | Satisfied for current changes. |
 | Package PRs and version/dependency bumps | Existing PR branches carry package versions one patch above npm latest for changed packages where package metadata applies; latest follow-up commits were pushed to existing PRs. | Satisfied for current PR set; no new extra package bump was made for report-only or selector-payload follow-up commits. |
 | CI/tests/contract sizes pass | Refreshed `gh pr checks` inspection on 2026-05-20: `nana-core-v6` #152, `nana-721-hook-v6` #139, `nana-buyback-hook-v6` #134, and `nana-suckers-v6` #134 report passing `forge-fmt`, `forge-test`, and `halmos-smoke`; `nana-project-handles-v6` #20, `nana-project-payer-v6` #19, `revnet-core-v6` #158, `nana-omnichain-deployers-v6` #110, `nana-distributor-v6` #29, `nana-router-terminal-v6` #118, `nana-ownable-v6` #77, `nana-permission-ids-v6` #72, `nana-univ4-lp-split-hook-v6` #132, `banny-retail-v6` #117, `croptop-core-v6` #137, `nana-fee-project-deployer-v6` #78, and `deploy-all-v6` #143 all report passing required jobs. `version-6` #151 reports no checks. | Satisfied for opened PRs as of 2026-05-20. |
-| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, and full-width standard-fee subtraction safety; `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior; `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol` has passing branch proofs for slippage floor/ceiling behavior; and `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol` has passing same-currency peer-value conversion proofs. The core, 721, buyback, and suckers repos now wire those smoke targets into CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
+| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, and full-width standard-fee subtraction safety; `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior; `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol` has passing branch proofs for slippage floor/ceiling behavior; and `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol` has passing same-currency peer-value conversion, merkle branch-root, and bounded tree-root helper proofs. The core, 721, buyback, and suckers repos now wire those smoke targets into CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
 
 Remaining uncovered requirements:
 
@@ -3097,28 +3154,36 @@ Progress against the plan:
   Results: exit code 0 for all three; Halmos passed 3 symbolic slippage branch checks across 14 total paths in 0.04s
   test time, 18 `JBSwapLib` unit/fuzz tests passed, and the size build passed. CI for `nana-buyback-hook-v6` #134
   reports `forge-fmt`, `forge-test`, and `halmos-smoke` passing.
-- Added `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol`, a Halmos smoke proof target for
-  `JBSuckerLib.convertPeerValue` on the same-currency path. It proves zero-value conversion, same-currency/same-decimal
-  identity, and same-currency decimal scaling parity with `JBFixedPointNumber.adjustDecimals`. This keeps the proof on
-  the cross-component decimal-conversion boundary without needing oracle mocks for the different-currency price path.
-  Added `nana-suckers-v6/.github/workflows/halmos.yml` to run the proof in CI.
+- Added `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol`, a Halmos proof target for
+  `JBSuckerLib.convertPeerValue` on the same-currency path, `JBSuckerLib.computeBranchRoot` on fixed merkle proof edge
+  paths with arbitrary leaves/proof branches, and `JBSuckerLib.computeTreeRoot` on fixed tree-count classes with
+  arbitrary branch entries. It proves zero-value conversion, same-currency/same-decimal identity, same-currency decimal
+  scaling parity with `JBFixedPointNumber.adjustDecimals`, branch-root parity against a simple loop reference for
+  all-right, all-left, and mixed index patterns, and tree-root parity for every power-of-two count plus every dense
+  `(2^n - 1)` low-bit mask across the full 32-level tree. This keeps the proof on cross-chain decimal conversion,
+  claim-proof helper, and outbox/inbox root helper boundaries without needing oracle mocks for the different-currency
+  price path. Added `nana-suckers-v6/.github/workflows/halmos.yml` to run the proof in CI with `--loop 40`.
 - Verification commands:
-  `halmos --root nana-suckers-v6 --match-contract JBSuckerLibHalmos --solver-threads 1 --solver-timeout-assertion 30s --statistics`;
+  `halmos --root nana-suckers-v6 --match-contract JBSuckerLibHalmos --loop 40 --solver-threads 1 --solver-timeout-assertion 30s --statistics`;
   `forge test --root nana-suckers-v6 --match-path test/regression/DecimalParametric.t.sol --fail-fast --summary --detailed`;
   `forge test --root nana-suckers-v6 --match-path test/invariants/ConversionParityInvariant.t.sol --fail-fast --summary --detailed`;
+  `forge test --root nana-suckers-v6 --match-path test/unit/merkle_equivalence.t.sol --fail-fast --summary --detailed`;
   `forge build --root nana-suckers-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
-  Results: exit code 0 for all four; Halmos passed 3 symbolic peer-value checks across 29 total paths in 0.13s test
-  time, 8 decimal regression/fuzz tests passed, the conversion parity invariant passed 204,800 calls across 2
-  invariants, and the size build passed. `JBSwapCCIPSucker` remains close to EIP-170 with 36 bytes of runtime margin,
-  but this proof/workflow change is test/CI-only and did not alter runtime bytecode.
+  Results: exit code 0 for all five; Halmos passed 6 symbolic peer-value/merkle checks across 32 total paths in 13.58s
+  test time, 8 decimal regression/fuzz tests passed, the conversion parity invariant passed 204,800 calls across 2
+  invariants, 7 merkle equivalence unit/fuzz tests passed, and the size build passed. `JBSwapCCIPSucker` remains close
+  to EIP-170 with 36 bytes of runtime margin, but this proof/workflow change is test/CI-only and did not alter runtime
+  bytecode. A full arbitrary-count symbolic `computeTreeRoot` reference proof was attempted with `--loop 40` and
+  stopped after exceeding the 30-minute proof budget; the bounded count-class proof above is the CI-safe formal target,
+  and the existing Foundry merkle equivalence suite remains the durable insertion/root behavior test coverage.
 - Clarified the inline documentation around the core reserved-token self-payment guard. The comment now explains that a
   non-zero reserved-token split `projectId` uses the terminal-payment path and why targeting the source project would
   rebook freshly minted reserves as new revenue.
 
 Open formal gaps:
 
-- Halmos is installed and wired for narrow core fee, 721 bitmap, buyback slippage, and sucker peer-value smoke proof
-  suites, but no broad external formal-verification lane exists for the rest of the ecosystem yet.
+- Halmos is installed and wired for narrow core fee, 721 bitmap, buyback slippage, sucker peer-value, and merkle helper
+  proof suites, but no broad external formal-verification lane exists for the rest of the ecosystem yet.
 - Foundry invariants are bounded/randomized properties, not exhaustive proofs.
 - No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
 - Some low-fund peripheral repos still rely on unit/fork tests plus accepted trust-boundary docs rather than dedicated
