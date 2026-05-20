@@ -1073,6 +1073,9 @@ Verification:
   passed, including the existing 4096-run tier add/remove and cleanup fuzz tests.
 - `forge test --root nana-721-hook-v6 --no-match-path 'test/fork/*' --fail-fast --summary --detailed`: exit code
   0 across 51 suites, including `test/Fork.t.sol`, `TieredHookStoreInvariant`, and `TierLifecycleInvariant`.
+- CI surfaced `JB721TiersHook` at 24,579 bytes, 3 bytes over EIP-170. Dropping the nonessential
+  `MissingSplitMetadata` error payload brought it to 24,572 bytes, leaving a 4-byte runtime margin under
+  `forge build --root nana-721-hook-v6 --deny notes --sizes --skip "*/test/**" --skip "*/script/**" --skip SphinxUtils`.
 
 ### DEFIFA-01. Defifa fulfillment, fee accounting, and reserve dilution pass current invariant coverage
 
