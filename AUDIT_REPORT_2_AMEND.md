@@ -454,6 +454,6 @@ Verification after the third-pass source update:
 - `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`: full suite
   passed.
 - `halmos --root nana-core-v6 --contract HalmosSmoke --solver-threads 1 --solver-timeout-assertion 30s --statistics`:
-  5 symbolic fee checks passed.
+  6 symbolic checks passed, including the cash-out boundary table added after this amendment pass.
 - `forge build --root nana-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed;
   `JBMultiTerminal` is at 24,552 runtime bytes, 24 bytes under EIP-170.
