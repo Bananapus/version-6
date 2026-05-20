@@ -2850,6 +2850,13 @@ Progress against the plan:
 - Verification command:
   `forge test --root nana-distributor-v6 --match-path test/invariant/JB721DistributorInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 7 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Strengthened `nana-suckers-v6/test/unit/invariants.t.sol` so the emergency-exit campaign explicitly checks the
+  derived emergency execution bitmap. The harness now documents that normal claims consume the peer-inbox namespace
+  while emergency exits consume local outbox leaves, so the same numeric index can exist in both directions without a
+  double-spend; the new invariant asserts every tracked emergency exit is marked in the emergency namespace.
+- Verification command:
+  `forge test --root nana-suckers-v6 --match-path test/unit/invariants.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 9 invariant properties passed, each with 1024 runs and 102,400 handler calls.
 
 Open formal gaps:
 
