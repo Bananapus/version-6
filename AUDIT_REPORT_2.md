@@ -2657,6 +2657,49 @@ Repo evidence snapshot:
 
 ## Completion Audit Status
 
-Not complete. The objective requires full ecosystem formal verification/deep invariant analysis plus reproducible
-attack-path work where promising. Current work has established the new record keeper and continuation scope, but
-broad subsystem coverage remains open.
+Not complete. The audit sweep has produced report-backed findings, risk-doc updates, regression/fork tests, package
+PRs, and green CI for the latest smart-contract hardening branches, but the user objective explicitly asks for full
+top-to-bottom formal verification. No comprehensive machine-checkable formal spec, proof harness, or composed-system
+verifier exists yet, so the objective cannot be marked complete.
+
+Concrete success criteria derived from the objective:
+
+1. `AUDIT_REPORT_2.md` is the record keeper for findings, hypotheses, commands, tests, accepted risks, and completion
+   gaps.
+2. Scope includes Banny, Defifa, Revnet, Croptop, all in-scope Nana smart-contract repos, Univ4 hooks/routers, and
+   deployer/verifier packages; `nana-referral-split-hook-v6`, `bendystraw-v6`, and `website` are excluded by later user
+   instruction.
+3. Every production module and dependency is mapped to reviewed invariants, trust boundaries, and interaction paths.
+4. Promising invariant-break threads have surviving reproducible PoCs or regression/fork tests.
+5. Cross-component dynamics have fork or integration-style tests wherever feasible.
+6. Changes avoid unnecessary surface area and document non-obvious diffs inline.
+7. Package PRs are open/pushed with package versions/dependencies already bumped on the branch where applicable.
+8. CI, including tests and contract-size checks, passes for opened PRs.
+9. Formal verification exists top to bottom, not just adversarial review plus tests.
+
+Prompt-to-artifact checklist:
+
+| Requirement | Current evidence inspected | Completion status |
+| --- | --- | --- |
+| Use `AUDIT_REPORT_2.md` as record keeper | This file contains the findings, risk decisions, command log, module manifest, and this completion audit. | Satisfied for current work; keep extending it. |
+| Include all intended smart-contract repos | Workspace inventory on 2026-05-20 shows 292 production `src/*.sol` files across 18 in-scope runtime repos: `banny-retail-v6`, `croptop-core-v6`, `defifa`, `nana-721-hook-v6`, `nana-address-registry-v6`, `nana-buyback-hook-v6`, `nana-core-v6`, `nana-distributor-v6`, `nana-omnichain-deployers-v6`, `nana-ownable-v6`, `nana-permission-ids-v6`, `nana-project-handles-v6`, `nana-project-payer-v6`, `nana-router-terminal-v6`, `nana-suckers-v6`, `revnet-core-v6`, `univ4-lp-split-hook-v6`, and `univ4-router-v6`. `nana-fee-project-deployer-v6` and `deploy-all-v6` are deployment/script packages. | Satisfied for smart-contract scope, subject to user exclusions. |
+| Map modules/dependencies/interactions | Module-to-invariant manifest and repo evidence snapshot map each runtime repo to reviewed module groups, invariants, and trust boundaries. | Partially satisfied: repo/module-group level exists, but not a per-function formal dependency graph. |
+| Deep invariant analysis | Findings and regressions cover pooled terminal accounting, split conservation, callback ordering, bridge-bound values, registry freshness, Revnet loans, deployment provenance, router/swap boundaries, 721 tier lifecycle, distributor snapshots, Croptop policy, Banny custody, and Defifa game flow. | Partially satisfied: substantial adversarial coverage, not exhaustive formal proof. |
+| Reproducible PoCs for promising threads | Verified findings have in-repo regression/fork tests where relevant; temporary gas/attack harnesses are documented when removed. | Satisfied for confirmed findings in this pass; future confirmed threads should add durable tests. |
+| Cross-component fork/integration tests | Report records fork/integration evidence for deploy-all, ProjectPayer+terminal, buyback/V4, router terminal, Univ4 router, LP split, sucker, Revnet, Croptop, Banny, Defifa, and omnichain deployer paths. | Satisfied for the current reviewed findings; no single exhaustive cross-chain campaign exists. |
+| Prefer reduced surface / no broad unnecessary diffs | PRs removed/narrowed Revnet terminal config and loan-source surface, cleaned stale docs/tests, added narrow guards/regressions, and documented non-obvious changes inline. | Satisfied for current changes. |
+| Package PRs and version/dependency bumps | Existing PR branches carry package versions one patch above npm latest for changed packages where package metadata applies; latest follow-up commits were pushed to existing PRs. | Satisfied for current PR set; no new extra package bump was made for report-only or selector-payload follow-up commits. |
+| CI/tests/contract sizes pass | Final `gh pr checks` inspection: `nana-core-v6` #152, `nana-project-handles-v6` #20, `nana-project-payer-v6` #19, `nana-suckers-v6` #134, `revnet-core-v6` #158, `nana-omnichain-deployers-v6` #110, `nana-721-hook-v6` #139, and `nana-distributor-v6` #29 all report passing `forge-fmt` and `forge-test`. `version-6` #151 reports no checks. | Satisfied for opened PRs as of 2026-05-20. |
+| Formal verification top to bottom | No Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, and subagent review. | Not satisfied. This blocks completion. |
+
+Remaining uncovered requirements:
+
+- Build a formal specification plan before claiming "formal verification": define protocol-level invariants for
+  controller/terminal/store, hooks, suckers, Revnet loans, router/swap paths, 721 tier accounting, distributor rewards,
+  deployers, and games/apps, then choose proof tooling per layer.
+- Convert the strongest cross-component invariants into machine-checkable specs or bounded model/property harnesses.
+- Produce a final per-module manifest that ties each `src/*.sol` file, not only each module group, to a concrete
+  invariant, test, trust boundary, or proof artifact.
+- Decide whether the accepted slow-suite split for omnichain/fork coverage is sufficient for release gates, and record
+  exact commands that CI should run versus local release-only verification.
+- Re-run this completion audit after formal-spec/proof artifacts exist; until then, do not mark the goal complete.
