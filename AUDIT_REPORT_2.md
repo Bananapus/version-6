@@ -2997,11 +2997,24 @@ Progress against the plan:
 - Verification command:
   `forge test --root deploy-all-v6 --match-path test/fork/FlashLoanInvariantsFork.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 4 fork tests passed.
+- Re-ran the small registry/utility repos that do not justify dedicated stateful invariant harnesses but do sit on
+  important trust boundaries. `nana-address-registry-v6` covers CREATE/CREATE2 prediction, zero deployers,
+  unauthorized finalization, nonce truncation/boundaries, duplicate registration, deployment-helper validation, and a
+  fork integration path. `nana-project-handles-v6` covers ENS resolver soft-fail behavior, malformed return data,
+  setter isolation, chain-ID mismatch, control-character rejection, and bidirectional Unicode spoof rejection.
+  `nana-project-payer-v6` covers native/ERC-20 forwarding, fee-on-transfer acceptance, allowance cleanup, callback
+  token accounting, nested payer tracking, router-style refunds, forced-ETH sweep behavior, and fork payment paths.
+- Verification commands:
+  `forge test --root nana-address-registry-v6 --fail-fast --summary --detailed`;
+  `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`;
+  `forge test --root nana-project-payer-v6 --fail-fast --summary --detailed`.
+  Result: exit code 0 for all three; 53 address-registry tests passed including 1 fork test, 60 project-handle tests
+  passed, and 67 project-payer tests passed including 5 fork tests and the audit regression slice.
 
 Open formal gaps:
 
 - No external formal-verification tool is installed or wired into CI yet.
 - Foundry invariants are bounded/randomized properties, not exhaustive proofs.
 - No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
-- Some low-fund or registry-style repos currently rely on unit/fork tests plus accepted trust-boundary docs rather than
-  dedicated invariant harnesses.
+- Some low-fund peripheral repos still rely on unit/fork tests plus accepted trust-boundary docs rather than dedicated
+  invariant harnesses.
