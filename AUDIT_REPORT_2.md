@@ -2908,6 +2908,19 @@ Progress against the plan:
 - Verification command:
   `forge test --root defifa --match-path test/DefifaMintCostInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 3 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Re-ran Revnet's loan, invincibility, and pool-price invariant surfaces. The loan campaign covers borrow, repay,
+  liquidation, collateral reallocation, and time advancement; the invincibility campaign covers pay/borrow, repayment,
+  liquidation, cash-out, stage changes, reserved-token sends, and fee-project accounting; the pool-price campaign
+  checks deterministic pool price consistency.
+- Verification command:
+  `forge test --root revnet-core-v6 --match-path test/REVLoans.invariants.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 5 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Verification command:
+  `forge test --root revnet-core-v6 --match-contract REVInvincibility_Invariants --fail-fast --summary --detailed`.
+  Result: exit code 0; 6 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Verification command:
+  `forge test --root revnet-core-v6 --match-path test/invariants/PoolPriceInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 2 invariant properties passed, each with 1024 runs and 102,400 handler calls.
 
 Open formal gaps:
 
