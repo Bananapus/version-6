@@ -2850,7 +2850,7 @@ Prompt-to-artifact checklist:
 | Prefer reduced surface / no broad unnecessary diffs | PRs removed/narrowed Revnet terminal config and loan-source surface, cleaned stale docs/tests, added narrow guards/regressions, and documented non-obvious changes inline. | Satisfied for current changes. |
 | Package PRs and version/dependency bumps | Existing PR branches carry package versions one patch above npm latest for changed packages where package metadata applies; latest follow-up commits were pushed to existing PRs. | Satisfied for current PR set; no new extra package bump was made for report-only or selector-payload follow-up commits. |
 | CI/tests/contract sizes pass | Refreshed `gh pr checks` inspection on 2026-05-20: `nana-core-v6` #152, `nana-721-hook-v6` #139, `nana-buyback-hook-v6` #134, and `nana-suckers-v6` #134 report passing `forge-fmt`, `forge-test`, and `halmos-smoke`; `nana-project-handles-v6` #20, `nana-project-payer-v6` #19, `revnet-core-v6` #158, `nana-omnichain-deployers-v6` #110, `nana-distributor-v6` #29, `nana-router-terminal-v6` #118, `nana-ownable-v6` #77, `nana-permission-ids-v6` #72, `nana-univ4-lp-split-hook-v6` #132, `banny-retail-v6` #117, `croptop-core-v6` #137, `nana-fee-project-deployer-v6` #78, and `deploy-all-v6` #143 all report passing required jobs. `version-6` #151 reports no checks. | Satisfied for opened PRs as of 2026-05-20. |
-| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, full-width standard-fee subtraction safety, and an audit-selected `JBCashOuts` bonding-curve boundary table; `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior; `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol` has passing branch proofs for slippage floor/ceiling behavior; and `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol` has passing same-currency peer-value conversion, merkle branch-root, and bounded tree-root helper proofs. The core, 721, buyback, and suckers repos now wire those smoke targets into CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
+| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, full-width standard-fee subtraction safety, and an audit-selected `JBCashOuts` bonding-curve boundary table; `nana-core-v6/test/formal/BondingCurveProperties.t.sol` now also pins the same cash-out tax-rate boundary table in the existing Forge property suite; `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior; `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol` has passing branch proofs for slippage floor/ceiling behavior; and `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol` has passing same-currency peer-value conversion, merkle branch-root, and bounded tree-root helper proofs. The core, 721, buyback, and suckers repos now wire those smoke targets into CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
 
 Remaining uncovered requirements:
 
@@ -3182,16 +3182,19 @@ Progress against the plan:
 - Clarified the inline documentation around the core reserved-token self-payment guard. The comment now explains that a
   non-zero reserved-token split `projectId` uses the terminal-payment path and why targeting the source project would
   rebook freshly minted reserves as new revenue.
-- Extended `nana-core-v6/test/formal/HalmosSmoke.t.sol` with `check_cashOutBoundaryTaxRateTable()`, a CI-safe concrete
-  Halmos proof for audit-selected bonding-curve tax-rate edges. A broader symbolic cash-out domain was attempted and
-  abandoned as not CI-safe after exceeding the smoke budget; the durable check pins exact partial/full cash-out branch
-  outputs for tax rates `{0, 1, 2500, 5000, 7500, 9999, 10000}`.
+- Extended `nana-core-v6/test/formal/HalmosSmoke.t.sol` with `check_cashOutBoundaryTaxRateTable()` and
+  `nana-core-v6/test/formal/BondingCurveProperties.t.sol` with `test_cashOut_boundaryTaxRateTable()`, pinning
+  audit-selected bonding-curve tax-rate edges in both the CI Halmos smoke target and the existing Forge property
+  suite. A broader symbolic cash-out domain was attempted and abandoned as not CI-safe after exceeding the smoke
+  budget; the durable checks pin exact partial/full cash-out branch outputs for tax rates
+  `{0, 1, 2500, 5000, 7500, 9999, 10000}`.
 - Verification commands:
   `forge fmt --root nana-core-v6 --check`;
+  `forge test --root nana-core-v6 --match-path test/formal/BondingCurveProperties.t.sol --deny notes --fail-fast --summary --detailed`;
   `halmos --root nana-core-v6 --contract HalmosSmoke --solver-threads 1 --solver-timeout-assertion 30s --statistics`;
   `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`.
-  Result: exit code 0 for all three; Halmos passed 6 checks with 0 failures in 7.90s total, including the new
-  `check_cashOutBoundaryTaxRateTable()` path, and the full core suite passed.
+  Result: exit code 0 for all four; the bonding-curve property file passed 8 tests, Halmos passed 6 checks with 0
+  failures in 7.97s total including `check_cashOutBoundaryTaxRateTable()`, and the full core suite passed.
 
 Open formal gaps:
 
