@@ -2318,6 +2318,20 @@ before relying on this as the final manifest.
 | `univ4-lp-split-hook-v6` | 4 files: 2 root, 2 interfaces. | LP-SPLIT-01/02 invariant and fork coverage. |
 | `univ4-router-v6` | 2 files: 1 root, 1 library. | ROUTER-UNI-01/02 invariant and V4 routing coverage. |
 
+### Release-Gate Command Split
+
+The slow-suite split is intentionally path-scoped instead of weakening coverage. PR CI should keep running each repo's
+standard `forge fmt --check`, full non-script `forge test`, and size build jobs. Release verification should add the
+expensive fork/invariant slices below and record the exact RPC/chain used.
+
+| Gate | Command | Evidence / reason |
+| --- | --- | --- |
+| Standard contract PR CI | `forge test --deny notes --fail-fast --summary --detailed --skip "*/script/**"` plus `forge build --deny notes --sizes --skip "*/test/**" --skip "*/script/**" --skip SphinxUtils`. | Matches the ecosystem workflow shape in `STYLE_GUIDE.md`; refreshed PR checks report passing required jobs for the opened branches. |
+| Omnichain fast invariant release slice | `forge test --root nana-omnichain-deployers-v6 --match-path 'test/invariants/*.t.sol' --fail-fast --summary --detailed`. | Already run: 2 invariant campaigns, 1024 runs/depth 100 each, 204,800 handler calls total, 51.2s. Keeps the randomized campaign local and avoids replaying fork setup for every handler call. |
+| Omnichain fork release slice | `forge test --root nana-omnichain-deployers-v6 --match-path 'test/fork/*.t.sol' --fail-fast --summary --detailed`. | Already run: 5 fork suites and 24 tests for sucker deployment, cash-out, queue/adjust, stress, and weight behavior. This is where real V4/buyback/sucker composition belongs. |
+| Omnichain broad local regression slice | `forge test --root nana-omnichain-deployers-v6 --skip '*/fork/**' --fail-fast --summary --detailed`. | Already run: exit code 0 across 29 suites and 161 tests/properties, including both local invariant campaigns. This path-based gate avoids the older filename-sensitive `--no-match-path '*Fork.t.sol'` pattern, which can accidentally include fork files whose names do not end with `Fork.t.sol`. |
+| Full release rehearsal | Run the standard PR gate, the omnichain invariant slice, the omnichain fork slice, and any app/deploy-all fork suites touched by the release branch. | Keeps CI short enough for PR iteration while preserving fork-backed cross-component coverage before merge/release. |
+
 ### Connected Subagent Coverage Reconciliation
 
 Read-only subagents were used for the next pass over high-coupling surfaces. They did not edit files; this section
