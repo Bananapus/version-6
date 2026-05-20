@@ -2962,6 +2962,16 @@ Progress against the plan:
   `forge test --root nana-core-v6 --match-path test/invariants/Phase3DeepInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0 for all three; 8 comprehensive invariants, 6 economic simulation invariants, and 8 phase-3 deep
   invariants passed, each with 1024 runs and 102,400 handler calls.
+- Re-ran `nana-omnichain-deployers-v6/test/invariants/*.t.sol`, the shortened local invariant slice that replaced the
+  slower repeated omnichain campaign with one assertion entrypoint per handler. The core campaign randomizes project
+  payments, cash-outs, sucker payments/cash-outs, and time warps; the cross-chain campaign adds ruleset queuing,
+  mocked remote supply/surplus, and reserved-token distribution. Together the assertions cover sucker zero-tax
+  cash-outs, 721 hook ordering/storage, fund conservation, token supply bounds, deployer ETH pass-through, hook
+  carry-forward, queued ruleset hook configs, launch hook immutability, and no actor profit.
+- Verification command:
+  `forge test --root nana-omnichain-deployers-v6 --match-path 'test/invariants/*.t.sol' --fail-fast --summary --detailed`.
+  Result: exit code 0; `CrossChainDeployerInvariant` passed 1 combined property in 23.71s and
+  `OmnichainDeployerInvariant` passed 1 combined property in 27.19s, each with 1024 runs and 102,400 handler calls.
 
 Open formal gaps:
 
