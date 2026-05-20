@@ -3217,6 +3217,20 @@ Progress against the plan:
   `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`.
   Result: exit code 0 for all four; the bonding-curve property file passed 8 tests, Halmos passed 6 checks with 0
   failures in 7.97s total including `check_cashOutBoundaryTaxRateTable()`, and the full core suite passed.
+- Extended `revnet-core-v6/test/TestLiquidationBehavior.t.sol` with the liquidation-duration boundary triplet. The new
+  regression calls `liquidateExpiredLoansFrom(...)` at `createdAt + LOAN_LIQUIDATION_DURATION - 1`,
+  `createdAt + LOAN_LIQUIDATION_DURATION`, and `createdAt + LOAN_LIQUIDATION_DURATION + 1`, proving the exact boundary
+  second is still non-liquidatable while the next second burns the loan NFT and clears loan accounting.
+- Extended `revnet-core-v6/test/REVLoansSourceFeeRecovery.t.sol` with a prepaid-duration source-fee boundary test. It
+  documents that one second after prepaid expiry can still round to zero because the elapsed fee percent is quantized
+  into `JBConstants.MAX_FEE` steps, then asserts the first calculated nonzero fee step accrues a source fee.
+- Verification commands:
+  `forge fmt --root revnet-core-v6 --check`;
+  `forge test --root revnet-core-v6 --match-path test/TestLiquidationBehavior.t.sol --summary --detailed`;
+  `forge test --root revnet-core-v6 --match-path test/REVLoansSourceFeeRecovery.t.sol --summary --detailed`;
+  `forge test --root revnet-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`.
+  Result: exit code 0 for all four; `TestLiquidationBehavior` passed 5 tests,
+  `REVLoansSourceFeeRecovery` passed 6 tests, and the full revnet suite passed with invariants and fork-tagged tests.
 
 Open formal gaps:
 
