@@ -2703,3 +2703,81 @@ Remaining uncovered requirements:
 - Decide whether the accepted slow-suite split for omnichain/fork coverage is sufficient for release gates, and record
   exact commands that CI should run versus local release-only verification.
 - Re-run this completion audit after formal-spec/proof artifacts exist; until then, do not mark the goal complete.
+
+## Formal Verification Plan
+
+Current tooling state on 2026-05-20:
+
+- Available: Foundry 1.6.0-v1.7.0, including the existing fuzz and invariant harnesses.
+- Not currently installed in the workspace shell: `halmos`, `certoraRun`, `scribble`, and `echidna`.
+- Existing machine-checkable evidence is therefore bounded Foundry tests/invariants plus fork/integration tests. This is
+  valuable adversarial evidence, but it is not a top-to-bottom formal proof.
+
+Existing invariant-harness inventory:
+
+| Repo | Existing invariant/spec surface |
+| --- | --- |
+| `nana-core-v6` | `test/ComprehensiveInvariant.t.sol`, `EconomicSimulation.t.sol`, `PermissionsInvariant.t.sol`, `test/invariants/**`, and `test/formal/**`. |
+| `nana-721-hook-v6` | `test/invariants/TierLifecycleInvariant.t.sol`, `TieredHookStoreInvariant.t.sol`, and handlers. |
+| `nana-distributor-v6` | `test/invariant/JB721DistributorInvariant.t.sol`. |
+| `nana-buyback-hook-v6` | `test/invariant/BuybackHookInvariant.t.sol`. |
+| `nana-router-terminal-v6` | `test/invariant/RouterTerminalInvariant.t.sol`. |
+| `nana-suckers-v6` | `test/invariants/ConversionParityInvariant.t.sol` and `test/unit/invariants.t.sol`. |
+| `nana-omnichain-deployers-v6` | `test/invariants/**` local deployer/721/terminal/sucker campaigns. |
+| `revnet-core-v6` | `REVLoans.invariants.t.sol`, `REVInvincibility.t.sol`, and `test/invariants/PoolPriceInvariant.t.sol`. |
+| `defifa` | `test/DefifaMintCostInvariant.t.sol`. |
+| `nana-ownable-v6` | `test/OwnableInvariantTests.sol`. |
+| `univ4-lp-split-hook-v6` | `test/invariant/LPSplitHookInvariant.t.sol`. |
+| `univ4-router-v6` | `test/Invariant.t.sol`. |
+| `deploy-all-v6` | `test/fork/FlashLoanInvariantsFork.t.sol` for deployed-composition checks. |
+
+Proof layers to build next:
+
+1. Core ledger model: `JBController`, `JBMultiTerminal`, `JBTerminalStore`, `JBTokens`, `JBRulesets`,
+   `JBSplits`, and permission/directory dependencies. First invariants: terminal solvency, project-token supply,
+   reserved-token accounting, payout-limit consumption, fee-free surplus, held-fee processing, migration
+   conservation, and split lock uniqueness.
+2. Hook and plugin model: 721 tiers, distributor rewards, buyback/router hooks, project payer, project handles, and LP
+   split hooks. First invariants: split conservation, no residual approvals after hook execution, tier supply/reserve
+   bounds, reward-token solvency, and external registry/resolver trust boundaries.
+3. Cross-chain model: suckers, omnichain deployers, and Revnet loan/sucker interactions. First invariants:
+   bridge-bound value is consumed exactly once, inbox/outbox nonces are monotonic, remote snapshots never create local
+   backing, same peer aggregation uses fresh per-chain snapshots, and multiple suckers per chain pair remain separate
+   risk lanes.
+4. App/deployer model: Revnet, Croptop, Defifa, Banny, `nana-fee-project-deployer-v6`, and `deploy-all-v6`. First
+   invariants: constructor-pinned canonical dependencies, deployment replay identity, project-NFT handoff, app-specific
+   custody boundaries, and launch/game phase transitions.
+
+Candidate implementation path:
+
+1. Strengthen Foundry invariants first because the toolchain is already present. Promote the highest-value regression
+   assertions into stateful properties and keep fork-backed checks for cross-component dynamics that depend on real
+   deployed integrations.
+2. Add a proof-tool lane once an external verifier is approved/installed. Halmos is the most natural first target for
+   Solidity-level bounded symbolic properties; Certora/Scribble/Echidna remain candidates for richer rule specs and
+   long-running campaigns.
+3. Produce a per-`src/*.sol` manifest before completion. Each file should map to one of: a proved invariant, a Foundry
+   property, a fork/integration regression, or an explicitly accepted trust boundary.
+
+Initial machine-checkable spec targets:
+
+- Terminal solvency: for every accepted token and project, total terminal ledger claims cannot exceed actual terminal
+  backing after excluding explicitly bridge-bound, held-fee, or pending external-transfer state.
+- Split conservation: every payout/reserve/hook split either consumes exactly its assigned value or returns/revokes the
+  unused value, with no residual token allowance left behind.
+- Revnet loan consistency: total borrowed, collateral, reallocation, repayment-with-new-loan, and cross-chain snapshot
+  state remain internally consistent across all loan lifecycle actions.
+- Sucker bridge safety: bridge roots, inbox claims, emergency executions, swap callbacks, approvals, and remote
+  snapshots cannot mint local backing or claim the same bridge-bound value twice.
+- 721 tier lifecycle: tier supply, reserve supply, category ordering, cash-out weights, cleaned tiers, and metadata
+  lookup state remain bounded after add/remove/mint/cash-out flows.
+- Distributor rewards: hook-scoped reward balances, vesting totals, voting snapshots, and actual ERC-20/native backing
+  stay solvent under callback-capable token behavior.
+
+Open formal gaps:
+
+- No external formal-verification tool is installed or wired into CI yet.
+- Foundry invariants are bounded/randomized properties, not exhaustive proofs.
+- No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
+- Some low-fund or registry-style repos currently rely on unit/fork tests plus accepted trust-boundary docs rather than
+  dedicated invariant harnesses.
