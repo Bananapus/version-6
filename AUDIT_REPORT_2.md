@@ -2990,6 +2990,13 @@ Progress against the plan:
   `forge test --root banny-retail-v6 --skip '*/script/**' --match-path 'test/{DecorateFlow.t.sol,OutfitTransferLifecycle.t.sol,TestQALastMile.t.sol,regression/*.t.sol}' --fail-fast --summary --detailed`;
   `forge test --root banny-retail-v6 --match-path test/Fork.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0 for both; 90 local custody/composition tests passed and 79 fork tests passed.
+- Re-ran `deploy-all-v6/test/fork/FlashLoanInvariantsFork.t.sol`, the deployed-composition fork suite that ports the
+  highest-value core flash-loan attack vectors into the deploy-all environment. The fork tests cover atomic
+  pay/cash-out no-profit behavior, multi-payer reclaim conservation, payout sandwich timing, and reserved-token
+  inflation effects while using the fork deployment stack instead of isolated core mocks.
+- Verification command:
+  `forge test --root deploy-all-v6 --match-path test/fork/FlashLoanInvariantsFork.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 4 fork tests passed.
 
 Open formal gaps:
 
