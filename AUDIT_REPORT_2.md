@@ -2807,10 +2807,11 @@ Repo evidence snapshot:
   - `forge fmt --root revnet-core-v6 --check`,
     `forge test --root revnet-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`, and
     `forge build --root revnet-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed.
-- Bumped package metadata for the edited packages and direct `@bananapus/core-v6` consumers: `@bananapus/core-v6`
-  `0.0.57`, `@bananapus/univ4-lp-split-hook-v6` `0.0.43`, `@bananapus/project-handles-v6` `0.0.16`,
-  `@bananapus/distributor-v6` `0.0.22`, and `@rev-net/core-v6` `0.0.60`. `npm pack --dry-run` passed in each edited
-  package.
+- Bumped package metadata for the edited packages: `@bananapus/core-v6` `0.0.57`,
+  `@bananapus/univ4-lp-split-hook-v6` `0.0.43`, `@bananapus/project-handles-v6` `0.0.16`,
+  `@bananapus/distributor-v6` `0.0.22`, and `@rev-net/core-v6` `0.0.60`. Direct `@bananapus/core-v6` dependency
+  ranges in downstream packages stay on the latest published line so CI can install before `0.0.57` is published.
+  `npm pack --dry-run` passed in each edited package.
 
 ## Completion Audit Status
 
