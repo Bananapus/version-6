@@ -2785,19 +2785,21 @@ Repo evidence snapshot:
   applies only before owner-controlled outflows; payouts, surplus allowance, and cashouts can intentionally leave
   nonzero token supply with zero terminal balance. The targeted invariant and full core suite both pass.
 - Re-ran contract-size builds after the review/amendment fixes. All edited packages remain below EIP-170:
-  `JBMultiTerminal` is very tight at 24,566 bytes with 10 bytes of runtime margin; `JBUniswapV4LPSplitHook` has 589
+  `JBMultiTerminal` is very tight at 24,552 bytes with 24 bytes of runtime margin; `JBUniswapV4LPSplitHook` has 589
   bytes of margin; `JBProjectHandles` has 18,705 bytes; `JBTokenDistributor` has 15,534 bytes;
   `JB721Distributor` has 12,694 bytes; `REVLoans` has 2,202 bytes.
 - Verification for the review/amendment pass:
   - `forge fmt --root nana-core-v6 --check`, `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`,
     `forge build --root nana-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`, and
     `halmos --root nana-core-v6 --contract HalmosSmoke --solver-threads 1 --solver-timeout-assertion 30s --statistics`:
-    core full suite passed; Halmos smoke proved 5 fee properties; size build passed with the 10-byte
+    core full suite passed; Halmos smoke proved 5 fee properties; size build passed with the 24-byte
     `JBMultiTerminal` margin noted above.
   - `forge fmt --root univ4-lp-split-hook-v6 --check`,
     `forge test --root univ4-lp-split-hook-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`, and
     `forge build --root univ4-lp-split-hook-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed,
     including the Permit2 fork coverage.
+  - `forge test --root univ4-lp-split-hook-v6 --match-path test/fork/DeployPositionManagerAddresses.t.sol --fail-fast --summary --detailed`:
+    7 passed after pinning the mainnet PositionManager sanity check to the suite's stable Ethereum fork block.
   - `forge fmt --root nana-project-handles-v6 --check`,
     `forge test --root nana-project-handles-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`, and
     `forge build --root nana-project-handles-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed.
