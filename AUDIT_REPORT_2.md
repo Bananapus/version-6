@@ -3224,13 +3224,18 @@ Progress against the plan:
 - Extended `revnet-core-v6/test/REVLoansSourceFeeRecovery.t.sol` with a prepaid-duration source-fee boundary test. It
   documents that one second after prepaid expiry can still round to zero because the elapsed fee percent is quantized
   into `JBConstants.MAX_FEE` steps, then asserts the first calculated nonzero fee step accrues a source fee.
+- Extended `revnet-core-v6/test/REVLoansSourced.t.sol` with fixed cash-out/loan parity wrappers for
+  `cashOutTaxRate` values `{3999, 4000, 4001}`. The existing fuzz body is now shared through an internal helper so the
+  audit-selected 4,000 / 10,000 tax-rate edge is always hit without widening the unrelated fuzz domain.
 - Verification commands:
   `forge fmt --root revnet-core-v6 --check`;
   `forge test --root revnet-core-v6 --match-path test/TestLiquidationBehavior.t.sol --summary --detailed`;
   `forge test --root revnet-core-v6 --match-path test/REVLoansSourceFeeRecovery.t.sol --summary --detailed`;
+  `forge test --root revnet-core-v6 --match-path test/REVLoansSourced.t.sol --summary --detailed`;
   `forge test --root revnet-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`.
-  Result: exit code 0 for all four; `TestLiquidationBehavior` passed 5 tests,
-  `REVLoansSourceFeeRecovery` passed 6 tests, and the full revnet suite passed with invariants and fork-tagged tests.
+  Result: exit code 0 for all five; `TestLiquidationBehavior` passed 5 tests,
+  `REVLoansSourceFeeRecovery` passed 6 tests, `REVLoansSourced` passed 25 tests with 1 skipped, and the full revnet
+  suite passed with invariants and fork-tagged tests.
 
 Open formal gaps:
 
