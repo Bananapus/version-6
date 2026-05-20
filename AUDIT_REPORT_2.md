@@ -2290,6 +2290,34 @@ boundaries; it does not replace a machine-checked formal spec.
 | `nana-fee-project-deployer-v6` | `script/Deploy.s.sol` deployment surface. | FEEDEPLOY-01 covers exact fee-project replay guard, project-1 squat handling, canonical NANA/Revnet shape checks, native terminal setup, and fork/regression deployment coverage. | Any Revnet config evolution must be reflected in the replay guard. |
 | `deploy-all-v6` | `script/Deploy.s.sol`, `script/Verify.s.sol`, post-deploy artifact/build/distribution scripts and `chains.json`. | DEPLOY-VERIFY-01 and DEPLOYCONFIG-01 cover fail-closed artifact provenance, dirty/stale manifest gates, library/constructor verification, configured-revnet replay guards, deployment resume rehearsal, and full-stack fork coverage. | Final production readiness still needs exact-chain deployment rehearsal evidence for every intended production chain. |
 
+### Source File Coverage Checkpoint
+
+This is an intermediate path-partition manifest for the 292 in-scope production `src/*.sol` files. It is not a formal
+proof and it is not yet the final literal per-file appendix, but every concrete file returned by `rg --files <repo>/src`
+belongs to one partition below. A future completion pass should expand any partition that needs file-by-file evidence
+before relying on this as the final manifest.
+
+| Repo | File partitions checked | Evidence bucket |
+| --- | --- | --- |
+| `banny-retail-v6` | 2 files: 1 root, 1 interface. | BANNY-01/02 local and fork resolver coverage. |
+| `croptop-core-v6` | 11 files: 3 root, 3 interfaces, 5 structs. | CROPTOP-01/02 publisher/deployer/fork coverage. |
+| `defifa` | 22 files: 5 root, 6 interfaces, 2 libraries, 2 enums, 7 structs. | DEFIFA-01 game-flow, fee, reserve, governance, and invariant coverage. |
+| `nana-721-hook-v6` | 38 files: 6 root, 2 abstract, 8 interfaces, 5 libraries, 17 structs. | 721-01/02/03 tier lifecycle, split, fork, and invariant coverage. |
+| `nana-address-registry-v6` | 2 files: 1 root, 1 interface. | ADDRESS-01 plus full utility test/fork checkpoint. |
+| `nana-buyback-hook-v6` | 8 files: 2 root, 3 interfaces, 1 library, 2 structs. | BUYBACK-01/02/03 and ROUTER-UNI-01 swap/fork coverage. |
+| `nana-core-v6` | 87 files: 16 root, 2 abstract, 31 interfaces, 10 libraries, 5 periphery, 22 structs, 1 enum. | CORE-01 through CORE-07 plus core formal/invariant campaigns. |
+| `nana-distributor-v6` | 8 files: 3 root, 3 interfaces, 2 structs. | DIST-01 through DIST-05 and distributor invariant/fork coverage. |
+| `nana-omnichain-deployers-v6` | 6 files: 1 root, 1 interface, 4 structs. | OMNI-01/02 plus shortened omnichain invariant coverage. |
+| `nana-ownable-v6` | 4 files: 2 root, 1 interface, 1 struct. | OWNABLE-01 and ownable invariant coverage. |
+| `nana-permission-ids-v6` | 1 root file. | PERMISSION-01 constants scan and build gate. |
+| `nana-project-handles-v6` | 2 files: 1 root, 1 interface. | HANDLES-01 plus malformed resolver/control-character coverage. |
+| `nana-project-payer-v6` | 5 files: 2 root, 3 interfaces. | PAYER-01/02/03/04 plus audit/fork payer coverage. |
+| `nana-router-terminal-v6` | 16 files: 3 root, 8 interfaces, 2 libraries, 3 structs. | ROUTER-TERM-01 and ROUTER-UNI-01 router/fork coverage. |
+| `nana-suckers-v6` | 58 files: 8 root, 7 deployers, 21 interfaces, 8 libraries, 11 structs, 2 enums, 1 utility. | SUCKER-01/02, SUCKER-BRIDGE-01, SUCKER-REG-01, SUCKER-MAP-01, and SUCKER-ALLOW-01. |
+| `revnet-core-v6` | 16 files: 3 root, 3 interfaces, 10 structs. | REVNET-TERM-01, REVNET-LOAN-01, REVNET-FEE-01, and Revnet invariant/fork coverage. |
+| `univ4-lp-split-hook-v6` | 4 files: 2 root, 2 interfaces. | LP-SPLIT-01/02 invariant and fork coverage. |
+| `univ4-router-v6` | 2 files: 1 root, 1 library. | ROUTER-UNI-01/02 invariant and V4 routing coverage. |
+
 ### Connected Subagent Coverage Reconciliation
 
 Read-only subagents were used for the next pass over high-coupling surfaces. They did not edit files; this section
@@ -2756,8 +2784,8 @@ Remaining uncovered requirements:
   controller/terminal/store, hooks, suckers, Revnet loans, router/swap paths, 721 tier accounting, distributor rewards,
   deployers, and games/apps, then choose proof tooling per layer.
 - Convert the strongest cross-component invariants into machine-checkable specs or bounded model/property harnesses.
-- Produce a final per-module manifest that ties each `src/*.sol` file, not only each module group, to a concrete
-  invariant, test, trust boundary, or proof artifact.
+- Expand the source-file coverage checkpoint into a final literal per-file manifest that ties each `src/*.sol` file,
+  not only each path partition, to a concrete invariant, test, trust boundary, or proof artifact.
 - Decide whether the accepted slow-suite split for omnichain/fork coverage is sufficient for release gates, and record
   exact commands that CI should run versus local release-only verification.
 - Re-run this completion audit after formal-spec/proof artifacts exist; until then, do not mark the goal complete.
