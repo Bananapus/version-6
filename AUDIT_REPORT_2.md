@@ -2928,6 +2928,40 @@ Progress against the plan:
 - Verification command:
   `forge test --root revnet-core-v6 --match-path test/invariants/PoolPriceInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 2 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Re-ran core formal-style property tests in `nana-core-v6/test/formal/*.t.sol`, covering fee arithmetic and
+  bonding-curve cash-out properties. The bounded fuzz properties check fee additivity, return consistency,
+  round-trips, subtraction safety, multi-split accumulation, cash-out boundedness, full redemption, no-arbitrage,
+  max-tax behavior, monotonicity, and metadata packing round-trips.
+- Verification command:
+  `forge test --root nana-core-v6 --match-path 'test/formal/*.t.sol' --fail-fast --summary --detailed`.
+  Result: exit code 0; 13 fuzz/property tests passed with 4096 fuzz runs each.
+- Re-ran `nana-core-v6/test/PermissionsInvariant.t.sol`, covering permission bit packing and stateful
+  set/revoke/root-forwarding/wildcard attempts. The bounded properties check that the packed model matches expected
+  bits, bit 0 is never set, root forwarding is blocked, wildcard-by-operator is blocked, and `hasPermission(...)`
+  matches the bit model.
+- Verification command:
+  `forge test --root nana-core-v6 --match-path test/PermissionsInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 5 invariant properties passed with 1024 runs and 102,400 handler calls each, plus 4
+  bit-packing tests.
+- Re-ran `nana-core-v6/test/invariants/TokensInvariant.t.sol` and
+  `nana-core-v6/test/invariants/RulesetsInvariant.t.sol`. The token campaign covers mint, burn, credit claim, and
+  credit transfer paths; the ruleset campaign covers queued rulesets, time advancement, and weight cache updates.
+- Verification commands:
+  `forge test --root nana-core-v6 --match-path test/invariants/TokensInvariant.t.sol --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --match-path test/invariants/RulesetsInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0 for both; 4 token invariants and 4 ruleset invariants passed, each with 1024 runs and 102,400
+  handler calls.
+- Re-ran `nana-core-v6/test/ComprehensiveInvariant.t.sol`, `nana-core-v6/test/EconomicSimulation.t.sol`, and
+  `nana-core-v6/test/invariants/Phase3DeepInvariant.t.sol`. Together these campaigns cover multi-operation terminal
+  solvency, token supply consistency, payout limits, reclaimable surplus bounds, reserve distribution, held-fee
+  accounting, cross-project split cascades, fee-project monotonicity, no-profit-from-cash-out-alone assumptions,
+  actor extraction bounds, and global conservation.
+- Verification commands:
+  `forge test --root nana-core-v6 --match-path test/ComprehensiveInvariant.t.sol --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --match-path test/EconomicSimulation.t.sol --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --match-path test/invariants/Phase3DeepInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0 for all three; 8 comprehensive invariants, 6 economic simulation invariants, and 8 phase-3 deep
+  invariants passed, each with 1024 runs and 102,400 handler calls.
 
 Open formal gaps:
 
