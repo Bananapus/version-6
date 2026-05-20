@@ -2857,6 +2857,14 @@ Progress against the plan:
 - Verification command:
   `forge test --root nana-suckers-v6 --match-path test/unit/invariants.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 9 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Re-ran `nana-buyback-hook-v6/test/invariant/BuybackHookInvariant.t.sol`, which exercises
+  `beforePayRecordedWith(...)` across oracle-derived and explicit-quote routing. The bounded property checks that the
+  hook either leaves minting unchanged or chooses a swap route whose guaranteed output plus leftover minting is at
+  least the no-hook mint amount.
+- Verification command:
+  `forge test --root nana-buyback-hook-v6 --match-path test/invariant/BuybackHookInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 2 invariant properties passed with 1024 runs and 102,400 handler calls each, plus the handler
+  smoke test.
 
 Open formal gaps:
 
