@@ -1809,10 +1809,11 @@ Fix applied:
 - Deploy calls accept only `JBAccountingContext[]`; the deployer always registers the canonical multi-terminal with
   those contexts and, when distinct, the router terminal registry with no accounting contexts.
 - Loan fund-access limits are derived only from `MULTI_TERMINAL` accounting contexts.
-- `REVLoanSource` was removed. Loan APIs and stored loan state now carry only `sourceToken`; `REVLoans` and `REVOwner`
-  derive decimals and currency from the deployer-pinned `MULTI_TERMINAL` accounting context for that token.
-- The Revnet configuration hash now commits to the constructor-pinned `MULTI_TERMINAL` and `ROUTER_TERMINAL_REGISTRY` instead
-  of caller-supplied terminal configs.
+- `REVLoanSource` was removed. Loan APIs and stored loan state now carry only `sourceToken`; `REVLoans` pins its own
+  constructor-level `MULTI_TERMINAL`, and `REVOwner` derives decimals/currency from the deployer-pinned
+  `MULTI_TERMINAL` accounting context for that token.
+- The Revnet configuration hash no longer includes terminal addresses. Terminal identity is fixed by the deployer and
+  loan constructors, while per-revnet hashes cover the economic configuration that must match across chains.
 - Deployment scripts pass the router terminal registry as `ROUTER_TERMINAL_REGISTRY`, not the underlying router
   terminal, and the CREATE2 restart/prediction path now encodes the same constructor arguments.
 - `TestTerminalEncodingInHash` now constructs a real `JBRouterTerminalRegistry` and verifies that it is installed as
@@ -2316,8 +2317,9 @@ Repo evidence snapshot:
   regression pack, fee-project deployer unit coverage, deploy-all router-registry verifier coverage, and the
   deploy-all Ethereum full-stack fork test.
 - Removed `REVLoanSource`; Revnet loans now accept and persist source tokens only, with accounting contexts derived
-  from the constructor-pinned `MULTI_TERMINAL`. Ran focused loan source, reallocation, remote-state, and router-registry
-  regression suites.
+  from the constructor-pinned `MULTI_TERMINAL`. The loan contract also pins the same canonical multi-terminal directly,
+  so runtime borrowing no longer depends on reading it back through the revnet data hook. Ran focused loan source,
+  reallocation, remote-state, and router-registry regression suites.
 - Rechecked `nana-project-payer-v6` after the Revnet pass. The current implementation clears terminal ERC-20 allowances
   after successful `pay` and `addToBalanceOf`, so the old residual-allowance risk text was stale; updated
   `nana-project-payer-v6/RISKS.md` to distinguish cleared under-pull allowances from intentionally unrecoverable direct
