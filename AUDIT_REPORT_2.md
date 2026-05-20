@@ -2789,8 +2789,8 @@ Prompt-to-artifact checklist:
 | Cross-component fork/integration tests | Report records fork/integration evidence for deploy-all, ProjectPayer+terminal, buyback/V4, router terminal, Univ4 router, LP split, sucker, Revnet, Croptop, Banny, Defifa, and omnichain deployer paths. | Satisfied for the current reviewed findings; no single exhaustive cross-chain campaign exists. |
 | Prefer reduced surface / no broad unnecessary diffs | PRs removed/narrowed Revnet terminal config and loan-source surface, cleaned stale docs/tests, added narrow guards/regressions, and documented non-obvious changes inline. | Satisfied for current changes. |
 | Package PRs and version/dependency bumps | Existing PR branches carry package versions one patch above npm latest for changed packages where package metadata applies; latest follow-up commits were pushed to existing PRs. | Satisfied for current PR set; no new extra package bump was made for report-only or selector-payload follow-up commits. |
-| CI/tests/contract sizes pass | Refreshed `gh pr checks` inspection on 2026-05-20: `nana-core-v6` #152 reports passing `forge-fmt`, `forge-test`, and `halmos-smoke`; `nana-project-handles-v6` #20, `nana-project-payer-v6` #19, `nana-suckers-v6` #134, `revnet-core-v6` #158, `nana-omnichain-deployers-v6` #110, `nana-721-hook-v6` #139, `nana-distributor-v6` #29, `nana-buyback-hook-v6` #134, `nana-router-terminal-v6` #118, `nana-ownable-v6` #77, `nana-permission-ids-v6` #72, `nana-univ4-lp-split-hook-v6` #132, `banny-retail-v6` #117, `croptop-core-v6` #137, `nana-fee-project-deployer-v6` #78, and `deploy-all-v6` #143 all report passing required jobs. `version-6` #151 reports no checks. | Satisfied for opened PRs as of 2026-05-20. |
-| Formal verification top to bottom | Halmos 0.3.3 is installed, `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, and full-width standard-fee subtraction safety, and `nana-core-v6/.github/workflows/halmos.yml` wires that smoke target into core CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
+| CI/tests/contract sizes pass | Refreshed `gh pr checks` inspection on 2026-05-20: `nana-core-v6` #152 and `nana-721-hook-v6` #139 report passing `forge-fmt`, `forge-test`, and `halmos-smoke`; `nana-project-handles-v6` #20, `nana-project-payer-v6` #19, `nana-suckers-v6` #134, `revnet-core-v6` #158, `nana-omnichain-deployers-v6` #110, `nana-distributor-v6` #29, `nana-buyback-hook-v6` #134, `nana-router-terminal-v6` #118, `nana-ownable-v6` #77, `nana-permission-ids-v6` #72, `nana-univ4-lp-split-hook-v6` #132, `banny-retail-v6` #117, `croptop-core-v6` #137, `nana-fee-project-deployer-v6` #78, and `deploy-all-v6` #143 all report passing required jobs. `version-6` #151 reports no checks. | Satisfied for opened PRs as of 2026-05-20. |
+| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, and full-width standard-fee subtraction safety; and `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior. The core and 721 repos now wire those smoke targets into CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
 
 Remaining uncovered requirements:
 
@@ -2819,7 +2819,7 @@ Existing invariant-harness inventory:
 | Repo | Existing invariant/spec surface |
 | --- | --- |
 | `nana-core-v6` | `test/ComprehensiveInvariant.t.sol`, `EconomicSimulation.t.sol`, `PermissionsInvariant.t.sol`, `test/invariants/**`, `test/formal/**`, and `test/formal/HalmosSmoke.t.sol`. |
-| `nana-721-hook-v6` | `test/invariants/TierLifecycleInvariant.t.sol`, `TieredHookStoreInvariant.t.sol`, and handlers. |
+| `nana-721-hook-v6` | `test/invariants/TierLifecycleInvariant.t.sol`, `TieredHookStoreInvariant.t.sol`, handlers, and `test/formal/JBBitmapHalmos.t.sol`. |
 | `nana-distributor-v6` | `test/invariant/JB721DistributorInvariant.t.sol`. |
 | `nana-buyback-hook-v6` | `test/invariant/BuybackHookInvariant.t.sol`. |
 | `nana-router-terminal-v6` | `test/invariant/RouterTerminalInvariant.t.sol`. |
@@ -3075,11 +3075,22 @@ Progress against the plan:
   Halmos 0.3.3 and runs the smoke proof separately from the long Foundry test job, creating a first CI-enforced
   symbolic lane without broadening runtime contract surface. `gh pr checks` for `nana-core-v6` #152 now reports
   `halmos-smoke` passing in 3m49s alongside passing `forge-fmt` and `forge-test`.
+- Added `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol`, a bounded Halmos proof target for the tier-removal
+  bitmap used by `JB721TiersHookStore`. It proves removed-tier round trips, removal idempotence, same-word bit
+  isolation, and cached-word refresh semantics. Added `nana-721-hook-v6/.github/workflows/halmos.yml` to run the
+  bitmap proof in CI.
+- Verification commands:
+  `halmos --root nana-721-hook-v6 --match-contract JBBitmapHalmos --solver-threads 1 --solver-timeout-assertion 30s --statistics`;
+  `forge test --root nana-721-hook-v6 --match-path test/unit/JBBitmap.t.sol --fail-fast --summary --detailed`;
+  `forge build --root nana-721-hook-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
+  Results: exit code 0 for all three; Halmos passed 4 symbolic bitmap checks across 16 total paths in 0.41s test time,
+  16 bitmap unit/fuzz tests passed, and the size build passed. `JB721TiersHook` remains tight at 4 bytes of runtime
+  margin, but the proof/workflow change is test/CI-only and did not alter runtime bytecode.
 
 Open formal gaps:
 
-- Halmos is installed and wired for a narrow core smoke proof suite, but no broad external formal-verification lane exists
-  for the rest of the ecosystem yet.
+- Halmos is installed and wired for narrow core fee and 721 bitmap smoke proof suites, but no broad external
+  formal-verification lane exists for the rest of the ecosystem yet.
 - Foundry invariants are bounded/randomized properties, not exhaustive proofs.
 - No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
 - Some low-fund peripheral repos still rely on unit/fork tests plus accepted trust-boundary docs rather than dedicated
