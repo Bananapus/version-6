@@ -337,6 +337,64 @@ Verification after fix:
 - `forge test --root nana-distributor-v6 --match-path test/fork/TokenDistributorFork.t.sol --fail-fast --summary --detailed`:
   9 fork tests passed, covering real split funding plus vest/collect conservation.
 
+### DIST-05. `nana-distributor-v6`: partial vesting dust can strand reward reserves
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-distributor-v6/src/JBDistributor.sol`
+- Regression update: `nana-distributor-v6/test/regression/AuditFixAE.t.sol`
+- Invariant update: `nana-distributor-v6/test/invariant/JB721DistributorInvariant.t.sol`
+
+Root cause:
+
+- `claimedFor(...)` reports remaining claimable rewards using cumulative share accounting:
+  `amount - floor(amount * shareClaimed / MAX_SHARE)`.
+- Partial `collectVestedRewards(...)` / `releaseForfeitedRewards(...)` used incremental share accounting:
+  `floor(amount * (newShareClaimed - oldShareClaimed) / MAX_SHARE)`.
+- Repeated partial collections can make the sum of incremental floors smaller than the cumulative floor. The token ID's
+  `claimedFor(...)` balance then drops faster than `totalVestingAmountOf`, leaving wei counted as still vesting even
+  after the user-facing claim is exhausted.
+
+Proof:
+
+- Strengthening `JB721DistributorInvariant.t.sol` with
+  `totalVestingAmountOf(hook, token) == claimedFor(hook, token1, token) + claimedFor(hook, token2, token)` produced a
+  shrunk counterexample where the aggregate vesting counter exceeded remaining claims by 1 wei after repeated
+  `collectBob()` / `warpForward()` calls.
+- The new regression `test_AE2_totalVestingClearsAfterPartialDustCollections` funds 7 wei, collects across partial
+  vesting rounds, then fully vests. Before the fix, `totalVestingAmountOf` can retain dust after `claimedFor` reaches
+  zero.
+
+Impact:
+
+- This is a value-stranding/accounting-liveness bug, not a direct overclaim.
+- Stranded `totalVestingAmountOf` reduces later `distributable = balance - vestingAmount` snapshots, so reward dust can
+  remain reserved forever instead of returning to the hook's distributable pool.
+
+Fix applied:
+
+- `collectableFor(...)` and `_unlockTokenIds(...)` now calculate partial unlocks as the difference between cumulative
+  rounded claims:
+  `floor(amount * newShareClaimed / MAX_SHARE) - floor(amount * oldShareClaimed / MAX_SHARE)`.
+- This keeps user-facing views and state mutation on the same rounding model while preserving the existing final-unlock
+  dust recovery path.
+- Added exact invariant checks that the distributor's tracked hook balance matches its actual ERC-20 backing and that
+  aggregate vesting equals the remaining uncollected token-ID claims.
+
+Verification after fix:
+
+- `forge test --root nana-distributor-v6 --match-path test/regression/AuditFixAE.t.sol --match-test test_AE2_totalVestingClearsAfterPartialDustCollections -vvv`:
+  1 passed.
+- `forge test --root nana-distributor-v6 --match-path test/invariant/JB721DistributorInvariant.t.sol --fail-fast --summary --detailed`:
+  7 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- `forge test --root nana-distributor-v6 --deny notes --skip '*/fork/**' --fail-fast --summary --detailed`: exit
+  code 0 across the broad non-fork suite, including 79 `JB721Distributor` tests, dust regressions, and invariant
+  campaigns.
+- `forge build --root nana-distributor-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: exit code 0.
+  Runtime margins: `JB721Distributor` 12,693 bytes, `JBTokenDistributor` 15,533 bytes.
+
 ### PAYER-03. `nana-project-payer-v6`: forwarded ERC-20 allowance remains live after terminal under-pull
 
 Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
@@ -2222,7 +2280,7 @@ boundaries; it does not replace a machine-checked formal spec.
 | `nana-router-terminal-v6` | router terminal, registry, pay-route resolver, forwarding/swap libraries, route/terminal/pool structs, terminal/router interfaces. | ROUTER-TERM-01 and ROUTER-UNI-01 cover cold-start zero-terminal resolution, registry forwarding, FOT/partial-fill boundaries, V3/V4/JB terminal fork paths, and value-forwarding fail-fast behavior. | Router can bound but not eliminate arbitrary external swap-route and market-state risk. |
 | `nana-suckers-v6` | 58 files: base sucker, bridge-specific suckers/deployers, swap CCIP sucker/deployer, registry, Merkle utilities, relay/swap/CCIP libraries, enums, interfaces, bridge message/token/value structs, and scratch structs. | SUCKER-01/02, SUCKER-BRIDGE-01, SUCKER-REG-01, SUCKER-MAP-01, and SUCKER-ALLOW-01 cover bridge-bound accounting, initial swap callback timing, same-peer aggregation freshness, one-remote-inbox-per-local-token per sucker, approval cleanup, and local-backed sucker cash-outs. | Bridge/router/token honesty and remote-chain integrity remain explicit trust boundaries; local RPC gaps still gate some fork suites outside CI. |
 | `nana-omnichain-deployers-v6` | omnichain deployer/hook plus deployment config structs and interface. | OMNI-01/02 plus invariant/fork log cover controller/directory validation, hook composition, cash-out hook semantics, local invariant campaigns, and real fork integration. | Slow omnichain campaigns are split into local invariant and targeted fork coverage; no single exhaustive cross-chain campaign exists. |
-| `nana-distributor-v6` | shared distributor base, token and 721 distributors, vesting/snapshot structs, interfaces. | DIST-01/02/03/04 cover callback-capable reward funding, callback collection during funding, split-hook native value conservation, token mismatch handling, and zero-reward 721 voting-budget accounting. | Arbitrary reward-token behavior remains a boundary; tests defend callback windows but not every ERC-20 noncompliance shape. |
+| `nana-distributor-v6` | shared distributor base, token and 721 distributors, vesting/snapshot structs, interfaces. | DIST-01/02/03/04/05 cover callback-capable reward funding, callback collection during funding, split-hook native value conservation, token mismatch handling, zero-reward 721 voting-budget accounting, and partial-vesting dust reserve cleanup. | Arbitrary reward-token behavior remains a boundary; tests defend callback windows but not every ERC-20 noncompliance shape. |
 | `univ4-router-v6` | V4 hook plus oracle library. | ROUTER-UNI-01/02 cover route selection, TWAP/spot assumptions, structural arbitrage classification, delta settlement, and forked V4/JB routing. | AMM/oracle manipulation remains bounded by documented economics, not eliminated. |
 | `univ4-lp-split-hook-v6` | LP split hook/deployer plus interfaces. | LP-SPLIT-01/02 cover tick/range validation, preinitialized pool hypotheses, Permit2 and ERC-20 allowance cleanup, fee routing, terminal migration, and forked PositionManager/PoolManager integration. | Pool state and Permit2 behavior remain integration-critical external surfaces. |
 | `revnet-core-v6` | deployer, owner hook, loans, interfaces, loan/stage/721/sucker/croptop config structs. | REVNET-TERM-01, REVNET-LOAN-01, REVNET-FEE-01 plus SUCKER-BRIDGE-01 cover constructor-pinned canonical terminals, token-only loan sources/accounting contexts, callback-locked loan actions, fee forwarding `msg.value`, and local-backed sucker cash-outs. | Cross-chain loan/surplus freshness is accepted and documented; composed loan economics are test-backed, not formally proved. |
@@ -2309,7 +2367,7 @@ Repo evidence snapshot:
 | `nana-router-terminal-v6` | ROUTER-TERM-01 and ROUTER-UNI-01 fork-backed coverage. | Router cannot make arbitrary external swap paths risk-free. |
 | `nana-suckers-v6` | SUCKER-01, SUCKER-02, SUCKER-REG-01, SUCKER-MAP-01, SUCKER-ALLOW-01. | Bridge and remote-chain integrity remain trust boundaries. |
 | `nana-omnichain-deployers-v6` | OMNI-01/02 plus invariant/fork coverage. | Slow omnichain suite was improved, but final audit must document runtime budget choices. |
-| `nana-distributor-v6` | DIST-01/02/03/04 plus broad and fork coverage. | Reward-token behavior beyond standard ERC-20 remains a review focus. |
+| `nana-distributor-v6` | DIST-01/02/03/04/05 plus broad and fork coverage. | Reward-token behavior beyond standard ERC-20 remains a review focus. |
 | `univ4-router-v6` | ROUTER-UNI-01/02 structural-arbitrage and fork coverage. | AMM/oracle manipulation is bounded by documented assumptions, not eliminated. |
 | `univ4-lp-split-hook-v6` | LP-SPLIT-01/02 plus fork coverage. | Pool state and Permit2 assumptions remain integration-critical. |
 | `revnet-core-v6` | REVNET-TERM-01, REVNET-LOAN-01, REVNET-FEE-01 plus loan/fork/regression suites. | Cross-chain loan/surplus staleness is accepted and documented. |
@@ -2785,6 +2843,13 @@ Progress against the plan:
   `forge test --root nana-core-v6 --match-path test/invariants/TerminalStoreInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 5 invariant properties passed, each with 1024 runs and 102,400 handler calls. This is bounded
   Foundry evidence for the core native terminal solvency model, not a complete formal proof.
+- Strengthened `nana-distributor-v6/test/invariant/JB721DistributorInvariant.t.sol` with exact reward-token backing and
+  vesting-reserve equality checks. The new equality exposed DIST-05, and the fixed suite now proves across the bounded
+  campaign that tracked hook rewards equal actual ERC-20 backing and aggregate vesting equals the remaining token-ID
+  claims.
+- Verification command:
+  `forge test --root nana-distributor-v6 --match-path test/invariant/JB721DistributorInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 7 invariant properties passed, each with 1024 runs and 102,400 handler calls.
 
 Open formal gaps:
 
