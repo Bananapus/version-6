@@ -2872,6 +2872,15 @@ Progress against the plan:
 - Verification command:
   `forge test --root nana-router-terminal-v6 --match-path test/invariant/RouterTerminalInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 9 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Re-ran `nana-721-hook-v6/test/invariants/*.t.sol`, covering tier store and lifecycle state under add/remove,
+  pay-and-mint, owner mint, reserve mint, NFT cash-out, discount, and time-advance operations. The bounded properties
+  check per-tier supply accounting, total cash-out weight consistency, pay-credit non-negativity, reserve mint bounds,
+  removed-tier exclusion, cash-out weight bounds, max-tier monotonicity, reserve mint bounds, and store-level supply
+  conservation.
+- Verification command:
+  `forge test --root nana-721-hook-v6 --match-path 'test/invariants/*.t.sol' --fail-fast --summary --detailed`.
+  Result: exit code 0; 9 invariant properties passed, each with 1024 runs and 102,400 handler calls. Runtime was
+  14.84s for `TieredHookStoreInvariant` and 263.89s for `TierLifecycleInvariant`.
 
 Open formal gaps:
 
