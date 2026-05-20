@@ -17,7 +17,7 @@ The V6 EVM repos are not one monolith. They break into a few clear layers:
 - opinionated deployers and launch packaging: [nana-omnichain-deployers-v6](./nana-omnichain-deployers-v6/USER_JOURNEYS.md), [revnet-core-v6](./revnet-core-v6/USER_JOURNEYS.md), [deploy-all-v6](./deploy-all-v6/USER_JOURNEYS.md), [nana-fee-project-deployer-v6](./nana-fee-project-deployer-v6/USER_JOURNEYS.md)
 - payment, market-routing, and liquidity extensions: [nana-router-terminal-v6](./nana-router-terminal-v6/USER_JOURNEYS.md), [nana-buyback-hook-v6](./nana-buyback-hook-v6/USER_JOURNEYS.md), [univ4-router-v6](./univ4-router-v6/USER_JOURNEYS.md), [univ4-lp-split-hook-v6](./univ4-lp-split-hook-v6/USER_JOURNEYS.md)
 - NFT, publishing, and product surfaces: [nana-721-hook-v6](./nana-721-hook-v6/USER_JOURNEYS.md), [croptop-core-v6](./croptop-core-v6/USER_JOURNEYS.md), [banny-retail-v6](./banny-retail-v6/USER_JOURNEYS.md), [defifa/USER_JOURNEYS.md](./defifa/USER_JOURNEYS.md)
-- cross-chain movement and utility infrastructure: [nana-suckers-v6](./nana-suckers-v6/USER_JOURNEYS.md), [nana-ownable-v6](./nana-ownable-v6/USER_JOURNEYS.md), [nana-project-handles-v6](./nana-project-handles-v6/USER_JOURNEYS.md), [nana-address-registry-v6](./nana-address-registry-v6/USER_JOURNEYS.md), [nana-distributor-v6](./nana-distributor-v6/USER_JOURNEYS.md), [nana-permission-ids-v6](./nana-permission-ids-v6/USER_JOURNEYS.md)
+- cross-chain movement and utility infrastructure: [nana-suckers-v6](./nana-suckers-v6/USER_JOURNEYS.md), [nana-ownable-v6](./nana-ownable-v6/USER_JOURNEYS.md), [nana-project-handles-v6](./nana-project-handles-v6/USER_JOURNEYS.md), [nana-project-payer-v6](./nana-project-payer-v6/USER_JOURNEYS.md), [nana-address-registry-v6](./nana-address-registry-v6/USER_JOURNEYS.md), [nana-distributor-v6](./nana-distributor-v6/USER_JOURNEYS.md), [nana-permission-ids-v6](./nana-permission-ids-v6/USER_JOURNEYS.md)
 
 If you do not know where to begin, decide whether the question is mainly about:
 
@@ -49,6 +49,7 @@ If you do not know where to begin, decide whether the question is mainly about:
 - To [nana-721-hook-v6](./nana-721-hook-v6/USER_JOURNEYS.md) for tiered NFT issuance.
 - To [nana-router-terminal-v6](./nana-router-terminal-v6/USER_JOURNEYS.md) for multi-asset payment routing.
 - To [nana-buyback-hook-v6](./nana-buyback-hook-v6/USER_JOURNEYS.md) for market-aware pricing.
+- To [nana-project-payer-v6](./nana-project-payer-v6/USER_JOURNEYS.md) for reusable payable addresses that forward into a project's current primary terminal.
 - To [nana-suckers-v6](./nana-suckers-v6/USER_JOURNEYS.md) for cross-chain bridging.
 
 ## Journey 2: Launch An Owner-Controlled Packaged Project

@@ -21,6 +21,7 @@ This document covers the active EVM repos in `/v6/evm`:
 - `nana-omnichain-deployers-v6`
 - `nana-distributor-v6`
 - `nana-project-handles-v6`
+- `nana-project-payer-v6`
 - `univ4-router-v6`
 - `univ4-lp-split-hook-v6`
 - `revnet-core-v6`
@@ -44,6 +45,7 @@ Foundation primitives
   -> nana-ownable-v6
   -> nana-address-registry-v6
   -> nana-project-handles-v6
+  -> nana-project-payer-v6
 
 Extension / routing / interoperability layer
   -> nana-721-hook-v6
@@ -148,6 +150,7 @@ Key point:
 - `nana-buyback-hook-v6` is a route selector and settlement wrapper, not treasury truth.
 - `nana-omnichain-deployers-v6` and some product deployers are both launch wrappers and live runtime hooks.
 - `nana-address-registry-v6`, `nana-project-handles-v6`, and `nana-ownable-v6` are infrastructure pieces, not product policy layers.
+- `nana-project-payer-v6` is a cloneable payment relay. It forwards into the current primary terminal and does not own treasury accounting.
 
 ### External Dependencies
 
@@ -191,6 +194,7 @@ If a bug crosses one of these seams, assume the blast radius may be larger than 
 | `nana-ownable-v6` | Ownership adapter that can follow project NFTs and JB permissions |
 | `nana-address-registry-v6` | On-chain deployer provenance registry |
 | `nana-project-handles-v6` | Permissionless ENS handle verification |
+| `nana-project-payer-v6` | Cloneable project payment addresses that forward ETH or ERC-20s to current primary terminals |
 | `nana-721-hook-v6` | Tiered NFT issuance, reserves, credits, and NFT-aware cash-out shaping |
 | `nana-buyback-hook-v6` | Best-execution mint-or-swap and cash-out-or-sell routing |
 | `nana-router-terminal-v6` | Accept-any-token payment router into downstream terminals |
@@ -199,7 +203,7 @@ If a bug crosses one of these seams, assume the blast radius may be larger than 
 | `nana-distributor-v6` | Round-based reward distribution for 721 or `IVotes` staking bases |
 | `univ4-router-v6` | Uniswap V4 hook plus TWAP oracle surface for routing decisions |
 | `univ4-lp-split-hook-v6` | Reserved-token liquidity automation and LP fee routing |
-| `revnet-core-v6` | Ownerless staged project pattern with loans, hidden tokens, and hook composition |
+| `revnet-core-v6` | Ownerless staged project pattern with loans, fee handling, and hook composition |
 | `croptop-core-v6` | Permissioned NFT publishing product |
 | `banny-retail-v6` | Composable avatar rendering and attachment-custody system |
 | `defifa` | Prediction-game product with phased rulesets, scorecard governance, and game-piece cash-out logic |

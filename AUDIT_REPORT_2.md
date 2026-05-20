@@ -1,0 +1,2344 @@
+# Audit Report 2
+
+Continuation record for the Juicebox V6 EVM ecosystem audit.
+
+Date started: 2026-05-19
+
+## Objective
+
+Formally verify and adversarially audit the full Juicebox V6 EVM ecosystem as a composed system, including Banny,
+Defifa, and all Nana repos. Maintain this file as the new record keeper for fresh coverage, concrete evidence,
+surviving hypotheses, PoCs, and verification blockers. Prefer evidence, tests, and surface reduction over broad code
+changes.
+
+## Starting State
+
+- Existing root report: `AUDIT_REPORT.md` is the prior record keeper and contains Current Open Edge Cases A-AS plus
+  historical edge-case disposition.
+- Root scope docs list 19 active EVM repos in `ARCHITECTURE.md`.
+- Additional workspace repo relevant to "all nana repos": `nana-project-payer-v6`.
+- User directive on 2026-05-19: skip `nana-referral-split-hook-v6`; it is not part of this continuation scope.
+- User directive on 2026-05-19: `bendystraw-v6` and `website` are out of scope; focus on smart-contract work.
+- User directive on 2026-05-19: nothing is deployed in production yet, so fixes and documentation can prefer clean
+  fail-closed behavior over backward compatibility with legacy deployed state.
+
+## Expanded Scope Delta
+
+Repos explicitly in the continuation scope:
+
+- all repos covered by root `ARCHITECTURE.md`
+- `nana-project-payer-v6`
+- smart-contract deployment/runtime packages only
+
+## Current Audit Seed
+
+Seed: deep dive / all repos / input-monoculture breaker + ruthless thief + deployment-integrity reviewer /
+continuation from `AUDIT_REPORT.md`
+
+## Fresh Finding Candidates
+
+### CORE-01. `nana-core-v6`: callback-capable ERC-20 intake can over-credit `JBTerminalStore`
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-core-v6/src/JBMultiTerminal.sol`
+- `nana-core-v6/src/JBTerminalStore.sol`
+- New regression: `nana-core-v6/test/regression/ReentrantERC20IntakeGuard.t.sol`
+
+Root cause:
+
+- `JBMultiTerminal._acceptFundsFor(...)` measures accepted ERC-20 funds as
+  `balanceAfter - balanceBefore` around `_transferFrom(...)`.
+- During `_transferFrom(...)`, a callback-capable token can reenter `JBMultiTerminal.addToBalanceOf(...)` or
+  `pay(...)` for the same token before the outer transfer finishes.
+- The inner call records its own balance delta in `JBTerminalStore`; the outer call then computes its accepted amount
+  from the original pre-inner balance, so it includes the inner transfer again.
+
+Proof:
+
+- Temporary local PoC: `nana-core-v6/test/regression/RegressionReentrantERC20Intake.t.sol`.
+- Sequence:
+  1. Launch a project whose terminal accepts a deliberately callback-capable ERC-20.
+  2. Payer calls `addToBalanceOf(projectId, token, 100, ...)`.
+  3. Token `transferFrom(payer, terminal, 100)` reenters `addToBalanceOf(projectId, token, 100, ...)` before the
+     outer transfer completes.
+  4. Inner call transfers 100 tokens and records 100 in `JBTerminalStore`.
+  5. Outer transfer then sends another 100 tokens.
+  6. Outer `_acceptFundsFor(...)` returns `balanceAfter(200) - balanceBefore(0) = 200`, and the outer call records
+     another 200.
+- Result: terminal actual token balance is 200, but `JBTerminalStore.balanceOf(terminal, projectId, token)` is 300.
+
+Command:
+
+- `forge test --match-path test/regression/RegressionReentrantERC20Intake.t.sol -vv` in `nana-core-v6`: 1 test
+  passed, proving the current code over-credits the store.
+- Stronger temporary local PoC: `nana-core-v6/test/regression/RegressionReentrantERC20CrossProjectDrain.t.sol`.
+- `forge test --match-path test/regression/RegressionReentrantERC20CrossProjectDrain.t.sol -vv` in `nana-core-v6`:
+  1 test passed, proving an attacker project can withdraw another project's same-token backing from the shared
+  terminal pool.
+
+Impact:
+
+- Breaks critical invariant 1, terminal solvency: internal accounting can exceed actual redeemable token balance.
+- A project that accepts a callback-capable ERC-20 can end up with phantom terminal balance.
+- If the terminal holds the same ERC-20 for unrelated projects, the inflated attacker-project balance can be paid,
+  cashed out, or migrated against the shared actual token pool. The store tracks balances per
+  `(terminal, projectId, token)`, but the terminal has one actual ERC-20 balance per token, so outbound transfers do
+  not distinguish which project supplied the backing tokens.
+- The cross-project drain PoC:
+  1. Victim project records a legitimate 100-token balance.
+  2. Attacker project contributes 200 actual tokens through the reentrant token path.
+  3. Attacker project receives a 300-token recorded balance.
+  4. Attacker owner uses a 300-token surplus allowance and receives all 300 actual tokens.
+  5. Victim project still has a 100-token store balance, but the terminal's actual token balance is zero.
+- `pay(...)` is worse than `addToBalanceOf(...)` because the outer payment mints project tokens from the inflated
+  accepted amount, letting the attacker receive project tokens for the nested inflow twice and then use those tokens
+  in cash-out paths.
+- Cross-token surplus views can be inflated because surplus starts from the store ledger, but this does not by itself
+  create a recorded balance of another token. Different-token extraction still requires an attacker-project recorded
+  balance for the token being reclaimed.
+- If no same-token backing exists in the terminal, the practical result is failed outbound transfers and insolvent or
+  liveness-broken accounting for that token.
+
+Self-review:
+
+- This is not reachable for plain ERC-20s that cannot call back during `transferFrom`.
+- It is reachable for terminal accounting contexts that accept nonstandard/callback-capable tokens or token wrappers.
+- The protocol already supports arbitrary ERC-20 accounting contexts, so the invariant should be enforced in the
+  terminal rather than relying only on token behavior assumptions.
+
+Recommended fix:
+
+- Avoid a broad `nonReentrant` guard on terminal entrypoints. Existing hook compositions intentionally reenter terminal
+  entrypoints after accounting, and a broad guard risks breaking split hooks, cash-out hooks, buyback leftovers, and
+  REV owner fee routing.
+- Prefer scoped transient inbound accounting inside `_acceptFundsFor(...)`: subtract nested accepted deltas from the
+  outer raw balance delta, then add the final accepted amount to a transient per-token counter before returning.
+- Acceptable simpler mitigation: a narrow ERC-20 `_acceptFundsFor` lock that only blocks nested `pay(...)` /
+  `addToBalanceOf(...)` while token `transferFrom` is executing. This targets the vulnerable token-callback window
+  without blocking post-accounting hook callbacks.
+- Add regression tests for reentrant `pay`, reentrant `addToBalanceOf`, same-token/different-project variants, and
+  existing legitimate nested-hook regressions.
+
+Fix applied:
+
+- Added `JBMultiTerminal_ReentrantTokenTransfer(address token)`.
+- Added transient `_acceptingToken` state in `JBMultiTerminal`.
+- `_acceptFundsFor(...)` now sets the transient guard only around the ERC-20 transfer/balance-delta window. Native-token
+  entrypoints and post-accounting hook callbacks are not broadly locked.
+- Added `ReentrantERC20IntakeGuard.t.sol`, covering:
+  - callback-token reentry through `addToBalanceOf(...)`, including preservation of an existing victim project
+    same-token balance and terminal token pool;
+  - callback-token reentry through `pay(...)`, including no attacker accounting and no project-token mint.
+
+Verification after fix:
+
+- `forge test --root nana-core-v6 --match-path test/regression/ReentrantERC20IntakeGuard.t.sol -vv`: 2 passed.
+- `forge test --root nana-core-v6 --match-path test/regression/SplitHookBalanceDeltaReentrancy.t.sol -vv`: 2 passed.
+- `forge test --root nana-core-v6 --match-path test/regression/CashOutReenterPay.t.sol -vv`: 2 passed.
+- `forge test --root nana-core-v6 --match-path test/TestForwardedTokenConsumption.sol -vv`: 4 passed.
+- `forge test --root nana-core-v6 --deny notes --skip '*/fork/**' --fail-fast --summary --detailed`: exit code 0,
+  including long-running unit, regression, fuzz, and invariant suites.
+
+### DIST-01. `nana-distributor-v6`: callback-capable reward-token funding can over-credit hook reward balances
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-distributor-v6/src/JBDistributor.sol`
+- `nana-distributor-v6/src/JBTokenDistributor.sol`
+- `nana-distributor-v6/src/JB721Distributor.sol`
+- New regression: `nana-distributor-v6/test/regression/ReentrantRewardFundingGuard.t.sol`
+
+Root cause:
+
+- `JBDistributor.fund(...)`, `JBTokenDistributor.processSplitWith(...)`, and
+  `JB721Distributor.processSplitWith(...)` measured received ERC-20 reward tokens as a contract balance delta around
+  `safeTransferFrom(...)`.
+- A callback-capable reward token could reenter `fund(...)` during that transfer.
+- The inner `fund(...)` credited one hook's reward balance, then the outer balance-delta calculation included the
+  nested transfer and credited another hook with the nested amount again.
+- Actual reward tokens are pooled by token address in the distributor, while `_balanceOf[hook][token]` and vesting are
+  hook-scoped. Over-crediting one hook can therefore drain another hook's same-token backing.
+
+Proof:
+
+- Temporary local PoC: `nana-distributor-v6/test/regression/ReentrantRewardFundingPoC.t.sol`.
+- Sequence:
+  1. Victim hook is legitimately funded with 100 reward tokens.
+  2. Attacker hook uses the same callback-capable reward token and funds 200 tokens.
+  3. During the attacker's token transfer, the token reenters `fund(attackerHook, token, 100)`.
+  4. Inner `fund(...)` credits attacker hook for 100.
+  5. Outer `fund(...)` computes `balanceAfter(400) - balanceBefore(100) = 300` and credits attacker hook again.
+  6. Distributor actual token pool is 400, but hook balances sum to 500: victim 100 plus attacker 400.
+  7. Attacker hook vests and collects 400, draining the entire actual token pool while victim hook still records 100.
+
+Command:
+
+- `forge test --root nana-distributor-v6 --match-path test/regression/ReentrantRewardFundingPoC.t.sol -vv`: 1 test
+  passed, proving over-credit and same-token hook-backing drain before the fix.
+
+Impact:
+
+- Breaks distributor solvency for a reward token accepted by multiple hooks.
+- Any hook with inflated same-token reward balance can vest and collect against the shared actual token pool.
+- This is reachable through both direct public `fund(...)` and authorized split funding via `processSplitWith(...)`
+  when the reward token can call back during `transferFrom`.
+
+Self-review:
+
+- Plain ERC-20 reward tokens that cannot call back during `transferFrom` are not affected.
+- The attack requires a callback-capable or deliberately adversarial reward token; the distributor intentionally
+  accepts arbitrary ERC-20 reward tokens, so the accounting invariant should be defended locally.
+
+Fix applied:
+
+- Added `JBDistributor_ReentrantTokenTransfer(address token)`.
+- Added transient `_acceptingToken` state to `JBDistributor`.
+- Added shared `_acceptErc20FundsFrom(...)` helper that wraps only the ERC-20 transfer/balance-delta window.
+- Switched both token and 721 split distributors to the shared helper, preserving fee-on-transfer accounting while
+  blocking nested funding deltas.
+- Added `ReentrantRewardFundingGuard.t.sol`, covering both direct `fund(...)` and split-hook
+  `processSplitWith(...)` reentry attempts.
+
+Verification after fix:
+
+- `forge test --root nana-distributor-v6 --match-path test/regression/ReentrantRewardFundingGuard.t.sol -vv`: 2
+  passed.
+- `forge test --root nana-distributor-v6 --deny notes --skip '*/fork/**' --fail-fast --summary --detailed`: exit
+  code 0, including unit, regression, fuzz, and invariant suites.
+
+### DIST-02. `nana-distributor-v6`: native split-hook funding did not conserve `context.amount`
+
+Status: VERIFIED INVARIANT GAP / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-distributor-v6/src/JBTokenDistributor.sol`
+- `nana-distributor-v6/src/JB721Distributor.sol`
+- Regression updates: `nana-distributor-v6/test/regression/TokenMismatchFix.t.sol`
+- Fork coverage update: `nana-distributor-v6/test/fork/TokenDistributorFork.t.sol`
+
+Root cause:
+
+- Both split distributors rejected native ETH only when `context.token` was not `NATIVE_TOKEN`.
+- For native split contexts, they credited `msg.value` but did not require `msg.value == context.amount`.
+- That left terminal context accounting and distributor native accounting coupled by convention rather than an enforced
+  invariant.
+
+Impact:
+
+- A malformed, buggy, or adversarial authorized terminal/controller could under-send native ETH while passing a larger
+  `context.amount`, or over-send ETH while passing a smaller `context.amount`.
+- The distributor would stay solvent because it credited actual `msg.value`, but cross-component accounting around the
+  split could become ambiguous and downstream tests would not catch the mismatch.
+- This is lower severity than DIST-01 because callers are gated by `JBDirectory`, but no production deployment exists
+  yet and the cleaner invariant is exact native conservation.
+
+Fix applied:
+
+- Native split contexts now require `context.token == NATIVE_TOKEN` and `msg.value == context.amount`.
+- ERC-20 split contexts now explicitly reject nonzero `msg.value`.
+- Zero-amount ERC-20 contexts remain no-ops; fee-on-transfer ERC-20 paths still use balance-delta accounting.
+
+Verification after fix:
+
+- `forge test --root nana-distributor-v6 --match-path test/regression/TokenMismatchFix.t.sol --summary --detailed`:
+  10 passed, covering token and 721 distributor underpay/overpay reverts plus the existing ETH-as-ERC20 mismatch cases.
+- `forge test --root nana-distributor-v6 --match-path test/fork/TokenDistributorFork.t.sol --summary --detailed`:
+  9 passed. The payout split fork test now asserts the distributor's native credit delta equals the actual ETH received
+  through the real `JBMultiTerminal` split path.
+- `forge fmt --root nana-distributor-v6 --check`: passed.
+
+### DIST-03. `nana-distributor-v6`: zero-reward 721 vesting attempts consumed owner voting budget
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-distributor-v6/src/JB721Distributor.sol`
+- Regression update: `nana-distributor-v6/test/audit/FreshCodexNemesisZeroRewardReplay.t.sol`
+
+Root cause:
+
+- `JB721Distributor._vestSingleToken(...)` capped each owner's per-round voting budget across their NFTs.
+- The function incremented the owner's consumed voting budget before calculating whether the pro-rata reward amount
+  rounded down to zero.
+- When a token's effective stake produced `tokenAmount == 0`, no vesting entry was created, so the same token could be
+  replayed repeatedly while still consuming the owner's remaining budget for the hook/token/release-round bucket.
+
+Impact:
+
+- A permissionless caller could repeatedly vest a low-stake NFT whose reward rounded to zero and exhaust the owner's
+  voting cap.
+- Later higher-value NFTs owned by the same snapshot owner could then receive no allocation for that reward round.
+- The issue is a griefing/under-allocation bug rather than a direct overclaim; the undistributed reward stays in the
+  pool, but the intended owner allocation for the round can be blocked.
+
+Fix applied:
+
+- `_vestSingleToken(...)` now returns before mutating consumed voting power when the computed `tokenAmount` is zero.
+- The consumed-vote cap is updated only when a nonzero vesting entry is created.
+
+Verification after fix:
+
+- `forge test --root nana-distributor-v6 --match-path test/audit/FreshCodexNemesisZeroRewardReplay.t.sol --summary --detailed`:
+  1 passed. The replayed dust token remains unclaimable and no longer blocks the high-value token's allocation.
+- `forge test --root nana-distributor-v6 --match-path test/JB721Distributor.t.sol --match-test 'testFuzz_beginVesting_proportional|testFuzz_conservation|test_processSplitWith_nativeETH|test_invariant_totalVestingNeverExceedsBalance|test_beginVesting_exactAmounts' --summary --detailed`:
+  5 passed, including proportional and conservation fuzz smoke coverage around the changed accounting path.
+- `forge test --root nana-distributor-v6 --deny notes --skip '*/fork/**' --fail-fast --summary --detailed`: 22
+  suites passed, including the updated replay regression and the 721 distributor invariant campaign.
+
+### PAYER-03. `nana-project-payer-v6`: forwarded ERC-20 allowance remains live after terminal under-pull
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-project-payer-v6/src/JBProjectPayer.sol`
+- Regression updates: `nana-project-payer-v6/test/JBProjectPayer_Edge.t.sol`
+
+Root cause:
+
+- `_pay(...)` and `_addToBalanceOf(...)` approve the selected terminal for the measured ERC-20 amount before calling
+  `terminal.pay(...)` or `terminal.addToBalanceOf(...)`.
+- If the terminal returns without pulling the full approved amount, the payer contract keeps both the leftover tokens
+  and a live allowance for that terminal.
+- A malicious, buggy, or partial-fill terminal can later call `transferFrom(address(payer), ...)` and drain the held
+  remainder.
+
+Impact:
+
+- This is lower severity than CORE-01/DIST-01 because it depends on the selected project terminal under-pulling or
+  being adversarial.
+- It is still a real approval-surface bug: the forwarding contract should not preserve spend authority beyond the
+  immediate terminal call.
+
+Fix applied:
+
+- After successful `terminal.pay(...)` and `terminal.addToBalanceOf(...)`, `JBProjectPayer` now resets the terminal's
+  ERC-20 allowance to zero.
+- The existing original-payer transient restore behavior is unchanged.
+
+Verification after fix:
+
+- `forge test --root nana-project-payer-v6 --match-path test/JBProjectPayer_Edge.t.sol -vv`: 13 passed.
+- `forge test --root nana-project-payer-v6 --skip '*/fork/**' --fail-fast --summary --detailed`: exit code 0 across
+  the non-fork unit, edge, audit, and regression suites.
+
+### OMNI-01. `nana-omnichain-deployers-v6`: generic extra cash-out hooks corrupt NFT cash-out semantics
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol`
+- Regression updates:
+  - `nana-omnichain-deployers-v6/test/Tiered721HookComposition.t.sol`
+  - `nana-omnichain-deployers-v6/test/regression/CashOutCountPropagation.t.sol`
+  - `nana-omnichain-deployers-v6/test/regression/ExtraCashOutHookZeroReclaim.t.sol`
+  - `nana-omnichain-deployers-v6/test/regression/CashOutSpecMerge.t.sol`
+  - `nana-omnichain-deployers-v6/test/OmnichainDeployerEdgeCases.t.sol`
+
+Root cause:
+
+- When a tiered 721 hook was active for cash-outs, `JBOmnichainDeployer.beforeCashOutRecordedWith(...)` first let the
+  721 hook translate NFT metadata into an effective cash-out weight and NFT total weight.
+- It then forwarded that derived context to the extra cash-out hook and merged the extra hook's tax rate/specs into the
+  NFT cash-out result.
+- The terminal later fulfills cash-out hook specs with `JBAfterCashOutRecordedContext.cashOutCount` equal to the
+  original fungible token burn count from the terminal call. For NFT cash-outs, that count is zero.
+- Generic cash-out hooks therefore see NFT-derived values in the before-hook phase, but receive a zero fungible burn
+  count in the after-hook phase.
+
+Concrete failure mode:
+
+- With a buyback-style extra cash-out hook, the extra hook can select the AMM route and return
+  `MAX_CASH_OUT_TAX_RATE`, causing the terminal's direct reclaim amount to become zero.
+- `JBBuybackHook.afterCashOutRecordedWith(...)` clamps its metadata-provided sell count to the terminal's original
+  `context.cashOutCount`; for NFT cash-outs this is zero, so the buyback hook sells zero project tokens.
+- The 721 hook can still burn the NFT, leaving the holder settled for zero instead of the NFT cash-out reclaim.
+
+Self-review:
+
+- The current buyback hook's sell-count clamp prevents the over-mint/sell variant. The bug is the zero-settlement /
+  semantic-corruption composition, not an unchecked mint in the current checkout.
+- This is a configuration hazard for projects that enable both `use721ForCashOut` and an extra cash-out data hook.
+
+Fix applied:
+
+- `JBOmnichainDeployer` now detects `hasTiered721CashOut` once per cash-out.
+- When the 721 hook handles cash-out pricing, generic extra cash-out hooks are skipped entirely for that cash-out path.
+- Extra cash-out hook behavior remains unchanged when no 721 cash-out hook is active, or when the 721 hook exists but
+  `useDataHookForCashOut` is false.
+
+Verification after fix:
+
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/Tiered721HookComposition.t.sol -vv`: 34 passed.
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/regression/CashOutCountPropagation.t.sol -vv`: 1
+  passed.
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/regression/ExtraCashOutHookZeroReclaim.t.sol -vv`:
+  4 passed.
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/regression/CashOutSpecMerge.t.sol -vv`: 3 passed.
+- `forge test --root nana-omnichain-deployers-v6 --match-test test_beforeCashOut_721CashOutSkipsCustomHookSpecifications -vv`:
+  1 passed.
+- `forge test --root nana-omnichain-deployers-v6 --skip '*/fork/**' --no-match-path 'test/invariants/**' --summary --detailed`:
+  exit code 0 across 28 non-fork, non-invariant suites.
+
+### OMNI-02. `nana-omnichain-deployers-v6`: fresh project launch accepted controller-shaped no-ops
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol`
+- Updated regressions:
+  - `nana-omnichain-deployers-v6/test/JBOmnichainDeployerGuard.t.sol`
+  - `nana-omnichain-deployers-v6/test/regression/ValidateController.t.sol`
+  - `nana-omnichain-deployers-v6/test/regression/OmnichainRegressionFixes.t.sol`
+
+Root cause:
+
+- `_launchProjectFor(...)` reserved a canonical `JBProjects` NFT, deployed the 721 hook, called the caller-supplied
+  controller, transferred hook ownership to the project, optionally deployed suckers, and transferred the project NFT.
+- Existing project `launchRulesetsFor(...)` / `queueRulesetsOf(...)` paths validated the caller-supplied controller
+  against the canonical directory, but the fresh launch path did not validate that the controller was attached to this
+  deployer's canonical `PROJECTS` registry or that it registered itself in the canonical directory.
+- A controller-shaped contract could therefore return success from `launchRulesetsFor(...)` without configuring the
+  canonical Juicebox project state.
+
+Impact:
+
+- A fresh omnichain launch could hand the user a canonical project NFT and project-owned hook wiring while the
+  canonical directory had no controller for the project. The result is a project that appears launched through the
+  deployer but is not actually launched in Juicebox core.
+- Because no production state exists yet, the safer model is exact controller validation rather than accepting
+  controller-shaped contracts.
+
+Fix applied:
+
+- `_validateController(...)` now also requires `controller.PROJECTS() == PROJECTS`.
+- Fresh `launchProjectFor(...)` validates the controller after reserving the project ID and before deploying
+  project-scoped hooks.
+- Both fresh `launchProjectFor(...)` and blank-project `launchRulesetsFor(...)` now require the canonical directory to
+  point at the selected controller after `launchRulesetsFor(...)` returns.
+- Risk docs now describe the canonical `PROJECTS` and post-launch directory checks.
+
+Verification after fix:
+
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/JBOmnichainDeployerGuard.t.sol --summary --detailed`:
+  8 passed, including wrong-`PROJECTS` and no-directory-registration fake-controller regressions against real core
+  test infrastructure.
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/regression/ValidateController.t.sol --summary --detailed`:
+  3 passed.
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/regression/OmnichainRegressionFixes.t.sol --match-test 'test_freshProjectZeroControllerMustRegisterAfterLaunch|test_existingProjectWrongControllerReverts|test_existingProjectCorrectControllerPasses|test_remoteSurplusUsesCorrectDecimals' --summary --detailed`:
+  4 passed.
+- `forge test --root nana-omnichain-deployers-v6 --match-path 'test/{JBOmnichainDeployerGuard.t.sol,regression/ValidateController.t.sol,regression/OmnichainRegressionFixes.t.sol}' --summary --detailed`:
+  17 passed across 3 suites.
+
+### SUCKER-01. `nana-suckers-v6`: initial CCIP swap output can be consumed by an older claim during token callback
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-suckers-v6/src/JBSwapCCIPSucker.sol`
+- New regression: `nana-suckers-v6/test/regression/InitialSwapReentrantClaim.t.sol`
+
+Root cause:
+
+- `JBSwapCCIPSucker.ccipReceive(...)` swaps delivered bridge tokens into the local token before calling
+  `fromRemote(...)` and before writing the new nonce's conversion rate.
+- The retry path already blocked `claim(...)` during `retrySwap(...)`, but the initial `ccipReceive(...)` swap had no
+  equivalent lock.
+- If the local swap output token can call back during transfer, it can reenter `claim(...)` for an already accepted
+  older same-token batch while the new batch's freshly swapped local tokens are sitting in the sucker.
+- The older claim can transfer the fresh output to the terminal, after which `ccipReceive(...)` records the new nonce
+  as backed by local output that has already been consumed.
+
+Impact:
+
+- Breaks per-batch backing isolation for callback-capable local tokens received through the swap path.
+- Requires an already claimable older batch for the same local token and a local token that can call back during the
+  swap output transfer.
+- No bridge spoofing is required in the PoC; the attacker-controlled surface is the token callback timing and the
+  older valid claim.
+
+Fix applied:
+
+- Added transient `_ccipReceiveSwapLocked` state to `JBSwapCCIPSucker`.
+- `ccipReceive(...)` now sets the lock only around the initial `this.executeSwapExternal(...)` call and clears it in
+  both the success and catch branches.
+- `claim(...)` now shares the existing swap-pending guard and reverts while either `_retrySwapLocked` or
+  `_ccipReceiveSwapLocked` is active.
+- The existing retry-swap lock and nonce-indexed conversion-rate logic are otherwise unchanged.
+
+Verification after fix:
+
+- `forge test --root nana-suckers-v6 --match-path test/regression/InitialSwapReentrantClaim.t.sol -vv`: 1 passed.
+- `forge test --root nana-suckers-v6 --match-contract 'InitialSwapReentrantClaimTest|RegressionFreshRoundTest|ZeroOutputSwapPendingTest|ZeroOutputRetryClaimTest|RegressionSwapBatchRateMixingTest|TransientClaimContextRegression' -vv`:
+  9 passed.
+- `forge test --root nana-suckers-v6 --no-match-path 'test/*Fork*.t.sol' --fail-fast --summary --detailed`: exit
+  code 0 across the non-fork suite, including invariant suites.
+- `forge test --root nana-suckers-v6 --skip '*/fork/**' --fail-fast --summary --detailed` still picked up
+  `test/AdversarialSuckerFork.t.sol` and failed only because `RPC_ARBITRUM_MAINNET` was unset after 302 successful
+  tests.
+
+### BUYBACK-01. `nana-buyback-hook-v6`: oracle-derived sell-side minimums were enforced as explicit user floors
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-buyback-hook-v6/src/JBBuybackHook.sol`
+- Regression updates: `nana-buyback-hook-v6/test/regression/DerivedMinSellSideFOTDoS.t.sol`
+
+Root cause:
+
+- `beforeCashOutRecordedWith(...)` used the same `minimumSwapAmountOut` field for explicit user-provided
+  `cashOutMinReclaimed` metadata and for metadata-less oracle-derived TWAP route selection.
+- The sell-side hook metadata carried the minimum and sell count, but not whether the minimum was explicit or derived.
+- `afterCashOutRecordedWith(...)` therefore treated any nonzero oracle-derived minimum like a user slippage floor.
+
+Concrete failure modes:
+
+- If the metadata-less TWAP route beat direct reclaim during `beforeCashOutRecordedWith(...)` but the pool execution
+  later reverted, `afterCashOutRecordedWith(...)` reverted instead of returning the reminted project tokens to the
+  holder.
+- If the terminal-token output was fee-on-transfer, the oracle/pool output was quoted gross while the hook measured
+  net receipt and final net delivery. A metadata-less AMM-routed cash-out could therefore revert even though the user
+  had not supplied an explicit hard minimum.
+
+Fix applied:
+
+- Sell-side route metadata now appends `hasUserSpecifiedMinimumSwapAmountOut` after the existing informational fields.
+- `afterCashOutRecordedWith(...)` decodes the appended flag when present.
+- New metadata-less/oracle-derived routes still use the derived amount as the V4 price limit, but only explicit user
+  minimums are enforced as hard post-swap and swap-failure floors.
+- Legacy two-word hook metadata remains fail-closed: any nonzero minimum in that shape is treated as explicit.
+
+Verification after fix:
+
+- `forge test --root nana-buyback-hook-v6 --match-path test/regression/DerivedMinSellSideFOTDoS.t.sol -vv`: 3
+  passed.
+- `forge test --root nana-buyback-hook-v6 --match-path test/regression/SellSideFOTOutputDoS.t.sol -vv`: 2 passed.
+- `forge test --root nana-buyback-hook-v6 --match-path test/regression/SellSwapFallback.t.sol -vv`: 6 passed.
+- `forge fmt --root nana-buyback-hook-v6 --check`: passed.
+- `forge test --root nana-buyback-hook-v6 --skip '*/fork/**' --fail-fast --summary --detailed`: exit code 0,
+  including the non-fork invariant suite.
+
+### BUYBACK-02. Default buyback-hook changes do not retroactively hijack existing projects
+
+Status: REVIEWED / ALREADY COVERED
+
+Scope:
+
+- `nana-buyback-hook-v6/src/JBBuybackHookRegistry.sol`
+- `nana-buyback-hook-v6/test/regression/RegistryDefaultHookHijack.t.sol`
+- `nana-buyback-hook-v6/test/regression/SetDefaultHookCohortHistory.t.sol`
+- `nana-buyback-hook-v6/test/regression/DisallowDefaultHook.t.sol`
+
+Result:
+
+- The registry default is threshold-gated by `PROJECTS.count()`: a new default only applies to projects with
+  `projectId > defaultHookProjectIdThreshold`.
+- When the default changes, the outgoing default is snapshotted into `_defaultHookHistory`, preserving the project-ID
+  cohort that inherited that default. Existing projects therefore keep resolving to their historical default instead
+  of being retargeted to the new default.
+- `hasMintPermissionFor(...)` resolves through the same `_resolvedHookOf(...)` path, so mint permission follows the
+  project-specific or historical hook, not the latest default.
+- Disallowing the active default hook reverts, preventing owner action from breaking default-reliant payment paths.
+
+Residual risk:
+
+- Registry ownership remains a governance/trust boundary for future projects that do not pin a project-specific hook.
+  `nana-buyback-hook-v6/RISKS.md` documents that unpinned projects fall back to the mutable default for their cohort
+  and recommends explicitly pinning with `setHookFor(...)` / `lockHookFor(...)` where appropriate.
+
+Verification:
+
+- `forge test --root nana-buyback-hook-v6 --match-path test/regression/RegistryDefaultHookHijack.t.sol --summary --detailed`:
+  1 passed.
+- `forge test --root nana-buyback-hook-v6 --match-path 'test/regression/*DefaultHook*.t.sol' --summary --detailed`:
+  11 passed.
+- `forge test --root nana-buyback-hook-v6 --match-path test/Registry.t.sol --summary --detailed`: 37 passed.
+
+### BUYBACK-03. Registry-scoped metadata is rekeyed to the resolved buyback hook
+
+Status: REVIEWED / ALREADY COVERED
+
+Scope:
+
+- `nana-buyback-hook-v6/src/JBBuybackHookRegistry.sol`
+- `nana-buyback-hook-v6/test/regression/RegistryMetadataBoundary.t.sol`
+- `nana-buyback-hook-v6/test/regression/ExplicitCashOutMinNoPoolGap.t.sol`
+- `nana-buyback-hook-v6/test/audit/CodexNemesisRegistryCashOutMetadata.t.sol`
+
+Result:
+
+- `beforePayRecordedWith(...)` resolves the project's hook, then remaps `quote` metadata keyed to the registry address
+  into equivalent metadata keyed to the resolved hook address before forwarding.
+- `beforeCashOutRecordedWith(...)` performs the same remap for `cashOutMinReclaimed` metadata.
+- This prevents a mismatch where payers scope metadata to the registry as the configured data hook, but the underlying
+  buyback hook silently ignores it because its metadata key is address-specific.
+
+Verification:
+
+- `forge test --root nana-buyback-hook-v6 --match-contract 'RegressionRegistryMetadataBoundaryTest|ExplicitCashOutMinNoPoolGapTest|CodexNemesisRegistryCashOutMetadataTest' --summary --detailed`:
+  4 passed.
+
+### HANDLES-01. `nana-project-handles-v6`: malformed ENS resolver return data can revert handle lookup
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-project-handles-v6/src/JBProjectHandles.sol`
+- Regression update: `nana-project-handles-v6/test/CodexMalformedResolver.t.sol`
+
+Root cause:
+
+- `JBProjectHandles.handleOf(...)` used a high-level `ITextResolver.text(...)` call inside `try/catch`.
+- Resolver reverts were caught and mapped to `""`, but successful calls with malformed ABI return data still caused
+  Solidity's return-data decoding to revert.
+- This made malformed resolver data inconsistent with the documented soft-fail model for ENS lookup failures.
+
+Impact:
+
+- Low severity read-path liveness issue. The contract holds no funds and the bad resolver cannot forge a verified
+  handle, but a broken or malicious resolver for a stored name could make `handleOf(...)` revert for consumers that
+  expect unverified handles to resolve empty.
+
+Fix applied:
+
+- Replaced the high-level resolver text call with a low-level `staticcall`.
+- Added minimal ABI validation for a single returned `string`: return data must include the dynamic offset, length, and
+  enough bytes for the string contents.
+- The hardcoded ENS registry is treated as trusted for resolver lookup, while the resolver it returns remains
+  name-owner controlled and untrusted.
+- Invalid resolver return data, resolver reverts, no resolver, and no ENS registry code all now resolve to `""`.
+
+Verification after fix:
+
+- `forge test --root nana-project-handles-v6 --match-path test/CodexMalformedResolver.t.sol -vv`: 1 passed.
+- `forge fmt --root nana-project-handles-v6 --check`: passed.
+- `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 5 suites and 60
+  tests.
+
+### OWNABLE-01. `nana-ownable-v6`: project-ownership transfer with zero `PROJECTS` reverts opaquely
+
+Status: ACCEPTED DEPLOYMENT ASSUMPTION / DOCUMENTED
+
+Affected code:
+
+- `nana-ownable-v6/src/JBOwnableOverrides.sol`
+- Risk documentation: `nana-ownable-v6/RISKS.md`
+
+Root cause:
+
+- Address-owned deployments are allowed to pass `PROJECTS = address(0)` because they do not need project-owner
+  resolution.
+- If that owner later called `transferOwnershipToProject(...)`, the function reached `PROJECTS.count()` on the zero
+  address and reverted through an opaque external-call/return-data failure instead of the existing explicit
+  zero-projects error.
+
+Impact:
+
+- Low severity integration/liveness issue. It does not grant unauthorized ownership, but it made an invalid ownership
+  transition fail unclearly and bypassed the repo's intended deployment-surface guard.
+
+Resolution:
+
+- Constructor dependencies are treated as deployment-time invariants, so `PROJECTS = address(0)` is not a
+  runtime-supported configuration.
+- Removed the extra zero-address guard and documented the assumption in `RISKS.md`.
+
+Verification after fix:
+
+- `forge fmt --root nana-ownable-v6 --check`: passed.
+- `forge test --root nana-ownable-v6 --fail-fast --summary --detailed`: exit code 0 across 11 suites and 50 tests,
+  including stale-permission, burn-lock, root-permission, unminted-project, and invariant coverage.
+
+### FEEDEPLOY-01. `nana-fee-project-deployer-v6`: fee-project replay guard accepted wrong-but-plausible NANA revnets
+
+Status: VERIFIED DEPLOYMENT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-fee-project-deployer-v6/script/Deploy.s.sol`
+- Regression update: `nana-fee-project-deployer-v6/test/regression/RegressionCanonicalGuard.t.sol`
+- `deploy-all-v6/script/Deploy.s.sol`
+- New regression: `deploy-all-v6/test/regression/DeployCanonicalNanaGuard.t.sol`
+
+Root cause:
+
+- The standalone fee-project deployer skipped deployment when project `1` already had a controller and passed a weak
+  canonical check.
+- That check required ownership by the Revnet deployer, the expected controller, a nonzero Revnet configuration hash,
+  and the token symbol `NANA`.
+- A pre-existing project `1` could be configured through the same `REVDeployer` with symbol `NANA` but the wrong
+  Revnet hash, fee-revnet dependency, operator, URI, reserved split, or terminal setup. The script would then return
+  early and accept the wrong project as canonical.
+
+Impact:
+
+- Deployment-only, but high blast radius for standalone fee-project rollouts and rehearsals: project `1` is the
+  ecosystem fee sink.
+- A wrong-but-Revnet-shaped project `1` could silently preserve incorrect economics or operator authority instead of
+  failing closed.
+
+Fix applied:
+
+- The skip guard now computes the exact expected Revnet configuration hash using the same encoding surface as
+  `REVDeployer`.
+- The standalone `_feeProjectIsCanonical(...)` and deploy-all NANA replay guard now also check:
+  - `REVDeployer.FEE_REVNET_ID() == 1`;
+  - `REVDeployer.isOperatorOf(1, canonicalOperator)`;
+  - token symbol and project URI;
+  - the reserved-token split routes 100% to the canonical operator with no hook/project redirect;
+  - native terminal primary routing and accounting context match the intended setup;
+  - the router-terminal registry is installed as a project terminal.
+- Updated repo docs to state that replay/idempotence checks must prove exact canonical shape before skipping.
+
+Verification after fix:
+
+- `forge test --root nana-fee-project-deployer-v6 --match-path test/regression/RegressionCanonicalGuard.t.sol -vv`:
+  5 passed.
+- `forge test --root nana-fee-project-deployer-v6 --match-path 'test/regression/*.t.sol' -vv`: 19 passed.
+- `forge fmt --root nana-fee-project-deployer-v6 --check`: passed.
+- `forge build --root nana-fee-project-deployer-v6 --deny notes --skip '*/test/**'`: passed.
+- `forge test --root nana-fee-project-deployer-v6 --no-match-path '*Fork.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across 8 suites and 91 tests.
+- `forge test --root nana-fee-project-deployer-v6 --match-path test/FeeProjectDeployerFork.t.sol -vv`: 4 passed.
+- `forge test --root deploy-all-v6 --match-path test/regression/DeployCanonicalNanaGuard.t.sol -vv`: 1 passed.
+- `forge test --root deploy-all-v6 --match-contract 'FullStackForkTest|EcosystemForkTest|BuybackRouterForkTest|LPBuybackInteropForkTest' --fail-fast --summary --detailed`:
+  exit code 0 across 5 fork suites and 34 tests, covering full native/USDC revnet lifecycles, buyback routing,
+  LP-split/buyback interop, 721 splits, sucker-exempt cash-outs, and router-pay paths.
+- `forge fmt --root deploy-all-v6 --check`: passed.
+- `forge build --root deploy-all-v6 --deny notes --skip '*/test/**'`: passed.
+
+## Reconciled Items
+
+### PAYER-01. `nana-project-payer-v6` is deployed and verified by `deploy-all-v6`, but omitted from root architecture scope
+
+Status: DOC FIXED / INVENTORY GAP CLOSED
+
+Evidence:
+
+- Root `ARCHITECTURE.md` and `USER_JOURNEYS.md` now include `nana-project-payer-v6` as a first-class utility
+  infrastructure package.
+- `deploy-all-v6/package.json` depends on `@bananapus/project-payer-v6` `^0.0.14`.
+- `deploy-all-v6/script/Deploy.s.sol` imports `JBProjectPayerDeployer`, deploys it with
+  `PROJECT_PAYER_DEPLOYER_SALT`, and serializes both the deployer and its `JBProjectPayer` implementation.
+- `deploy-all-v6/script/Verify.s.sol` imports `JBProjectPayer` / `JBProjectPayerDeployer`, loads
+  `VERIFY_PROJECT_PAYER_DEPLOYER`, and checks deployer code, deployer directory wiring, implementation code,
+  implementation `DIRECTORY()`, and implementation `DEPLOYER()`.
+
+Impact:
+
+- Not a runtime bug by itself.
+- Audit/readiness docs are inconsistent: the prior report includes ProjectPayer as an add-on, while the root ecosystem
+  architecture omits a package that the canonical deployment now deploys and verifies.
+
+Fix applied:
+
+- Added `nana-project-payer-v6` to the root architecture scope list, foundation/utility layer, wrapper trust-boundary
+  text, and repository-role table.
+- Added `nana-project-payer-v6` to the root user-journey index and the standard treasury hand-off list.
+
+### CORE-SPLITS-01. `nana-core-v6` split namespaces and lock scope are documented and covered
+
+Status: REVIEWED / DOCUMENTATION UPDATED
+
+Scope:
+
+- `nana-core-v6/src/JBSplits.sol`
+- `nana-core-v6/src/structs/JBSplit.sol`
+- `nana-core-v6/RISKS.md`
+- `nana-core-v6/test/units/static/JBSplits/*.sol`
+
+Result:
+
+- Self-managed split groups are gated by `groupId`: the lower 160 bits must equal `msg.sender` and the upper 96 bits
+  must be nonzero. Bare address group IDs, including payout group IDs derived from token addresses, still require
+  controller authorization.
+- Locked splits are enforced when rewriting the same `(projectId, rulesetId, groupId)` table. The replacement table
+  must include an exact matching locked split, with the same percent and routing fields and a `lockedUntil` that is at
+  least as long. Duplicate locked splits must now be preserved with the same multiplicity; see `CORE-06`.
+- Locks intentionally do not carry across different ruleset IDs. This is now documented as configuration/governance
+  scope rather than treated as a protocol bypass.
+- Updated `nana-core-v6/RISKS.md` to remove stale text that implied locked split percentages could be reduced inside
+  the same table by a duplicate tuple. Current code requires an exact percent match and duplicate multiplicity.
+
+Verification:
+
+- `forge test --root nana-core-v6 --match-path 'test/units/static/JBSplits/*.sol' --summary --detailed`: 39 passed
+  across self-managed namespace, locked-split, packing, set, and lookup suites.
+- `forge fmt --root nana-core-v6 --check`: passed.
+
+### PAYER-02. Prior ProjectPayer implementation-verifier gap is fixed in this checkout
+
+Status: RECHECKED / RESOLVED
+
+Prior issue:
+
+- `AUDIT_REPORT.md` Current Open Edge Case T said the deploy-all verifier accepted arbitrary
+  `JBProjectPayerDeployer.IMPLEMENTATION()` code.
+
+Current evidence:
+
+- `deploy-all-v6/script/Verify.s.sol` now checks:
+  - `implementation.code.length > 0`
+  - `JBProjectPayer(implementation).DIRECTORY() == directory`
+  - `JBProjectPayer(implementation).DEPLOYER() == address(projectPayerDeployer)`
+- `deploy-all-v6/test/regression/PostDeployConstructorImplementationArtifactGap.t.sol` verifies that the
+  constructor-created ProjectPayer implementation is included in build artifacts and emitted in address dumps.
+- `forge test --match-path test/regression/PostDeployConstructorImplementationArtifactGap.t.sol -vv` in
+  `deploy-all-v6`: 1 test passed.
+- `forge test --skip '*/fork/**' -vv` in `nana-project-payer-v6`: 60 tests passed across unit, edge, audit, and
+  regression suites.
+- `forge build --deny notes --sizes --skip '*/test/**' --skip '*/script/**'` in `nana-project-payer-v6`: passed;
+  `JBProjectPayer` runtime size 6,559 bytes and `JBProjectPayerDeployer` runtime size 979 bytes.
+
+Residual risk:
+
+- Full fork coverage still depends on `RPC_ETHEREUM_MAINNET`.
+- The root docs still need inventory cleanup per PAYER-01.
+
+### DOC-01. Prior report's repo-local `REVIEW_GUIDE.md` inventory claim is stale
+
+Status: DOC / INVENTORY GAP
+
+Evidence:
+
+- `rg --files -g 'REVIEW_GUIDE.md'` from the workspace root returns no files.
+- `AUDIT_REPORT.md` says a doc inventory confirmed every active repo and `nana-project-payer-v6` has
+  `REVIEW_GUIDE.md`, `RISKS.md`, and `USER_JOURNEYS.md`.
+
+Impact:
+
+- Not a protocol bug.
+- This weakens audit reproducibility because future reviewers may look for a file class that is not present.
+
+Recommended fix:
+
+- Future audit summaries should name the actual repo-local docs used: `ARCHITECTURE.md`, `AUDIT_INSTRUCTIONS.md`,
+  `RISKS.md`, and `USER_JOURNEYS.md` where available.
+
+### SUCKER-BRIDGE-01. Registered sucker cash-outs intentionally use local backing
+
+Status: REVIEWED / ACCEPTED DESIGN CLARIFICATION
+
+Scope:
+
+- `revnet-core-v6/src/REVOwner.sol`
+- `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol`
+- `croptop-core-v6/src/CTDeployer.sol`
+
+Result:
+
+- The registered-sucker cash-out branch is the bridge movement path, not an ordinary holder cash-out.
+- It should return 0 tax/no fee while keeping `context.totalSupply` and `context.surplus.value` local to the source
+  chain, even when ordinary holder cash-outs for the same project are unscoped and aggregate remote snapshots.
+- This keeps value moved out by a sucker proportional to the funds on that chain.
+
+Documentation and tests:
+
+- Added inline comments at each sucker early-return branch.
+- Updated `revnet-core-v6/RISKS.md`, `nana-omnichain-deployers-v6/RISKS.md`, and `croptop-core-v6/RISKS.md`.
+- Regression tests now assert that ordinary unscoped holder cash-outs can include remote state, while registered
+  sucker cash-outs remain local-backed.
+
+Verification:
+
+- `forge test --root revnet-core-v6 --match-path test/regression/ScopeCashOutsToLocalBalancesConditional.t.sol -vv`:
+  5 passed.
+- `forge test --root croptop-core-v6 --match-path test/CTDeployer.t.sol -vv`: 24 passed.
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/JBOmnichainDeployer.t.sol -vv`: 18 passed.
+- `forge fmt --root revnet-core-v6 --check`, `forge fmt --root croptop-core-v6 --check`, and
+  `forge fmt --root nana-omnichain-deployers-v6 --check`: passed.
+
+### SUCKER-02. Sucker bridge-bound balance windows pass current invariant coverage
+
+Status: REVIEWED / NO CODE FINDING IN THIS PASS
+
+Focus:
+
+- Rechecked `JBSucker.prepare(...)`, `_pullBackingAssets(...)`, `_insertIntoTree(...)`, `toRemote(...)`,
+  `_sendRoot(...)`, `claim(...)`, `_addToBalance(...)`, and emergency exits.
+- Rechecked bridge-specific send implementations in `JBOptimismSucker`, `JBArbitrumSucker`, `JBCCIPSucker`,
+  `JBCeloSucker`, and the swap extension `JBSwapCCIPSucker`.
+- Focused on the known bridge-bound accounting window where `_sendRoot(...)` clears `outbox.balance` before the
+  implementation-specific bridge transfer completes.
+
+Result:
+
+- No fresh invariant break was confirmed in this pass.
+- The deleted-outbox window can transiently increase `amountToAddToBalanceOf(token)` during the same transaction, but
+  persisting a claim against bridge-bound value requires the bridge/token send path to return success without moving
+  the funds. With honest bridge/token movement, consuming the bridge-bound portion leaves the later bridge transfer
+  underfunded and reverts the whole transaction.
+- Existing exact-delta `assert(...)` checks in `_pullBackingAssets(...)` and `_addToBalance(...)` are harsh but
+  consistent with the repo's documented non-support for fee-on-transfer, rebasing, or adversarial terminal tokens.
+- The remaining risk is trust-boundary, not a clean protocol-accounting exploit: bridge contracts, official wrapped
+  native tokens, CCIP fee token behavior, and terminal token assumptions must hold.
+
+Verification:
+
+- `forge test --root nana-suckers-v6 --match-contract 'SuckerInvariantsTest|TestRegressionGaps|InitialSwapReentrantClaimTest|TransientClaimContextRegression|SwapPartialFillRemainderTest|RegressionSwapQueueOrderTest' -vv`:
+  35 passed.
+
+### 721-01. `nana-721-hook-v6` tier split, reserve, and cash-out timing pass current invariant coverage
+
+Status: REVIEWED / NO CODE FINDING IN THIS PASS
+
+Focus:
+
+- Mapped the payment path from `JBMultiTerminal.pay(...)` through `JB721TiersHook.beforePayRecordedWith(...)`,
+  `JB721TiersHook.afterPayRecordedWith(...)`, `JB721TiersHookLib.distributeAll(...)`, and store mint accounting.
+- Mapped the NFT cash-out path from `JB721Hook.beforeCashOutRecordedWith(...)` through
+  `JBMultiTerminal._cashOutTokensOf(...)`, `JB721Hook.afterCashOutRecordedWith(...)`, `_burn(...)`, and
+  `JB721TiersHookStore.recordBurn(...)`.
+- Rechecked the main high-risk surfaces named by the repo risk register: reserve slot protection, pending-reserve
+  dilution, split-credit scaling, same-currency decimal scaling, safe-transfer reentrancy, checkpoint transfer updates,
+  and tier removal/listing behavior.
+
+Result:
+
+- No fresh invariant break was confirmed in this pass.
+- The risky-looking split/cash-out economics are mostly configuration-level behavior already represented in the repo:
+  split-routed tier payments can reduce project-balance inflow, credits can underfund split-bearing mints, discounts
+  do not reduce cash-out weight, and pending reserves dilute cash-out values before they are minted.
+- Reentrancy during ERC-721 receiver callbacks and split-hook callbacks is regression-covered. The terminal records
+  pay balance net of split-routed hook amounts before later split distribution, the 721 hook mints before distributing
+  split proceeds, and the hook uses `_mint` rather than `safeMint`, so the reviewed split path has no ERC-721 receiver
+  callback window before accounting is finalized.
+- NFT cash-out reentry did not produce a confirmed break: same-token nested cash-out reverts the outer path by
+  changing ownership before the later burn, and distinct-token nested cash-outs are equivalent to sequential
+  cash-outs because the terminal balance is decremented before external value transfer.
+
+Verification:
+
+- `forge test --root nana-721-hook-v6 --skip '*/Fork.t.sol' --fail-fast --summary --detailed`: exit code 0.
+- Note: the skip pattern did not exclude `test/fork/*Fork.t.sol`; those fork-labeled suites also ran and passed in
+  this local environment.
+
+### 721-02. Pay-hook forwarded value and split metadata are now conservation-checked
+
+Status: FIXED
+
+Finding:
+
+- `JB721Hook.afterPayRecordedWith(...)` trusted the terminal/composer to keep `msg.value`, `context.forwardedAmount`,
+  and `context.hookMetadata` aligned.
+- `JB721TiersHookLib.distributeAll(...)` decoded per-tier split amounts but did not require their sum to equal the
+  forwarded amount. A malformed terminal/composer callback could therefore over-forward ETH/ERC-20 value or mutate
+  split metadata so the hook retained undistributed funds.
+
+Fix applied:
+
+- `JB721Hook.afterPayRecordedWith(...)` now rejects native `msg.value` mismatches and rejects stray ETH on non-native
+  forwarded payments.
+- `JB721TiersHook._processPayment(...)` now rejects nonzero forwarded amounts without split metadata.
+- `JB721TiersHookLib.distributeAll(...)` now rejects split metadata with mismatched array lengths or amounts whose sum
+  differs from the forwarded amount before pulling ERC-20 tokens or distributing native value.
+- `nana-721-hook-v6/RISKS.md` documents the pay metadata shape, forwarded-value conservation, removed-tier reserve
+  semantics, and future-tier URI authority.
+
+Verification:
+
+- Added malformed-terminal regressions in `nana-721-hook-v6/test/regression/RepoEdgeCases.t.sol`.
+- Added fork assertions in `nana-721-hook-v6/test/fork/ERC20TierSplitFork.t.sol` that real `JBMultiTerminal` ERC-20
+  and native split payments leave no balance stranded in the hook.
+- `forge test --root nana-721-hook-v6 --match-path test/regression/RepoEdgeCases.t.sol --summary --detailed`: 6
+  passed.
+- `forge test --root nana-721-hook-v6 --match-path test/fork/ERC20TierSplitFork.t.sol --summary --detailed`: 3
+  passed.
+- `forge test --root nana-721-hook-v6 --match-path 'test/{unit/tierSplitRouting_Unit.t.sol,unit/splitHookDistribution_Unit.t.sol,unit/pay_Unit.t.sol,regression/Erc20SplitAllowanceConsumption.t.sol,regression/SplitCreditsMismatch.t.sol,regression/BrokenTerminalDoesNotDos.t.sol,regression/SplitDistributionBugs.t.sol,regression/RepoEdgeCases.t.sol}' --summary --detailed`:
+  63 passed.
+- `forge test --root nana-721-hook-v6 --no-match-path 'test/fork/*' --fail-fast --summary --detailed`: all listed
+  non-`test/fork` suites passed; this command also includes the local `test/Fork.t.sol` suite, which passed 57 tests.
+
+### DEFIFA-01. Defifa fulfillment, fee accounting, and reserve dilution pass current invariant coverage
+
+Status: REVIEWED / NO CODE FINDING IN THIS PASS
+
+Focus:
+
+- Mapped game launch through `DefifaDeployer.launchGameWith(...)`, `_buildSplits(...)`, `_launchGame(...)`, and final
+  ruleset queuing.
+- Mapped scorecard submission, BWA attestation, quorum/timelock state, ratification, and commitment fulfillment through
+  `DefifaGovernor` and `DefifaDeployer.fulfillCommitmentsOf(...)`.
+- Mapped NFT mint, refund/no-contest cash-out, complete-phase weighted cash-out, reserve minting, and fee-token claims
+  through `DefifaHook` and `DefifaHookLib`.
+- Rechecked the sensitive phase boundary where `cashOutWeightIsSet` makes `currentGamePhaseOf(...)` report COMPLETE
+  before `fulfillCommitmentsOf(...)` has queued the final ruleset.
+
+Result:
+
+- No fresh invariant break was confirmed in this pass.
+- The apparent fulfillment reentrancy window is constrained by terminal accounting: `sendPayoutsOf(...)` records the
+  payout and reduces the game balance before split hooks run, while the active scoring ruleset still reserves the
+  remaining balance under its payout limit. A split hook cannot cash out against the pre-fee pot in that window.
+- Commitment payout failures are already caught by `fulfillCommitmentsOf(...)`; failed fee portions remain in the pot
+  and `fulfilledCommitmentsOf` is reset so game-pot reporting does not double-count them.
+- Pending reserves are included in quorum, BWA snapshots, cash-out denominators, and fee-token claim denominators in
+  the reviewed paths. Refund burns reduce pending reserve availability before reserve minting can inflate
+  `totalMintCost`.
+
+Verification:
+
+- `forge test --root defifa --match-path test/regression/FulfillmentBlocksRatification.t.sol -vv`: 1 passed.
+- `forge test --root defifa --match-path test/DefifaFeeAccounting.t.sol -vv`: 6 passed.
+- `forge test --root defifa --match-path test/regression/AdjustedPendingReserves.t.sol -vv`: 8 passed.
+- `forge test --root defifa --match-path test/regression/FixPendingReserveDilution.t.sol -vv`: 2 passed.
+- `forge test --root defifa --no-match-path '*Fork.t.sol' --fail-fast --summary --detailed`: exit code 0 across
+  210 non-fork tests, including governance, security, no-contest, ERC-20, fulfillment-window, and mint-cost invariant
+  suites.
+
+### BANNY-01. Banny resolver custody, body-transfer semantics, and anti-stranding behavior pass current coverage
+
+Status: REVIEWED / NO CODE FINDING IN THIS PASS
+
+Focus:
+
+- Mapped `Banny721TokenUriResolver.decorateBannyWith(...)`, `_decorateBannyWithBackground(...)`,
+  `_decorateBannyWithOutfits(...)`, `_storeOutfitsWithRetained(...)`, `assetIdsOf(...)`, `wearerOf(...)`,
+  `userOf(...)`, `onERC721Received(...)`, SVG hash/content publication, and ERC-2771 sender handling.
+- Rechecked the high-risk custody rules from the repo docs: only the body owner can decorate; unworn assets require
+  direct asset ownership; assets already attached to a body can be moved by that body's owner; outfit locks block
+  reassignment from locked source bodies; and failed safe-transfer returns retain resolver state instead of clearing it.
+
+Result:
+
+- No fresh invariant break was confirmed in this pass.
+- Equipped outfits/backgrounds are intentionally held by the resolver and keyed to the body token ID. When the body NFT
+  changes owner, the new body owner controls attached assets and can unequip them after any active lock expires.
+- Failed returns to a contract owner that cannot receive ERC-721s preserve attachment state, which is the intended
+  anti-stranding tradeoff. The merged retained/new outfit set is revalidated for exclusivity, duplicate categories,
+  and canonical category order before storage.
+- The resolver only accepts safe transfers it initiated itself. Direct `transferFrom` to the resolver bypasses
+  `onERC721Received` and is an ERC-721 limitation already documented in the contract/risk notes.
+- Burned body tokens can strand resolver-held assets because the body owner lookup reverts. This is covered as an
+  accepted limitation. Burning or otherwise mutating resolver-held accessory ownership requires a malformed or trusted
+  hook path; against the canonical Nana 721 cash-out hook, a token can only be burned when the cash-out holder is the
+  current NFT owner.
+
+Verification:
+
+- `forge test --root banny-retail-v6 --skip '*/script/**' --match-path 'test/regression/*.t.sol' -vv`: 35 passed.
+- `forge test --root banny-retail-v6 --skip '*/script/**' --match-path test/DecorateFlow.t.sol -vv`: 44 passed.
+- `forge test --root banny-retail-v6 --skip '*/script/**' --match-path test/OutfitTransferLifecycle.t.sol -vv`:
+  7 passed.
+- `forge test --root banny-retail-v6 --skip '*/script/**' --match-path test/TestQALastMile.t.sol -vv`: 3 passed.
+- `forge test --root banny-retail-v6 --skip '*/script/**' --no-match-path '*Fork.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across 19 non-fork suites and 166 tests.
+- `forge test --root banny-retail-v6 --match-path test/Fork.t.sol --summary --detailed`: 79 passed.
+
+### BANNY-02. `banny-retail-v6` standalone deploy build drift is closed
+
+Status: FIXED / BUILD VERIFIED
+
+Issue:
+
+- The standalone Banny package no longer compiled after dependency/API drift. Its dependency graph resolved
+  `@croptop/core-v6@0.0.48`, whose publisher/deployer code still called `IJB721TiersHook.PROJECT_ID()`, while the
+  current 721 hook exposes `projectId()`.
+- After updating Croptop resolution, the Banny deploy script reached a second stale reference,
+  `revnet.basic_deployer`, while the current Revnet deployment helper struct exposes `basicDeployer`.
+- The outfit migration generator also emitted Solidity snippets with `hook.PROJECT_ID()`, so generated migration
+  contracts would have recreated the same API mismatch.
+
+Fix:
+
+- Added a direct `@croptop/core-v6` package dependency at the fixed published line so Banny's Foundry remapping resolves
+  the compatible Croptop code.
+- Updated `script/Deploy.s.sol` to use `revnet.basicDeployer`.
+- Updated `script/outfit_drop/generate-migration.js` to generate `hook.projectId()` calls.
+
+Verification:
+
+- `forge build --root banny-retail-v6 --deny notes`: passed.
+- `forge test --root banny-retail-v6 --match-path 'test/regression/*.t.sol' --summary --detailed`: 35 passed.
+- `forge test --root banny-retail-v6 --no-match-path 'test/Fork.t.sol' --summary --detailed`: 166 passed.
+- `forge test --root banny-retail-v6 --match-path test/Fork.t.sol --summary --detailed`: 79 passed.
+
+### ADDRESS-01. `nana-address-registry-v6` provenance registration passes current invariant coverage
+
+Status: REVIEWED / NO CODE FINDING IN THIS PASS
+
+Focus:
+
+- Mapped `JBAddressRegistry.registerAddress(...)` for both `CREATE` and `CREATE2`, `_registerAddress(...)`, and the
+  `_addressFrom(...)` RLP encoding ladder.
+- Rechecked deployment-helper reads in `AddressRegistryDeploymentLib` and production write-side integration in
+  `JB721TiersHookDeployer`, `JBUniswapV4LPSplitHookDeployer`, and `DefifaDeployer`.
+- Scanned smart-contract production source for `deployerOf(...)` consumers.
+
+Result:
+
+- No fresh invariant break was confirmed in this pass.
+- The registry records deterministic provenance compatibility, not caller authentication or endorsement. Anyone can
+  finalize a valid registration for another deployer's already-deployed contract; this is covered and documented as
+  intentional.
+- Pre-registration of undeployed `CREATE`/`CREATE2` addresses is blocked by the runtime-code check. First valid
+  registration wins, and no production smart-contract source in the reviewed set currently uses `deployerOf(...)` as a
+  runtime authorization gate.
+- The `CREATE` derivation path is regression-covered across the RLP nonce boundaries up to `uint64.max`, including
+  explicit rejection above that range. `CREATE2` uses standard `0xff || deployer || salt || initCodeHash` derivation.
+
+Verification:
+
+- `forge test --root nana-address-registry-v6 --match-path 'test/regression/*.t.sol' -vv`: 16 passed.
+- `forge fmt --root nana-address-registry-v6 --check`: passed.
+- `forge test --root nana-address-registry-v6 --no-match-path '*Fork.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across 8 non-fork suites and 49 tests.
+
+### PERMISSION-01. `nana-permission-ids-v6` constants are canonical; stale local docs were corrected
+
+Status: DOC FIX / NO RUNTIME CODE FINDING IN THIS PASS
+
+Focus:
+
+- Mapped `JBPermissionIds.sol` from `ROOT = 1` through `REPAY_LOAN = 39`.
+- Rechecked local README/risk/user-journey docs for stale range and high-impact-ID descriptions.
+- Scanned reviewed smart-contract production source for hardcoded numeric ecosystem permission IDs.
+
+Result:
+
+- No runtime permission-ID drift was found in production source. Downstream smart-contract code uses
+  `JBPermissionIds.*` constants for ecosystem permission checks; the only numeric permission IDs found in source were
+  sentinel `permissionId: 0` uses.
+- Local permission-ID docs were stale: they described sucker permissions as `32-35`, Revnet permissions as `36-40`,
+  and loan powers as `36/37/38`.
+- Updated docs now reflect the source of truth:
+  - sucker and omnichain deployment/lifecycle permissions are `32-36`;
+  - Revnet loan permissions are `37-39`;
+  - ID `40` is currently unassigned in `JBPermissionIds.sol`.
+
+Verification:
+
+- Stale-reference scan for `36-40`, `32-35`, old Revnet loan IDs, and old `through 40` phrasing: no remaining hits in
+  non-vendored permission-ID docs.
+- `forge fmt --root nana-permission-ids-v6 --check`: passed.
+- `forge build --root nana-permission-ids-v6 --deny notes`: exit code 0; no files changed, compilation skipped.
+- `forge test --root nana-permission-ids-v6 --deny notes --summary --detailed`: exit code 0; no tests found in this
+  constants-only package.
+
+### ROUTER-UNI-01. Router terminal, buyback, Univ4 router, and LP-split cross-component paths pass current fork-backed coverage
+
+Status: REVIEWED / FORK-BACKED; SEE ROUTER-TERM-01 FOR REGISTRY HARDENING
+
+Focus:
+
+- Rechecked `nana-router-terminal-v6`, `nana-buyback-hook-v6`, `univ4-router-v6`, `univ4-lp-split-hook-v6`, and the
+  deploy-all fork harness as a composed routing/liquidity surface.
+- Focused on cross-component failure modes where local unit tests can miss interaction bugs: V3/V4 route selection,
+  buyback hook pay/cash-out handoff, router registry forwarding, partial-fill refunds, FOT token behavior, temporary
+  allowances, LP-split fee-token accounting, terminal migration, cross-project isolation, and forked PoolManager /
+  PositionManager address assumptions.
+
+Result:
+
+- Apart from the registry fail-fast hardening recorded in `ROUTER-TERM-01`, no fresh cross-component invariant break was
+  confirmed in this pass.
+- The router terminal's ERC-20 `addToBalanceOf(...)` receipt enforcement remains intentionally stricter than
+  `pay(...)`: `pay(...)` must tolerate hook/registry/FOT compositions already represented in fork and regression
+  tests, while `addToBalanceOf(...)` is expected to fail on lossy direct intake.
+- Router refund and settlement tests cover the balance-baseline pattern so partial fills do not sweep pre-existing
+  router balances. Callback checks cover V3 factory-verified callbacks and V4 PoolManager-only unlock callbacks.
+- Univ4 router coverage exercises buy and sell routing, JB fallback, signed delta bounds, temporary allowance cleanup,
+  exact min-output enforcement, TWAP/spot behavior, and project-state isolation on a mainnet fork.
+- LP-split hook coverage exercises forked PoolManager/PositionManager integration, fee routing, terminal migration,
+  cross-project isolation, token ID tracking, tick bounds, reserved-token dilution, and zero-rate edge cases.
+- Deploy-all fork coverage confirms the major composed surfaces still work together in native and USDC revnet
+  lifecycles. The deploy-all NANA exact replay guard itself is still protected by source-level regression plus
+  standalone fee-project fork coverage; the Sphinx-gated deploy script is not directly invoked in the fork harness.
+
+Verification:
+
+- `forge fmt --root nana-router-terminal-v6 --check`: passed.
+- `forge fmt --root univ4-router-v6 --check`: passed.
+- `forge fmt --root univ4-lp-split-hook-v6 --check`: passed.
+- `forge test --root nana-router-terminal-v6 --match-path 'test/regression/*.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across the focused regression suites.
+- `forge test --root univ4-router-v6 --match-path 'test/regression/*.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across the focused regression suites.
+- `forge test --root univ4-lp-split-hook-v6 --match-path 'test/regression/*.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across the focused regression suites.
+- `forge test --root nana-project-payer-v6 --match-path test/fork/ProjectPayerFork.t.sol -vv`: 5 passed.
+- `forge test --root nana-buyback-hook-v6 --match-path 'test/fork/*.t.sol' --fail-fast --summary --detailed`: exit
+  code 0 across 7 fork suites and 31 tests.
+- `forge test --root nana-router-terminal-v6 --match-path 'test/fork/*.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across 2 fork suites and 8 tests.
+- `forge test --root nana-router-terminal-v6 --match-path 'test/*Fork.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across 9 fork suites and 38 tests.
+- `forge test --root univ4-router-v6 --match-path test/JBUniswapV4HookFork.t.sol --fail-fast --summary --detailed`:
+  exit code 0 across 1 fork suite and 26 tests.
+- `forge test --root univ4-lp-split-hook-v6 --match-path 'test/fork/*.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across 18 fork suites and 42 tests.
+- `forge test --root deploy-all-v6 --match-contract 'FullStackForkTest|EcosystemForkTest|BuybackRouterForkTest|LPBuybackInteropForkTest' --fail-fast --summary --detailed`:
+  exit code 0 across 5 fork suites and 34 tests.
+
+### ROUTER-TERM-01. Router-terminal registry now fails explicitly when no terminal resolves
+
+Status: HARDENED / REGRESSION AND FORK VERIFIED
+
+Scope:
+
+- `nana-router-terminal-v6/src/JBRouterTerminalRegistry.sol`
+- `nana-router-terminal-v6/test/RouterTerminalRegistry.t.sol`
+
+Finding:
+
+- The registry deliberately lets `terminalOf(projectId)` and `defaultTerminalFor(projectId)` return
+  `address(0)` for projects whose IDs predate any default terminal.
+- Before this pass, `accountingContextForTokenOf(...)`, `accountingContextsOf(...)`, `previewPayFor(...)`,
+  `pay(...)`, and `addToBalanceOf(...)` reused the nullable resolver directly. Transactional paths therefore started
+  token acceptance / value forwarding setup before eventually failing on a downstream call to a zero terminal.
+- Reverts roll back state in these paths, so this is not recorded as a confirmed permanent fund-loss exploit. The
+  issue was that the registry depended on late external-call failure instead of enforcing its own terminal-resolution
+  invariant before handling user funds.
+
+Fix:
+
+- Added `_requireResolvedTerminalOf(projectId)`, which keeps the public nullable lookup behavior but makes all
+  passthrough view and transactional forwarding paths revert with `JBRouterTerminalRegistry_TerminalNotSet(projectId)`
+  before they call a terminal or accept funds.
+- Added cold-start cohort tests proving ERC-20 `pay(...)` and native `addToBalanceOf(...)` revert before moving value
+  into the registry.
+
+Verification:
+
+- `forge fmt --root nana-router-terminal-v6 --check`: passed.
+- `forge test --root nana-router-terminal-v6 --match-path test/RouterTerminalRegistry.t.sol --summary --detailed`:
+  29 passed.
+- `forge test --root nana-router-terminal-v6 --match-path 'test/regression/*.t.sol' --summary --detailed`: exit code
+  0 across the router-terminal regression suites.
+- `forge test --root nana-router-terminal-v6 --match-path 'test/fork/*.t.sol' --summary --detailed`: 8 passed across
+  the FOT and V4 quote/settlement fork suites.
+
+### ROUTER-UNI-02. V4/Juicebox cross-route arbitrage is accepted and bounded by project economics
+
+Status: REVIEWED / NO CODE FINDING IN THIS PASS
+
+Scope:
+
+- `univ4-router-v6/src/JBUniswapV4Hook.sol`
+- `univ4-router-v6/RISKS.md`
+- `univ4-router-v6/test/TestStructuralArbitrage.t.sol`
+
+Result:
+
+- When the router chooses the Juicebox route, the V4 pool is not touched. This can leave a temporary price difference
+  between the pool and the Juicebox bonding-curve route.
+- Current router docs classify that as accepted cross-route arbitrage, not a missed payout fee path. The extraction is
+  bounded by the project's surplus, cash-out tax, and route convergence; repeated extraction lowers the Juicebox
+  reclaim value until V4 routing wins again.
+- The remaining oracle risk is documented separately: new pools can use spot fallback during TWAP warmup, and mature
+  TWAP manipulation requires sustained price movement rather than a single-block push.
+
+Verification:
+
+- `forge test --root univ4-router-v6 --match-path test/TestStructuralArbitrage.t.sol --summary --detailed`: 8 passed.
+
+### LP-SPLIT-01. LP range manipulation via preinitialized pool or distorted terminal selection remains covered
+
+Status: REVIEWED / FORK-BACKED NO CODE FINDING IN THIS PASS
+
+Scope:
+
+- `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`
+- Pool pre-initialization, economic tick bounds, permissionless deployment terminal-token selection, and
+  sucker-aware cash-out-rate inputs.
+
+Result:
+
+- A pool that already exists is accepted only if its current `sqrtPriceX96` is strictly inside the project's computed
+  economic tick range. Out-of-band prices and exact boundary prices revert before the hook stores a pool key or marks
+  the project as deployed.
+- Permissionless `deployPool(...)` auto-selects the highest priced usable primary-terminal token, ignoring larger
+  balances on non-primary terminals and skipping unpriced tokens when at least one priced token exists.
+- `_getCashOutRate(...)` respects `scopeCashOutsToLocalBalances`: scoped projects avoid sucker-registry calls, while
+  unscoped projects include remote sucker surplus and supply by design.
+- I did not confirm a surplus-inflation exploit against the LP hook itself. The remaining risk is the upstream trust
+  boundary: incorrect price feeds, malicious registered terminals, or bad sucker-registry snapshots can distort the
+  Juicebox economic inputs that the LP hook deliberately uses.
+
+Verification:
+
+- `forge test --root univ4-lp-split-hook-v6 --match-contract 'PoolPriceFrontrunTest|AdversarialPoolInitTest|TickBoundsBoundaryEqualityTest|ScopeCashOutsLPHookTest|NonPrimaryBalanceSelectionDoSTest|UnpricedTokenSkipTest|RegressionFixM4Test|RegressionFixL6Test' --summary --detailed`:
+  27 passed.
+- `forge test --root univ4-lp-split-hook-v6 --match-contract PermissionlessDeployGriefingTest --summary --detailed`:
+  4 passed.
+- `forge test --root univ4-lp-split-hook-v6 --match-path test/fork/TickBoundsFork.t.sol --summary --detailed`: 2
+  passed.
+
+### LP-SPLIT-02. `univ4-lp-split-hook-v6`: partial V4 mints left residual Permit2 spend authority
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `univ4-lp-split-hook-v6/src/JBUniswapV4LPSplitHook.sol`
+- Updated regressions:
+  - `univ4-lp-split-hook-v6/test/DeploymentStageTest.t.sol`
+  - `univ4-lp-split-hook-v6/test/Fork.t.sol`
+
+Root cause:
+
+- `_mintPosition(...)` approves the canonical Permit2 contract for the maximum token amounts that may be settled by
+  Uniswap V4 `PositionManager`, then grants `PositionManager` a short-lived Permit2 allowance.
+- V4 minting can consume less than those max amounts, especially during partial-usage or price-shifted mint paths.
+- Before this fix, the unused ERC-20 allowance to Permit2 and the unused Permit2 allowance to `PositionManager` stayed
+  live until expiration or later overwrite.
+
+Impact:
+
+- This is a bounded approval-surface issue rather than a direct accounting over-credit. Exploitability depends on
+  whether the approved `PositionManager` can be driven, before expiry, to pull hook-held tokens through the residual
+  Permit2 allowance.
+- The hook already avoids direct approval to `PositionManager`; the missing cleanup was the second-order Permit2
+  allowance state.
+
+Fix applied:
+
+- After a successful `_modifyLiquidities(...)` mint call, `_mintPosition(...)` now clears Permit2's internal
+  allowance for each non-native mint token and resets the ERC-20 allowance granted to Permit2 back to zero.
+- Reverts still unwind the original approvals atomically.
+
+Verification after fix:
+
+- `forge test --root univ4-lp-split-hook-v6 --match-path test/DeploymentStageTest.t.sol --match-test test_DeployPool_PartialMintClearsPermit2Approvals --summary --detailed`:
+  1 passed.
+- `forge test --root univ4-lp-split-hook-v6 --match-path test/DeploymentStageTest.t.sol --summary --detailed`: 18
+  passed.
+- `forge test --root univ4-lp-split-hook-v6 --match-path test/Fork.t.sol --match-test test_fork_deployPool_usesPermit2NotDirectApproval --summary --detailed`:
+  1 fork-backed test passed, proving the real Permit2 allowance is zero after deploy.
+
+### DEPLOY-VERIFY-01. `deploy-all-v6` verifier and post-deploy artifact provenance regressions match the current fail-closed deployment model
+
+Status: REVIEWED / TEST FIX / NO DEPLOY SCRIPT CODE FINDING IN THIS PASS
+
+Focus:
+
+- Re-ran the deploy-all regression verifier surface after the NANA replay-guard work, focusing on exact deployed-code
+  checks, post-deploy artifact provenance, resume behavior, singleton/implementation verification, oracle/router/sucker
+  wiring, and dirty-source publishing gates.
+- Checked the artifact-build path because stale local artifacts are a high-impact deployment-integrity failure mode.
+
+Result:
+
+- No fresh deploy-all deployment code bug was confirmed in this pass.
+- Two regression tests were stale relative to the current build model and were updated to assert the behavior that now
+  exists:
+  - `build-artifacts.sh` builds each package into a fresh per-repo temporary output directory with `--out` and
+    `--force`, then copies the expected artifact from that fresh output.
+  - The dirty-source gate is now scoped to local source roots while package artifacts are built from npm package
+    sources under `node_modules`; production verify/artifact emission still refuses dirty manifests without
+    `--rehearsal`.
+- This is compatible with the no-production-state assumption: exact provenance checks and production dirty-manifest
+  reverts are preferable to tolerating ambiguous local build state.
+
+Verification:
+
+- `forge fmt --root deploy-all-v6 --check`: passed.
+- `forge test --root deploy-all-v6 --match-path test/regression/PostDeployStaleSourceArtifactGap.t.sol -vv`: 1 passed.
+- `forge test --root deploy-all-v6 --match-path test/regression/PostDeployDirtyArtifactProvenanceGap.t.sol -vv`: 1
+  passed.
+- `forge test --root deploy-all-v6 --match-path 'test/regression/*.t.sol' --fail-fast --summary --detailed`: exit code
+  0 across 38 regression suites and 70 tests.
+
+### DEPLOYCONFIG-01. `deploy-all-v6`: configured-revnet replay guards accepted wrong-but-plausible Defifa, ART, MARKEE, and Banny projects
+
+Status: VERIFIED DEPLOYMENT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `deploy-all-v6/script/Deploy.s.sol`
+- New regression: `deploy-all-v6/test/regression/DeployCanonicalConfiguredRevnetGuard.t.sol`
+
+Root cause:
+
+- After the NANA replay guard was hardened, later configured revnets still reused the generic check that accepted any
+  project owned by `REVDeployer`, controlled by the canonical controller, with a nonzero Revnet configuration hash and
+  the expected token symbol.
+- Defifa, ART-on-Base, and MARKEE could therefore return early for a wrong-but-Revnet-shaped project with incorrect
+  economics, operator, URI, reserved split, or terminal setup. Banny additionally checked the 721 hook identity, but
+  still did not bind the Revnet configuration hash or terminal/reserved-split shape.
+
+Impact:
+
+- Deployment-only, but high blast radius: these project IDs are canonical ecosystem projects. A partial or rehearsal
+  deployment could silently preserve wrong economics or operator authority instead of failing closed.
+- Because no production state exists yet, the correct behavior is exact canonical matching rather than backward
+  compatibility with ambiguous deployed state.
+
+Fix applied:
+
+- Defifa, ART, and MARKEE skip guards now compute the expected `REVDeployer` configuration hash and require exact hash,
+  operator, URI, reserved split beneficiary, native terminal accounting context, and optional router-terminal wiring.
+- Banny now requires the exact Revnet shape plus its canonical 721 hook/store/symbol. It accepts the Sphinx Safe as a
+  partial-resume operator before finalization or `_BAN_OPS_OPERATOR` after finalization.
+- Reserved-split verification now falls back to the latest queued ruleset when the first configured ruleset has not
+  started yet, so future-start projects like Defifa can still be replay-checked before launch.
+
+Verification after fix:
+
+- `forge fmt --root deploy-all-v6 --check`: passed.
+- `forge test --root deploy-all-v6 --match-path test/regression/DeployCanonicalConfiguredRevnetGuard.t.sol -vv`: 1
+  passed.
+- `forge test --root deploy-all-v6 --match-path test/regression/DeployCanonicalNanaGuard.t.sol -vv`: 1 passed.
+- `forge build --root deploy-all-v6 --deny notes --skip '*/test/**'`: passed.
+- `forge test --root deploy-all-v6 --match-path 'test/regression/*.t.sol' --fail-fast --summary --detailed`: exit code
+  0 across 40 regression suites and 71 tests.
+
+### CORE-02. `nana-core-v6`: migration fee-route failure could be iterated into near-total migration fee forgiveness
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-core-v6/src/JBMultiTerminal.sol`
+- Regression update: `nana-core-v6/test/regression/RegressionMigrationFeeFailure.t.sol`
+
+Root cause:
+
+- `migrateBalanceOf(...)` zeroed the source terminal ledger, attempted to process the standard migration fee, and sent
+  `balance - fee` to the destination terminal.
+- If the fee route was broken, `_processFee(...)` caught the failure and credited the fee amount back to the migrating
+  project on the source terminal.
+- That refunded fee residue could be migrated again while the fee route remained broken. Repeating the migration moved
+  a geometric series of residues to the destination terminal while the fee beneficiary received nothing.
+
+Impact:
+
+- A project owner migrating during fee-project misconfiguration could move almost the entire source balance to another
+  terminal without the intended migration fee being delivered.
+- Terminal solvency was not broken, but protocol fee accounting and migration semantics were.
+
+Fix applied:
+
+- Added `JBMultiTerminal_FeePaymentFailed(...)`.
+- `_takeFeeFrom(...)` and `_processFee(...)` now accept a `refundOnFailure` flag.
+- Terminal migration passes `refundOnFailure: false`, making the migration atomic: if the immediate fee cannot be
+  delivered, the transaction reverts and the source balance remains intact.
+- Held-fee processing and existing immediate payout/cash-out/allowance fee paths keep the previous refund-on-failure
+  behavior.
+
+Verification after fix:
+
+- `forge fmt --root nana-core-v6 --check`: passed.
+- `forge test --root nana-core-v6 --match-path test/regression/RegressionMigrationFeeFailure.t.sol -vv`: 1 passed.
+- `forge test --root nana-core-v6 --match-contract 'RegressionMigrationFeeFailure|TestTerminalMigration|TestMigrationHeldFees|TestFees|TestFeeProcessingFailure|SilentFeeFailureDetection' --fail-fast --summary --detailed`:
+  exit code 0 across 7 suites; 28 passed, 1 skipped.
+- `forge test --root nana-core-v6 --no-match-path '*Fork.t.sol' --deny notes --fail-fast --summary --detailed`: exit
+  code 0 across the broad non-fork suite, including unit, regression, fuzz, and invariant suites.
+
+### CORE-03. `nana-core-v6`: ERC-20 terminal migration to self could strand project accounting
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-core-v6/src/JBMultiTerminal.sol`
+- Regression update: `nana-core-v6/test/regression/RegressionTerminalSelfMigration.t.sol`
+
+Root cause:
+
+- `migrateBalanceOf(...)` accepted any destination terminal that reported an accounting context for the migrated token.
+- If `to == address(this)`, the source terminal zeroed its store balance and then called its own `addToBalanceOf(...)`
+  through the external terminal interface.
+- Native-token self-migration re-enters with `msg.value`, but ERC-20 self-migration transfers the token from the
+  terminal to itself. The terminal's ERC-20 balance does not change, so `_acceptFundsFor(...)` records a zero balance
+  delta.
+
+Impact:
+
+- A project owner with terminal-migration permission could accidentally or maliciously strip a project's ERC-20 store
+  balance while leaving the ERC-20 backing in the terminal contract.
+- The issue locks accounting rather than stealing funds, but it breaks terminal/project solvency attribution for the
+  migrated project.
+
+Fix applied:
+
+- Added `JBMultiTerminal_TerminalMigrationToSelf(...)`.
+- `migrateBalanceOf(...)` now rejects `address(to) == address(this)` before checking destination accounting contexts
+  or mutating the store.
+
+Verification after fix:
+
+- `forge test --root nana-core-v6 --match-path test/regression/RegressionTerminalSelfMigration.t.sol -vv`: 1 passed.
+- `forge test --root nana-core-v6 --match-contract 'RegressionTerminalSelfMigration|RegressionMigrationFeeFailure|TestTerminalMigration|TestMigrationHeldFees|TestFees|TestFeeProcessingFailure|SilentFeeFailureDetection|FeeFreeSurplusLifecycleTest' --fail-fast --summary --detailed`:
+  exit code 0 across 9 suites; 31 passed, 1 skipped.
+- `forge test --root nana-core-v6 --no-match-path '*Fork.t.sol' --deny notes --fail-fast --summary --detailed`:
+  exit code 0 across the broad core suite, including fuzz and invariant campaigns.
+
+### CORE-04. `nana-core-v6`: zero price-feed returns now fail closed in `JBPrices`
+
+Status: HARDENED / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-core-v6/src/JBPrices.sol`
+- `nana-core-v6/test/units/static/JBPrices/TestPricePerUnitOf.sol`
+
+Result:
+
+- `JBChainlinkV3PriceFeed` already rejects zero and negative oracle answers, but `JBPrices` previously trusted any
+  registered `IJBPriceFeed` implementation to return a nonzero value.
+- A custom feed returning zero could either propagate a zero price into downstream routing/accounting or make inverse
+  price lookup divide by zero.
+- `JBPrices.pricePerUnitOf(...)` now reverts with `JBPrices_ZeroPrice(...)` for both direct and inverse registered
+  feeds that return zero.
+- `nana-core-v6/RISKS.md` documents the fail-closed behavior and the remaining oracle honesty assumption.
+
+Verification:
+
+- `forge fmt --root nana-core-v6 --check`: passed.
+- `forge test --root nana-core-v6 --match-path test/units/static/JBPrices/TestPricePerUnitOf.sol --summary --detailed`:
+  7 passed.
+- `forge test --root nana-core-v6 --match-path 'test/units/static/JBPrices/*.sol' --summary --detailed`: 28 passed.
+- `forge test --root nana-core-v6 --match-path 'test/units/static/JBTerminalStore/*.sol' --summary --detailed`: 61
+  passed.
+
+### CORE-05. `nana-core-v6`: duplicate fund-access groups could split one terminal/token configuration
+
+Status: HARDENED / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-core-v6/src/JBFundAccessLimits.sol`
+- `nana-core-v6/src/structs/JBFundAccessLimitGroup.sol`
+- Regression update: `nana-core-v6/test/units/static/JBFundAccessLimits/TestFundAccessLimitsEdge.sol`
+
+Root cause:
+
+- `JBFundAccessLimits.setFundAccessLimitsFor(...)` required strictly increasing currencies inside each
+  `JBFundAccessLimitGroup`.
+- It did not require the outer groups to be unique by `(terminal, token)`.
+- A malformed ruleset could therefore provide multiple groups for the same terminal/token pair and split payout-limit or
+  surplus-allowance currencies across them, bypassing the intended one-group canonical shape for that accounting
+  context.
+
+Impact:
+
+- Single-currency payout enforcement through `payoutLimitOf(...)` remained bounded by the first matching currency.
+- Aggregate surplus views consume `payoutLimitsOf(...)`, so malformed duplicate groups could make surplus accounting
+  depend on noncanonical configuration shape, especially if duplicate currencies were split across groups.
+- The issue is configuration-integrity hardening rather than a direct theft path, but core fund-access limits are a
+  cross-component accounting boundary used by payout, allowance, cash-out, deployer, and product flows.
+
+Fix applied:
+
+- `setFundAccessLimitsFor(...)` now reverts with `JBFundAccessLimits_DuplicateFundAccessLimitGroup(...)` when a
+  ruleset provides more than one group for the same `(terminal, token)` pair.
+- `JBFundAccessLimitGroup` docs now state the uniqueness requirement.
+- `nana-core-v6/RISKS.md` documents that fund-access groups must be unique per `(terminal, token)` and internally
+  sorted by currency.
+
+Verification:
+
+- `forge fmt --root nana-core-v6 --check`: passed.
+- `forge test --root nana-core-v6 --match-path test/units/static/JBFundAccessLimits/TestFundAccessLimitsEdge.sol --summary --detailed`:
+  7 passed, including the duplicate terminal/token group regression.
+- Prior broad verification in this pass: `forge test --root nana-core-v6 --no-match-path '*Fork.t.sol' --deny notes --fail-fast --summary --detailed`
+  exited successfully across the core unit, regression, fuzz, and invariant campaigns.
+
+### CORE-06. `nana-core-v6`: duplicate locked splits could collapse multiplicity
+
+Status: HARDENED / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-core-v6/src/JBSplits.sol`
+- Regression update: `nana-core-v6/test/units/static/JBSplits/TestSplitsLockedEdge.sol`
+- Documentation update: `nana-core-v6/RISKS.md`
+
+Root cause:
+
+- `JBSplits.setSplitGroupsOf(...)` previously checked each current locked split with a boolean
+  `_includesLockedSplits(...)`.
+- If the current table contained two identical locked splits, one matching replacement split satisfied the check for
+  both current entries.
+- A project owner could therefore replace the second identical locked entry with an unrelated split while all locked
+  entries appeared to be included.
+
+Impact:
+
+- The issue was limited to rewriting the same `(projectId, rulesetId, groupId)` split table before the duplicate lock
+  expired.
+- It still violated locked-split semantics: duplicate locked allocations could be collapsed into one entry even though
+  each locked entry should remain present until expiry.
+
+Fix applied:
+
+- `JBSplits` now counts how many active current locked splits match each locked split's immutable fields and requires
+  the replacement table to contain at least that many matching entries.
+- Added `test_duplicateLockedSplits_cannotCollapseMultiplicity()`.
+- `nana-core-v6/RISKS.md` now documents that duplicate locked splits preserve multiplicity.
+
+Verification:
+
+- `forge fmt --root nana-core-v6 --check`: passed.
+- `forge test --root nana-core-v6 --match-path test/units/static/JBSplits/TestSplitsLockedEdge.sol --summary --detailed`:
+  10 passed.
+- `forge test --root nana-core-v6 --match-path 'test/units/static/JBSplits/*.sol' --summary --detailed`: 39 passed.
+
+### CORE-07. `nana-core-v6`: reserved-token self-project splits could recycle reserves through the project's own terminal
+
+Status: HARDENED / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-core-v6/src/JBController.sol`
+- Integration-style regression: `nana-core-v6/test/TestSplits.sol`
+- Unit regression updates: `nana-core-v6/test/units/static/JBController/TestSendReservedTokensToSplitsOf.sol`
+- Documentation update: `nana-core-v6/RISKS.md`
+
+Root cause:
+
+- Reserved-token split processing lets a split with `projectId != 0` pay the receiving project's primary terminal for
+  the project token being distributed.
+- It did not reject `split.projectId == projectId`.
+- If the source project accepted its own ERC-20 project token through a terminal, `sendReservedTokensToSplitsOf(...)`
+  could mint pending reserves to the controller, approve the terminal, pay the same project with its own token, and
+  trigger another project-token mint as if the reserve distribution were an external payment.
+
+Impact:
+
+- This could inflate project supply and pending reserves without new external treasury value when a project configured
+  its own ERC-20 as an accepted terminal token and pointed reserved-token splits back at itself.
+- The issue mirrors the self-pay mint bypass already guarded in payout split processing.
+
+Fix applied:
+
+- `JBController._sendReservedTokensToSplitGroupOf(...)` now reverts with
+  `JBController_ReservedTokenSplitProjectSameAsOwner(projectId)` when a no-hook reserved-token split points back to the
+  source project.
+- The new `TestSplits` regression uses real core and `JBMultiTerminal` wiring: it deploys the project ERC-20, registers
+  that ERC-20 as an accepted terminal token, creates pending reserves through a payment, and proves reserve distribution
+  now reverts before self-project terminal payment.
+
+Verification:
+
+- `forge fmt --root nana-core-v6 --check`: passed.
+- `forge test --root nana-core-v6 --match-path test/TestSplits.sol --match-test testReservedPercentSplitTerminal_rejectsSelfProject --summary --detailed`:
+  1 passed.
+- `forge test --root nana-core-v6 --match-path 'test/{TestSplits.sol,units/static/JBController/TestSendReservedTokensToSplitsOf.sol,units/static/JBController/TestPayReservedTokenToTerminal.sol}' --summary --detailed`:
+  13 passed.
+- `forge test --root nana-core-v6 --deny notes --skip '*/fork/**' --fail-fast --summary --detailed`: exit code
+  0 across the broad non-fork core unit, regression, fuzz, and invariant suites.
+
+### SUCKER-REG-01. `nana-suckers-v6`: same-peer active sucker aggregation used max value instead of freshest snapshot
+
+Status: VERIFIED CROSS-COMPONENT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-suckers-v6/src/JBSuckerRegistry.sol`
+- `nana-suckers-v6/src/interfaces/IJBSucker.sol`
+- `nana-suckers-v6/src/interfaces/IJBSuckerRegistry.sol`
+- `nana-suckers-v6/RISKS.md`
+- Regression update: `nana-suckers-v6/test/regression/RegistryStaleMaxAggregation.t.sol`
+
+Root cause:
+
+- Multiple active suckers for the same peer chain report redundant full-chain snapshots, not additive shares.
+- The registry correctly avoided summing same-peer values, but deduped by `max(value)`.
+- Remote balance, surplus, and supply are not monotonic. A stale active sucker with a higher old snapshot could dominate
+  a fresher active sucker with lower current state.
+
+Impact:
+
+- Non-sucker unscoped cash-out math in Revnet and Omnichain deployer hooks could be overquoted by stale remote surplus
+  or supply until capped by local liquidity.
+- `REVLoans` borrowable math consumes the same registry aggregate, so stale high snapshots could inflate borrowable
+  amounts relative to current remote state.
+
+Fix applied:
+
+- Added `snapshotTimestamp()` to `IJBSucker`.
+- Same-peer aggregation now prefers the highest snapshot freshness key for active suckers. `max(value)` remains only a
+  same-freshness tie-breaker and as the deprecated-sucker fallback when no active sucker answers for that peer chain.
+- Updated registry interface comments and sucker risk docs to state the freshness-first aggregation model.
+
+Verification after fix:
+
+- `forge fmt --root nana-suckers-v6 --check`: passed.
+- `forge test --root nana-suckers-v6 --match-path test/regression/RegistryStaleMaxAggregation.t.sol -vv`: 2 passed.
+- `forge test --root nana-suckers-v6 --match-path test/unit/deployer.t.sol --fail-fast --summary --detailed`: exit
+  code 0 across 18 tests.
+- `forge test --root nana-suckers-v6 --match-path test/regression/RegistryStaleDeprecatedMaxSurplus.t.sol --fail-fast --summary --detailed`:
+  1 passed.
+- `forge test --root nana-suckers-v6 --match-contract 'InitialSwapReentrantClaimTest|TransientClaimContextRegression|SwapPartialFillRemainderTest|RegressionSwapQueueOrderTest|SameTimestampSnapshotPinnedTest|PeerSnapshotDesyncTest|RegistryStaleMaxAggregationTest|RegistryStaleDeprecatedMaxSurplusTest' -vv`:
+  exit code 0 across 8 suites and 13 tests.
+- `forge test --root nana-suckers-v6 --no-match-path 'test/*Fork*.t.sol' --fail-fast --summary --detailed`: exit
+  code 0 across the broad non-fork suite; 441 passed, 0 failed, 0 skipped.
+- `forge test --root revnet-core-v6 --match-contract 'ScopeCashOutsToLocalBalancesConditionalTest|ScopeCashOutsREVLoansTest|RemoteLoanStateOmissionTest|RouterRegistrySourceDebtRepricingTest|TestREVLoans|TestLoanSourceRotation|TestLoansAndDeployerFixes|RegressionLoanSourceRotation|RegressionRouterRegistrySourceDebtRepricingTest' -vv`:
+  exit code 0 across 6 suites and 35 tests.
+- `forge test --root nana-omnichain-deployers-v6 --match-path test/JBOmnichainDeployer.t.sol -vv`: 18 passed.
+- `forge test --root nana-suckers-v6 --match-path 'test/fork/*.t.sol' --fail-fast --summary --detailed`: exit code 0;
+  4 fork tests passed and 8 Optimism RPC-dependent tests were skipped by their guards.
+- `forge test --root revnet-core-v6 --match-path '*Fork.t.sol' --fail-fast --summary --detailed`: exit code 0 across
+  15 fork suites; 66 tests passed.
+
+### SUCKER-MAP-01. `nana-suckers-v6`: one sucker could map multiple local tokens to one remote inbox
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-suckers-v6/src/JBSucker.sol`
+- `nana-suckers-v6/RISKS.md`
+- Regression update: `nana-suckers-v6/test/regression/RemoteTokenMappingUniqueness.t.sol`
+
+Root cause:
+
+- A sucker's outbound state is keyed by local terminal token: `_outboxOf[localToken]`, including independent tree counts
+  and nonces.
+- The destination sucker stores inbound roots under `root.token`, which is the remote token address converted to the
+  destination chain's local token address.
+- `mapToken(...)` prevented one local token from being remapped after use, but did not prevent two different local
+  tokens inside the same sucker from pointing at the same remote token.
+
+Impact:
+
+- Two local-token outboxes in the same sucker could race into one destination inbox key. Depending on delivery order,
+  one root could be rejected as stale or overwrite the other root, making claims unavailable until manual recovery.
+- This is not a restriction on bridge-lane redundancy: separate suckers have separate inbox/outbox storage, so native
+  bridge and CCIP suckers can both map ETH->ETH or USDC->USDC for the same project/chain pair.
+
+Fix applied:
+
+- Added a per-sucker reverse reservation `_localTokenForRemoteToken[remoteToken]`.
+- `_mapToken(...)` now rejects mapping a nonzero remote token if another local token in the same sucker already
+  reserved it.
+- Unused same-local-token remaps release the old remote token reservation, while disabled mappings keep their remote
+  token reserved so re-enabling the same route remains unambiguous.
+- `RISKS.md` now documents the per-sucker uniqueness invariant and explicitly states that separate suckers can carry
+  the same asset pair so users can choose their bridge risk profile.
+
+Verification after fix:
+
+- `forge test --root nana-suckers-v6 --match-path test/regression/RemoteTokenMappingUniqueness.t.sol -vv`: 5 passed.
+- `forge test --root nana-suckers-v6 --match-path 'test/regression/*MapToken*.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across 3 suites; 12 passed.
+- `forge test --root nana-suckers-v6 --no-match-path '*Fork*.t.sol' --fail-fast --summary --detailed`: exit code 0
+  across the broad local sucker suite, including local invariants.
+- `forge test --root nana-suckers-v6 --match-path test/MultiSuckerFork.t.sol --fail-fast --summary --detailed`:
+  10 passed, including multiple active suckers for the same peer chain.
+- `forge test --root nana-suckers-v6 --match-path 'test/fork/*.t.sol' --fail-fast --summary --detailed`: exit code 0;
+  4 fork tests passed and 8 Optimism RPC-dependent tests were skipped by their guards.
+
+### SUCKER-ALLOW-01. `nana-suckers-v6`: bridge send approvals stayed live after partial bridge/router pulls
+
+Status: HARDENED / FIXED IN WORKTREE
+
+Affected code:
+
+- `nana-suckers-v6/src/libraries/JBCCIPLib.sol`
+- `nana-suckers-v6/src/JBCCIPSucker.sol`
+- `nana-suckers-v6/src/JBSwapCCIPSucker.sol`
+- `nana-suckers-v6/src/JBOptimismSucker.sol`
+- `nana-suckers-v6/src/JBCeloSucker.sol`
+- `nana-suckers-v6/src/JBArbitrumSucker.sol`
+- `nana-suckers-v6/RISKS.md`
+- Regression update: `nana-suckers-v6/test/regression/BridgeAllowanceCleanup.t.sol`
+
+Root cause:
+
+- Sucker bridge send paths grant external bridge/router contracts ERC-20 allowance for the amount being sent.
+- The code assumed canonical bridges either pull the full approved amount or revert.
+- If a non-canonical, upgraded, misconfigured, or mocked bridge/router returned success after only a partial pull, the
+  unused allowance remained live.
+
+Impact:
+
+- Later same-token funds arriving in the sucker could be pulled by the still-approved bridge/router/gateway even though
+  those funds belonged to a future root, retry, claim backing, or project add-to-balance path.
+- This is mostly a hardening issue against bridge/router behavior outside the canonical exact-pull assumption, but it
+  touches pooled bridge custody and is cheap to close.
+
+Fix applied:
+
+- CCIP send logic now clears bridged-token approvals and fee-token approvals after successful `ccipSend(...)`.
+- OP Stack, Celo, and Arbitrum send paths now revoke the bridge/gateway approval after the successful bridge call.
+- `nana-suckers-v6/RISKS.md` documents the single-use bridge approval invariant.
+
+Verification:
+
+- `forge fmt --root nana-suckers-v6 --check`: passed.
+- `forge test --root nana-suckers-v6 --match-path test/regression/BridgeAllowanceCleanup.t.sol --summary --detailed`:
+  2 passed. The regression uses a CCIP router that succeeds after pulling only half of the approved bridge token or
+  LINK fee, and asserts the sucker-side allowance is zero afterward.
+- `forge test --root nana-suckers-v6 --match-path test/unit/ccip_native_interop.t.sol --summary --detailed`: 15
+  passed.
+- `forge test --root nana-suckers-v6 --match-path test/unit/multi_chain_evolution.t.sol --summary --detailed`: 6
+  passed.
+- `forge test --root nana-suckers-v6 --no-match-path '*Fork*.t.sol' --fail-fast --summary --detailed`: exit code 0
+  across the broad non-fork sucker suite, including regression, fuzz, and invariant coverage.
+- `forge test --root nana-suckers-v6 --match-path 'test/fork/*.t.sol' --fail-fast --summary --detailed`: exit code 0;
+  4 fork conversion tests passed and 8 Optimism RPC-dependent tests were skipped by their guards.
+
+### REVNET-TERM-01. `revnet-core-v6`: Revnet terminal selection is constructor-pinned
+
+Status: HARDENED / REGRESSION AND FORK VERIFIED
+
+Affected code:
+
+- `revnet-core-v6/src/REVDeployer.sol`
+- `revnet-core-v6/src/interfaces/IREVDeployer.sol`
+- `revnet-core-v6/RISKS.md`
+- Deployment callers in `revnet-core-v6`, `nana-fee-project-deployer-v6`, and `deploy-all-v6`
+
+Root cause:
+
+- `REVDeployer.deployFor(...)` accepted full `JBTerminalConfig[]` input from each caller.
+- That made terminal identity a per-revnet config choice even though Revnet loans, sucker exemptions, router payments,
+  and borrowability depend on a coherent terminal set across packages.
+- A malicious or mistaken deployment config could register a phantom terminal that distorted surplus reads, or register
+  a router registry/alternate terminal as if it were a treasury-bearing loan source.
+
+Fix applied:
+
+- `REVDeployer` now pins `MULTI_TERMINAL` and `ROUTER_TERMINAL_REGISTRY` in its constructor.
+- Deploy calls accept only `JBAccountingContext[]`; the deployer always registers the canonical multi-terminal with
+  those contexts and, when distinct, the router terminal registry with no accounting contexts.
+- Loan fund-access limits are derived only from `MULTI_TERMINAL` accounting contexts.
+- `REVLoanSource` was removed. Loan APIs and stored loan state now carry only `sourceToken`; `REVLoans` and `REVOwner`
+  derive decimals and currency from the deployer-pinned `MULTI_TERMINAL` accounting context for that token.
+- The Revnet configuration hash now commits to the constructor-pinned `MULTI_TERMINAL` and `ROUTER_TERMINAL_REGISTRY` instead
+  of caller-supplied terminal configs.
+- Deployment scripts pass the router terminal registry as `ROUTER_TERMINAL_REGISTRY`, not the underlying router
+  terminal, and the CREATE2 restart/prediction path now encodes the same constructor arguments.
+- `TestTerminalEncodingInHash` now constructs a real `JBRouterTerminalRegistry` and verifies that it is installed as
+  the second canonical project terminal, distinct from the treasury-bearing multi-terminal.
+
+Verification after fix:
+
+- `forge test --root revnet-core-v6 --match-path test/TestTerminalEncodingInHash.t.sol --summary --detailed`: 4
+  passed, including the real-router-registry terminal list check.
+- `forge test --root revnet-core-v6 --match-path 'test/regression/{PhantomSurplusTerminal,RouterRegistrySourceDebtRepricing}.t.sol' --summary --detailed`:
+  2 passed.
+- `forge test --root revnet-core-v6 --match-path 'test/regression/*.t.sol' --fail-fast --summary --detailed`: 105
+  passed across 29 regression files.
+- `forge test --root nana-fee-project-deployer-v6 --match-path test/TestFeeProjectDeployer.sol --summary --detailed`:
+  64 passed.
+- `forge test --root nana-fee-project-deployer-v6 --match-path 'test/regression/*.t.sol' --fail-fast --summary --detailed`:
+  19 passed across 5 regression suites.
+- `forge test --root deploy-all-v6 --match-path test/regression/RouterTerminalRouteVerifierGap.t.sol --summary --detailed`:
+  3 passed.
+- `forge test --root deploy-all-v6 --match-path test/fork/DeployFullStack.t.sol --match-test test_fullStack_ethereum --fail-fast --summary --detailed`:
+  1 passed, covering the full deploy stack with `JBRouterTerminalRegistry` registered as the canonical router project
+  terminal.
+- Additional token-only loan source verification:
+  - `forge test --root revnet-core-v6 --match-path test/REVLoansSourced.t.sol --summary --detailed`: 22 passed, 1
+    skipped.
+  - `forge test --root revnet-core-v6 --match-path test/REVLoansEdgeCases.t.sol --summary --detailed`: 5 passed.
+  - `forge test --root revnet-core-v6 --match-path test/REVLoansRegressions.t.sol --summary --detailed`: 2 passed.
+  - `forge test --root revnet-core-v6 --match-path test/TestLoanSourceRotation.t.sol --summary --detailed`: 6 passed.
+  - `forge test --root revnet-core-v6 --match-path test/TestCrossSourceReallocation.t.sol --summary --detailed`: 2
+    passed.
+  - `forge test --root revnet-core-v6 --match-path test/TestRevnetRegressions.t.sol --summary --detailed`: 1 passed.
+  - `forge test --root revnet-core-v6 --match-path test/regression/RemoteLoanStateOmission.t.sol --summary --detailed`:
+    2 passed.
+  - `forge test --root revnet-core-v6 --match-path test/regression/RouterRegistrySourceDebtRepricing.t.sol --summary --detailed`:
+    1 passed, proving router-registry-backed revnets still borrow from the canonical multi terminal.
+  - `forge test --root revnet-core-v6 --match-path 'test/REVLoans*.t.sol' --summary --detailed`: 57 passed, 1
+    skipped, including `REVLoans.invariants`.
+  - `forge test --root revnet-core-v6 --match-path 'test/Test*Loan*.t.sol' --summary --detailed`: 22 passed.
+  - `forge test --root revnet-core-v6 --match-path 'test/regression/*Loan*.t.sol' --summary --detailed`: 33 passed.
+  - `forge test --root revnet-core-v6 --match-path test/fork/TestLoanReallocateFork.t.sol --summary --detailed`: 2
+    passed.
+  - `forge test --root revnet-core-v6 --match-path test/fork/TestLoanERC20Fork.t.sol --summary --detailed`: 7
+    passed.
+  - `forge test --root deploy-all-v6 --match-path test/fork/MixedDecimalLoanComposition.t.sol --summary --detailed`:
+    1 passed.
+  - `forge test --root deploy-all-v6 --match-path test/fork/FullStackFork.t.sol --summary --detailed`: 8 passed.
+  - `forge test --root deploy-all-v6 --match-path test/fork/TestTerminalMigration.t.sol --summary --detailed`: 3
+    passed, with the loan case updated to assert that plain JB migration projects fail closed under the Revnet-only
+    loan path.
+
+### REVNET-LOAN-01. `revnet-core-v6`: callbacks could nest loan actions during partial accounting updates
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `revnet-core-v6/src/REVLoans.sol`
+- Regression update: `revnet-core-v6/test/TestCEIPattern.t.sol`
+- Fork coverage: `revnet-core-v6/test/fork/TestLoanBorrowFork.t.sol`
+
+Root cause:
+
+- `REVLoans._adjust(...)` writes the per-loan amount/collateral before interactions, but aggregate loan accounting is
+  updated across multiple helpers.
+- During borrow, native-token payouts to a contract beneficiary occur before `_addCollateralTo(...)` increments
+  `totalCollateralOf` and burns the holder's project tokens.
+- A beneficiary or terminal/token callback could call another loan-changing entrypoint while `totalBorrowedFrom` and
+  `totalCollateralOf` represented different points in the outer action.
+
+Impact:
+
+- The clearest practical callback is a smart-contract borrower receiving native-token loan proceeds.
+- A nested `borrowFrom`, `reallocateCollateralFromLoan`, or `repayLoan` could price or mutate against partially
+  updated aggregate loan state.
+
+Fix applied:
+
+- Added a transient loan-action lock to `borrowFrom`, `reallocateCollateralFromLoan`, and `repayLoan`.
+- Internal `_borrowFrom(...)` remains unguarded so the already-locked reallocation flow can create its replacement
+  loan without self-reverting.
+- Risk docs now describe callback observability separately from nested loan-action mutation.
+
+Verification after fix:
+
+- `forge test --root revnet-core-v6 --match-path test/TestCEIPattern.t.sol --match-test test_reentrantBeneficiary_cannotNestBorrowAction --summary --detailed`:
+  1 passed, proving a contract beneficiary cannot open a nested loan during the outer payout callback.
+- `forge test --root revnet-core-v6 --match-path test/fork/TestLoanBorrowFork.t.sol --match-test test_fork_borrow_reentrantBeneficiaryCannotNestBorrow --summary --detailed`:
+  1 fork test passed against the loan fork harness with the real buyback/V4 setup.
+
+### REVNET-FEE-01. `revnet-core-v6`: native fee hook could spend forced ETH
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `revnet-core-v6/src/REVOwner.sol`
+- Regression update: `revnet-core-v6/test/TestCashOutCallerValidation.t.sol`
+- Fork coverage: `revnet-core-v6/test/fork/TestCashOutFork.t.sol`
+
+Root cause:
+
+- `REVOwner.afterCashOutRecordedWith(...)` intentionally has no terminal-only caller gate. A non-terminal caller can
+  call the hook and donate their own forwarded fee into the fee revnet.
+- For native-token fees, the hook used `context.forwardedAmount.value` as the outbound `msg.value` without requiring
+  the current call's `msg.value` to match.
+- If ETH was forcibly sent or accidentally stranded in `REVOwner`, an arbitrary caller could set a native forwarded
+  amount and route that pre-existing balance through attacker-chosen hook metadata.
+
+Impact:
+
+- The normal terminal callback path was sound when the terminal forwarded value, but the public hook entrypoint could
+  spend native ETH that was not supplied by the caller.
+- The exposure is bounded to stranded/forced ETH in the hook contract, not revnet terminal balances.
+
+Fix applied:
+
+- Native fee processing now requires `msg.value == context.forwardedAmount.value`.
+- ERC-20 fee processing now requires `msg.value == 0` and still pulls the forwarded token amount from the caller.
+- Risk docs now state the public hook is allowed for donations but native processing is value-balanced.
+
+Verification after fix:
+
+- `forge test --root revnet-core-v6 --match-path test/TestCashOutCallerValidation.t.sol --match-test 'test_nonTerminalCaller' --summary --detailed`:
+  2 passed, covering both valid non-terminal donation and forced-balance rejection.
+- `forge test --root revnet-core-v6 --match-path test/TestCashOutCallerValidation.t.sol --summary --detailed`: 4
+  passed.
+- `forge test --root revnet-core-v6 --match-path test/fork/TestCashOutFork.t.sol --match-test test_fork_cashOut_normalWithFee --summary --detailed`:
+  1 fork test passed for the real terminal cash-out fee flow.
+
+### CROPTOP-01. `croptop-core-v6`: documented-valid posting policies and batches could brick at publish time
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `croptop-core-v6/src/CTPublisher.sol`
+- `croptop-core-v6/src/interfaces/ICTPublisher.sol`
+- Regression update: `croptop-core-v6/test/CTPublisher.t.sol`
+- Fork regression update: `croptop-core-v6/test/fork/PublishFork.t.sol`
+
+Root cause:
+
+- `CTAllowedPost` and `CTDeployerAllowedPost` document `maximumTotalSupply == 0` as "max"/unlimited, but
+  `configurePostingCriteriaFor(...)` rejected any nonzero `minimumTotalSupply` with `maximumTotalSupply == 0`, and
+  `mintFrom(...)` treated zero as a hard cap.
+- `CTPublisher._setupPosts(...)` preserved user post order in `tiersToAdd`, while the canonical 721 store requires new
+  tiers sorted by ascending category. A batch with valid posts in categories `[2, 1]` could therefore revert in the 721
+  store even though each post satisfied Croptop policy.
+
+Impact:
+
+- Project owners following the published zero-as-unlimited supply-bound docs could fail to configure the category, or
+  if configured through another path, could make every nonzero-supply post fail.
+- Publishers could unintentionally brick an otherwise valid multi-category batch unless they knew and followed the
+  lower-level 721 store's category-ordering precondition.
+- This is a publishing liveness/policy correctness issue, not a fund-drain path.
+
+Fix applied:
+
+- `maximumTotalSupply == 0` is now consistently treated as unlimited in both configuration validation and post supply
+  validation.
+- New tier configs are insertion-sorted by ascending category before `hook.adjustTiers(...)`.
+- The publisher tracks which original post produced each newly sorted tier, then assigns final tier IDs after sorting
+  so mint metadata and URI cache entries preserve the caller's requested mint order.
+- Interface docs now state that `allowanceFor(...).maximumTotalSupply == 0` means unlimited.
+
+Verification after fix:
+
+- `forge fmt --root croptop-core-v6 --check`: passed.
+- `forge test --root croptop-core-v6 --match-path test/CTPublisher.t.sol -vv`: 31 passed.
+- `forge test --root croptop-core-v6 --match-path 'test/regression/*.t.sol' --fail-fast --summary --detailed`: exit
+  code 0 across the local regression suite.
+- `forge test --root croptop-core-v6 --match-path test/fork/PublishFork.t.sol --fail-fast --summary --detailed`: exit
+  code 0 across the full-stack publish fork suite; 5 passed, including the unsorted-category regression against the
+  canonical 721 hook/store.
+- `forge test --root croptop-core-v6 --no-match-path '*Fork.t.sol' --deny notes --fail-fast --summary --detailed --skip '*/script/**'`:
+  exit code 0 across the broad non-fork suite; 139 passed, 0 failed, 0 skipped.
+
+### CROPTOP-02. `croptop-core-v6`: project NFT handoff bypassed ERC-721 receiver checks
+
+Status: VERIFIED SMART-CONTRACT FINDING / FIXED IN WORKTREE
+
+Affected code:
+
+- `croptop-core-v6/src/CTDeployer.sol`
+- Regression updates:
+  - `croptop-core-v6/test/regression/RegressionCurrencyCases.t.sol`
+  - `croptop-core-v6/test/fork/PublishFork.t.sol`
+
+Root cause:
+
+- `CTDeployer.deployProjectFor(...)` safely reserved the project NFT to itself through `JBProjects.createFor`, but
+  finalized ownership with raw `PROJECTS.transferFrom(address(this), owner, projectId)`.
+- If the requested `owner` was a contract that does not implement `IERC721Receiver`, the project NFT could still be
+  transferred there. That bypassed the same receiver safety that `JBProjects.createFor(owner)` enforces when projects
+  are launched directly.
+
+Impact:
+
+- A Croptop project could be deployed to a contract owner that cannot receive or manage ERC-721s safely, stranding the
+  project NFT and leaving the project/hook control path unusable without bespoke rescue behavior.
+- This is a launch-integrity issue rather than a fund-drain path, but it is cross-component: Croptop's deployer
+  changed the effective safety semantics of the canonical `JBProjects` NFT handoff.
+
+Fix applied:
+
+- `CTDeployer.deployProjectFor(...)` now finalizes the project NFT handoff with `PROJECTS.safeTransferFrom(...)`.
+- `croptop-core-v6/RISKS.md` documents that contract recipients must implement `onERC721Received`.
+
+Verification after fix:
+
+- `forge test --root croptop-core-v6 --match-path test/regression/RegressionCurrencyCases.t.sol --match-test test_deployerSafeTransfersProjectNftToContractOwners --summary --detailed`:
+  1 passed against freshly deployed core, Croptop, terminal, and 721-hook infrastructure.
+- `forge test --root croptop-core-v6 --match-path test/fork/PublishFork.t.sol --match-test testFork_DeployProjectForRequiresSafeProjectNftReceiver --summary --detailed`:
+  1 fork test passed.
+- `forge test --root croptop-core-v6 --match-path test/CTDeployer.t.sol --summary --detailed`: 24 passed.
+- `forge test --root croptop-core-v6 --match-path test/regression/RegressionCurrencyCases.t.sol --summary --detailed`:
+  3 passed.
+- `forge test --root croptop-core-v6 --match-path 'test/{CTDeployer.t.sol,ClaimCollectionOwnership.t.sol,regression/RegressionFreshRound.t.sol,regression/RegressionCases.t.sol,regression/DeployerPermissionBypass.t.sol,audit/NemesisStaleDeployerPermissions.t.sol}' --summary --detailed`:
+  36 passed across 6 suites.
+
+## Active Hypotheses
+
+- Continue through remaining smart-contract surfaces with emphasis on callback-capable token paths, pooled-balance
+  accounting, mutable deployment/runtime registries, and external-call ordering assumptions where actual balances are
+  shared but accounting is scoped.
+- Cross-component findings should carry fork or integration-style proof whenever feasible. Source-level assertions are
+  allowed only when the production deploy surface is not directly callable in the harness, and the report must label
+  them as source-level instead of fork-backed.
+- Because no production deployment exists yet, compatibility with legacy deployed hook metadata or project state is not
+  a requirement for fixes; prefer exact canonical checks and clear reverts.
+- Sucker-side exact-delta checks and `_sendRoot(...)` bridge-bound accounting are reconciled as trust-boundary risks:
+  harsh reverts are expected for unsupported token behavior, and persistent bridge-bound value consumption requires a
+  trusted bridge/token path to report success without moving funds.
+- Focused router/terminal/Univ4 review found one router-terminal registry fail-fast hardening (`ROUTER-TERM-01`) and
+  no clean CORE-01-style over-credit in `nana-router-terminal-v6`, `univ4-router-v6`, or
+  `univ4-lp-split-hook-v6`; current status is backed by local regression suites and mainnet-fork cross-component
+  suites.
+- Deploy-all verifier/post-deploy review found no fresh deploy-script code issue; current no-finding status is backed by
+  the local regression verifier suite plus fork-backed full-stack lifecycle coverage.
+- Same-peer sucker aggregate views now use source-chain snapshot freshness instead of value magnitude, and downstream
+  Revnet/Omnichain local plus Revnet fork suites pass against the corrected model.
+- Croptop publisher/deployer sidecar review reconciled existing-tier policy reuse, terminal/hook trust, URI mutation,
+  pre-claim deployer-scoped authority, and `CTProjectOwner` authority widening as already-tested accepted behavior or
+  integration trust boundaries. The fresh Croptop code fix from this pass is limited to policy-valid publish liveness:
+  zero-as-unlimited supply bounds and category-order normalization.
+- LP split hook Permit2 residual approvals, Croptop project-NFT receiver semantics, Revnet terminal selection, Revnet
+  owner fee forwarding, and Revnet loan callback ordering are now hardened and fork/local verified. Current high-signal
+  follow-up is report-backed completion mapping and any still-weak smart-contract seams found by that matrix.
+
+## Working Completion Matrix
+
+This is a live checklist for the user objective, not a completion claim. Passing tests and documented no-findings are
+evidence, but they are not a substitute for a full formal proof of the composed system.
+
+| Requirement | Current artifact evidence | Remaining gap |
+| --- | --- | --- |
+| Maintain `AUDIT_REPORT_2.md` as record keeper | This file records findings, fixes, commands, accepted risks, and coverage log entries. | Keep extending it as new surfaces are checked. |
+| Include Banny, Defifa, and all Nana smart-contract repos | Root `ARCHITECTURE.md` and `USER_JOURNEYS.md` now include the original 19 repos plus `nana-project-payer-v6`; `nana-referral-split-hook-v6`, `bendystraw-v6`, and website are explicitly out of scope per user direction. | Final completion audit must re-check scope against the actual workspace and user exclusions. |
+| Map every module and dependency | Repo-level architecture/RISKS/USER_JOURNEYS files exist for each in-scope repo; this report has mapped sections for core, hooks, suckers, deployers, Revnet, Croptop, Defifa, Banny, ProjectPayer, router, and LP surfaces. | A final artifact should explicitly tie every `src/*.sol` module to at least one reviewed invariant or accepted trust boundary. |
+| Deep invariant analysis | Findings cover pooled balance solvency, callback ordering, split conservation, loan accounting, bridge-bound state, duplicate config, registry freshness, deployment identity, and metadata/provenance invariants. | No single machine-checkable invariant manifest proves all invariants across all repos. |
+| Reproducible PoCs for promising threads | Verified findings include local or fork regression tests for core ERC-20 intake, distributor funding, ProjectPayer under-pulls, sucker callbacks, Revnet loan reentrancy, Croptop publish/deploy liveness, and deploy-all replay guards. | Temporary PoCs removed after fixes are documented, but final completion should ensure surviving PoCs/regressions remain in-repo for all fixed critical paths. |
+| Cross-component dynamics get fork/integration tests where feasible | Evidence includes deploy-all full-stack forks, ProjectPayer+terminal fork, buyback/V4 forks, router-terminal forks, LP split forks, sucker forks, Revnet forks, Croptop publish fork, Defifa/Banny broad non-fork coverage, and focused integration tests. | Some slow omnichain/fork suites are intentionally path-scoped; final completion should list any skipped suites and why they are not required. |
+| Prefer reduced surface over unnecessary code | Several fixes removed or narrowed configurable surfaces: Revnet terminal configs, `REVLoanSource`, duplicate groups/splits, leftover allowances, broad callback windows, and weak replay guards. | Continue challenging whether new abstractions are necessary before adding code. |
+| Formal verification “top to bottom” | Current evidence is adversarial review plus unit/regression/fork/invariant tests. | Not complete: no comprehensive formal spec, proof harness, or exhaustive composed-system verifier exists yet. |
+
+Repo evidence snapshot:
+
+| Repo | Primary report evidence | Current residual concern |
+| --- | --- | --- |
+| `nana-core-v6` | CORE-01 through CORE-07 plus broad non-fork/fuzz/invariant suites. | Final proof still needs composed terminal/hook manifest. |
+| `nana-permission-ids-v6` | PERMISSION-01 constants/docs scan and build/test command. | Constants-only package; downstream compatibility remains ecosystem-wide. |
+| `nana-ownable-v6` | OWNABLE-01 zero-address hardening plus broad suite. | Authority assumptions depend on project NFT and permissions state. |
+| `nana-address-registry-v6` | ADDRESS-01 registry provenance review and regression suite. | Registry remains permissionless metadata, not an authorization oracle. |
+| `nana-project-handles-v6` | HANDLES-01 malformed resolver hardening and full suite. | ENS availability and resolver honesty remain external dependencies. |
+| `nana-project-payer-v6` | PAYER-01/02/03 plus fork and non-fork suites; root inventory now includes it. | Direct token transfers are intentionally unrecoverable. |
+| `nana-721-hook-v6` | 721-01/02 plus local/fork split and pay-hook conservation coverage. | Complex tier behavior still relies on broad test coverage, not formal proof. |
+| `nana-buyback-hook-v6` | BUYBACK-01/02/03 plus registry/default/metadata/fork coverage. | Market route correctness depends on configured pools/oracles. |
+| `nana-router-terminal-v6` | ROUTER-TERM-01 and ROUTER-UNI-01 fork-backed coverage. | Router cannot make arbitrary external swap paths risk-free. |
+| `nana-suckers-v6` | SUCKER-01, SUCKER-02, SUCKER-REG-01, SUCKER-MAP-01, SUCKER-ALLOW-01. | Bridge and remote-chain integrity remain trust boundaries. |
+| `nana-omnichain-deployers-v6` | OMNI-01/02 plus invariant/fork coverage. | Slow omnichain suite was improved, but final audit must document runtime budget choices. |
+| `nana-distributor-v6` | DIST-01/02/03 plus broad and fork coverage. | Reward-token behavior beyond standard ERC-20 remains a review focus. |
+| `univ4-router-v6` | ROUTER-UNI-01/02 structural-arbitrage and fork coverage. | AMM/oracle manipulation is bounded by documented assumptions, not eliminated. |
+| `univ4-lp-split-hook-v6` | LP-SPLIT-01/02 plus fork coverage. | Pool state and Permit2 assumptions remain integration-critical. |
+| `revnet-core-v6` | REVNET-TERM-01, REVNET-LOAN-01, REVNET-FEE-01 plus loan/fork/regression suites. | Cross-chain loan/surplus staleness is accepted and documented. |
+| `croptop-core-v6` | CROPTOP-01/02 plus publisher/deployer/fork coverage. | Publisher policy complexity still benefits from focused scenario review. |
+| `banny-retail-v6` | BANNY-01/02 plus build, regression, broad non-fork, and mainnet-fork coverage. | Standalone script/deploy surface is currently aligned; package graph drift should remain a release-gate check. |
+| `defifa` | DEFIFA-01 plus governance, fulfillment, reserve, and non-fork suites. | Permissionless game launch trust boundaries must remain explicit to users. |
+| `nana-fee-project-deployer-v6` | FEEDEPLOY-01 plus fork/regression/broad coverage. | Canonical replay checks must track any Revnet config changes. |
+| `deploy-all-v6` | DEPLOY-VERIFY-01, DEPLOYCONFIG-01, Revnet/router/full-stack fork evidence. | Final deployment readiness still requires real-script/exact-equivalence rehearsal evidence for every production chain. |
+
+## Coverage Log
+
+- Read root `AUDIT_INSTRUCTIONS.md`, `ARCHITECTURE.md`, `RISKS.md`, `USER_JOURNEYS.md`.
+- Read prior `AUDIT_REPORT.md` tail and current open edge-case index.
+- Enumerated submodules and current dirty state.
+- Corrected continuation scope after user directive to skip `nana-referral-split-hook-v6`.
+- Ran a sidecar scope-gap review; actionable smart-contract follow-up was `nana-project-payer-v6` reconciliation.
+- Rechecked `nana-project-payer-v6` source, deploy-all deployment/verifier references, package pins, and local
+  verification commands.
+- Corrected continuation scope after user directive to exclude `bendystraw-v6` and `website`.
+- Verified CORE-01 with two temporary local PoCs in `nana-core-v6`, then removed the temporary files:
+  - `RegressionReentrantERC20Intake.t.sol` proved store over-credit.
+  - `RegressionReentrantERC20CrossProjectDrain.t.sol` proved same-token cross-project pool drain.
+- Implemented CORE-01 mitigation in `nana-core-v6/src/JBMultiTerminal.sol`.
+- Added permanent CORE-01 regression coverage in
+  `nana-core-v6/test/regression/ReentrantERC20IntakeGuard.t.sol`.
+- Ran focused compatibility regressions for legitimate nested-hook composition:
+  - `SplitHookBalanceDeltaReentrancy.t.sol`
+  - `CashOutReenterPay.t.sol`
+  - `TestForwardedTokenConsumption.sol`
+- Ran the broad `nana-core-v6` non-fork test suite with `--deny notes --fail-fast --summary --detailed`; command
+  exited successfully.
+- Verified DIST-01 with a temporary local PoC in `nana-distributor-v6`, then replaced it with permanent regression
+  coverage:
+  - `ReentrantRewardFundingPoC.t.sol` proved distributor hook-balance over-credit and same-token pool drain.
+  - `ReentrantRewardFundingGuard.t.sol` proves the fix for both direct `fund(...)` and split
+    `processSplitWith(...)` paths.
+- Implemented DIST-01 mitigation in `nana-distributor-v6/src/JBDistributor.sol`,
+  `nana-distributor-v6/src/JBTokenDistributor.sol`, and `nana-distributor-v6/src/JB721Distributor.sol`.
+- Ran the broad `nana-distributor-v6` non-fork test suite with `--deny notes --fail-fast --summary --detailed`;
+  command exited successfully.
+- Hardened `nana-distributor-v6` native split funding so `JBTokenDistributor` and `JB721Distributor` require
+  `msg.value == context.amount` for native split contexts and reject native value on ERC-20 split contexts. Added
+  malformed split regressions and a mainnet-fork payout split conservation assertion.
+- Hardened `JB721Distributor` owner voting-budget accounting so zero-reward vesting attempts do not consume the
+  snapshot owner's cap. Updated the existing replay PoC to prove the high-value token remains claimable.
+- Re-ran focused distributor regressions, the token distributor fork suite, `forge fmt --check`, and the broad
+  `nana-distributor-v6` non-fork suite with invariants; all exited successfully.
+- Verified and fixed PAYER-03 in `nana-project-payer-v6/src/JBProjectPayer.sol`; updated edge tests to prove
+  terminal under-pull leaves no residual drainable allowance.
+- Ran `nana-project-payer-v6` focused edge tests and the broad non-fork suite with `--fail-fast --summary --detailed`;
+  both exited successfully.
+- Verified and fixed OMNI-01 in `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol`; updated cash-out
+  composition regressions so NFT cash-outs skip generic extra cash-out hooks.
+- Ran focused omnichain cash-out regression suites and the broad non-fork, non-invariant omnichain suite; all exited
+  successfully.
+- Verified and fixed OMNI-02 in `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol`; fresh launches now require
+  the provided controller to use the canonical `PROJECTS` registry and to register itself in the canonical directory.
+  Ran the real-core guard tests plus mocked controller-validation regressions successfully.
+- Refactored `nana-omnichain-deployers-v6/test/invariants/**` so the long stateful campaigns run against a local
+  deployer/721/terminal/sucker setup with one public invariant entrypoint per handler. The V4/buyback integration
+  remains covered by targeted fork tests instead of being replayed for every invariant handler operation.
+- `forge test --root nana-omnichain-deployers-v6 --match-path 'test/invariants/*.t.sol' --fail-fast --summary --detailed`:
+  exit code 0; both invariant campaigns ran `1024` runs at depth `100` (204,800 handler calls total) in 51.2s.
+- `forge test --root nana-omnichain-deployers-v6 --match-path 'test/fork/*.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across 5 fork suites and 24 tests, covering sucker deployment, cash-out, 721 queue/adjust, stress, and
+  weight behavior.
+- `forge test --root nana-omnichain-deployers-v6 --no-match-path '*Fork.t.sol' --fail-fast --summary --detailed`:
+  exit code 0 across the broad local suite with invariants included. Note that the repository's
+  `test/fork/TestOmnichain721QueueAndAdjust.t.sol` path is still included by this historical pattern because its
+  filename does not end with `Fork.t.sol`.
+- Verified and fixed SUCKER-01 in `nana-suckers-v6/src/JBSwapCCIPSucker.sol`; added
+  `nana-suckers-v6/test/regression/InitialSwapReentrantClaim.t.sol`.
+- Ran focused sucker regression coverage, the related swap/claim regression group, and the broad non-fork sucker suite
+  including invariants; all exited successfully.
+- A broader sucker command using `--skip '*/fork/**'` still ran `test/AdversarialSuckerFork.t.sol` and failed only on
+  missing `RPC_ARBITRUM_MAINNET`; the refined `--no-match-path 'test/*Fork*.t.sol'` run is the clean recorded result.
+- Verified and fixed BUYBACK-01 in `nana-buyback-hook-v6/src/JBBuybackHook.sol`; updated
+  `nana-buyback-hook-v6/test/regression/DerivedMinSellSideFOTDoS.t.sol` to cover metadata-less derived-minimum pool
+  failure and fee-on-transfer output delivery.
+- Ran focused buyback sell-side regression suites, `forge fmt --check`, and the broad non-fork buyback suite including
+  invariants; all exited successfully.
+- Recorded router/terminal sidecar non-findings.
+- Closed the `nana-721-hook-v6` sidecar review with no fresh finding; reentrancy and split/cash-out timing were
+  reconciled against current regression coverage and state-transition ordering.
+- Read `revnet-core-v6` docs and mapped high-value paths through `REVDeployer`, `REVOwner`, `REVLoans`, sucker
+  registry accounting, buyback routing, and cash-out fee composition.
+- Reconciled registered-sucker cash-outs as intentional local-chain bridge accounting; added inline comments, risk-doc
+  updates, and focused tests across `revnet-core-v6`, `nana-omnichain-deployers-v6`, and `croptop-core-v6`.
+- Ran the focused sucker bridge accounting suites in those three repos; all exited successfully.
+- Ran focused revnet cash-out composition regressions, `forge fmt --check`, and the broad non-fork revnet suite with
+  `--no-match-path '*Fork.t.sol'`; all exited successfully, including non-fork invariant suites.
+- Mapped `nana-721-hook-v6` pay, split, reserve, checkpoint, and NFT cash-out paths; ran the broad suite with
+  `--fail-fast --summary --detailed`, including tier lifecycle and store invariants, with exit code 0.
+- Mapped Defifa launch, mint/refund, scorecard, BWA, fulfillment, reserve, weighted cash-out, and fee-token claim
+  paths.
+- Reconciled Defifa's COMPLETE-before-final-ruleset boundary against terminal payout-limit accounting and existing
+  fulfillment failure handling.
+- Ran focused Defifa fulfillment, fee-accounting, adjusted-pending-reserve, and reserve-dilution regression suites, then
+  the broad non-fork Defifa suite; all exited successfully.
+- Rechecked sucker bridge-bound accounting windows in `JBSucker` and OP/Arbitrum/CCIP/Celo/swap subclasses.
+- Ran focused sucker invariant and regression coverage for outbox accounting, claim/emergency execution isolation,
+  initial-swap reentrant claims, transient claim context, partial-fill swap behavior, and out-of-order swap-batch rates;
+  all exited successfully.
+- Mapped Banny resolver custody, body-transfer, anti-stranding, category-exclusivity, SVG publication, and ERC-2771
+  sender paths.
+- Ran focused Banny regression, decoration, transfer-lifecycle, and tokenURI suites, then the broad non-fork Banny
+  suite; all exited successfully.
+- Mapped ProjectHandles ENS name storage, namehash, setter isolation, ERC-2771 sender scoping, resolver lookup, and
+  input validation paths.
+- Hardened `JBProjectHandles.handleOf(...)` so malformed ENS resolver return data soft-fails to `""` instead of
+  reverting.
+- Ran focused malformed-resolver coverage, `forge fmt --check`, and the broad ProjectHandles suite; all exited
+  successfully.
+- Mapped Ownable dynamic project ownership, direct-address ownership, delegated permission IDs, stale-permission
+  invalidation, renounce behavior, constructor dependency assumptions, and unminted-project behavior.
+- Hardened `transferOwnershipToProject(...)` so address-owned contracts deployed without `PROJECTS` reject project
+  ownership transfers with the explicit existing error.
+- Ran focused zero-address regression coverage, `forge fmt --check`, and the broad Ownable suite including invariants;
+  all exited successfully.
+- Mapped AddressRegistry deterministic CREATE/CREATE2 provenance registration, first-write semantics, deployment helper
+  validation, and production write-side integrations in 721, LP split hook, and Defifa deployers.
+- Ran focused AddressRegistry regression coverage, `forge fmt --check`, and the broad non-fork AddressRegistry suite;
+  all exited successfully.
+- Mapped `nana-permission-ids-v6` constants, stale range docs, high-impact ID descriptions, and downstream
+  smart-contract permission checks.
+- Corrected permission-ID docs so sucker lifecycle IDs are `32-36`, Revnet loan IDs are `37-39`, and ID `40` is
+  explicitly unassigned.
+- Ran the stale-reference scan, `forge fmt --check`, `forge build --deny notes`, and the constants-only `forge test`
+  command for `nana-permission-ids-v6`; all exited successfully, with Forge reporting no tests in the package.
+- Mapped `nana-fee-project-deployer-v6` deployment script, fee-project canonical skip guard, project-1 squat
+  regressions, operator/split/auto-issuance configuration, native terminal setup, and deploy-all NANA revnet parity.
+- Hardened the standalone fee-project replay guard so an existing project `1` is accepted only when it matches the
+  expected Revnet hash, fee-revnet dependency, operator, URI, reserved split, native terminal, and router-terminal
+  setup.
+- Hardened the deploy-all NANA replay guard with the same exact-shape checks and added a source-level regression to
+  prevent falling back to the generic nonzero-hash revnet guard.
+- Updated fee-project deployer risk docs and ran focused guard/regression coverage, `forge fmt --check`,
+  `forge build --deny notes`, the broad non-fork suite, deploy-all focused coverage/build checks, and the fork
+  deployment suite; all exited successfully.
+- Recorded the production-deployment assumption: no production state exists yet, so new fixes do not need to preserve
+  backward compatibility with legacy deployed behavior.
+- Mapped router terminal, buyback, Univ4 router, LP-split, ProjectPayer, and deploy-all fork coverage for
+  cross-component findings and no-findings.
+- Ran the focused router terminal / Univ4 router / LP-split local regression suites; all exited successfully.
+- Ran cross-component fork suites for ProjectPayer+terminal, buyback+V4, router terminal+V3/V4/JB terminal, Univ4
+  router+JB terminal, LP-split+PoolManager/PositionManager/JB terminal, and deploy-all native/USDC revnet lifecycles;
+  all exited successfully.
+- Re-ran the full deploy-all local regression verifier suite after aligning stale post-deploy provenance tests with the
+  current per-package temporary artifact-output model; the suite exited successfully across 38 suites and 70 tests.
+- Updated `PostDeployStaleSourceArtifactGap.t.sol` and `PostDeployDirtyArtifactProvenanceGap.t.sol` so they continue to
+  enforce fail-closed artifact provenance and dirty-manifest gates under the current npm-package build path.
+- Hardened deploy-all configured-revnet replay guards for Defifa, ART, MARKEE, and Banny; ran focused guard tests,
+  deploy-all build, and the full local deploy-all regression suite.
+- Hardened `JBMultiTerminal.migrateBalanceOf(...)` so migration reverts instead of refunding an immediate failed
+  protocol fee back into a repeat-migratable source-terminal residue; ran focused migration and fee-processing suites
+  plus the broad `nana-core-v6` non-fork suite including fuzz and invariants.
+- Hardened `JBMultiTerminal.migrateBalanceOf(...)` against destination self-reference, which could otherwise strand
+  ERC-20 project accounting through a zero-delta self-transfer; ran focused self-migration and migration/fee suites plus
+  the broad `nana-core-v6` suite including fuzz and invariants.
+- Reconciled the terminal-migration payout-limit reset thread as accepted terminal-scoped accounting: usage counters are
+  keyed by terminal, so separately configured destination terminals use their own limits. Clarified
+  `nana-core-v6/RISKS.md`.
+- Triaged the reported hidden-token multiplier thread against current V6 code. `REVHiddenTokens.sol` is not present;
+  core burns destroy live supply rather than moving it into a reclaimable hidden bucket, and Revnet loan math only adds
+  burned loan collateral back because borrowers retain a repayable claim. Clarified the core and Revnet risk docs plus
+  stale ecosystem references; reran the phantom-terminal regression and scoped/sucker cash-out boundary tests.
+- Reconciled the initial-project-configuration hijack thread as an accepted launch-provenance risk: `launchProjectFor`
+  is explicitly callable by anyone on behalf of any owner, and project IDs are allocation-order outputs rather than
+  commitments. Clarified core docs so owner address alone is not treated as launch authorization.
+- Reconciled the Revnet auto-issuance stage-ID thread as a false positive for the current deployer path:
+  `JBRulesets` assigns sequential IDs (`deployTimestamp + i`) when all stages are queued in `deployFor`, and existing
+  project conversion is restricted to blank projects. Cleaned up a stale regression test so it asserts the actual
+  stage-key/ruleset-ID invariant.
+- Hardened fund-access-limit configuration so one ruleset cannot split the same terminal/token pair across duplicate
+  groups. Duplicate currencies were already rejected within a single group; the new guard closes the malformed
+  cross-group variant and keeps surplus views aligned with canonical payout-limit lookup.
+- Rechecked `JBSplits` self-managed group authorization, same-ruleset locked-split enforcement, cross-ruleset lock
+  scope, packing, and fallback behavior. Updated stale lock-scope docs, then hardened duplicate locked-split
+  multiplicity after sidecar review showed a boolean inclusion check could collapse identical locked entries.
+- Hardened reserved-token project splits so no-hook splits cannot point back to the source project and recycle pending
+  reserves through the source project's own terminal. Added real core plus terminal coverage in `TestSplits`.
+- Hardened `JBSuckerRegistry` same-peer aggregation to prefer the freshest active snapshot; ran local registry,
+  sucker, Revnet, Omnichain, broad sucker non-fork, and fork suites covering downstream cash-out/loan consumers.
+- Hardened per-sucker token mapping so two local tokens cannot share one remote destination inbox inside the same
+  sucker, while preserving parallel bridge lanes across separate suckers; ran focused mapping regressions, existing
+  map-token regressions, the broad sucker local suite, `MultiSuckerFork`, and the available sucker fork subset.
+- Hardened sucker bridge send paths so CCIP, OP Stack, Celo, and Arbitrum token approvals are revoked after successful
+  bridge/router calls. Added a partial-pull CCIP router regression proving leftover bridge-token and LINK-fee
+  allowances are zeroed; reran the broad sucker local suite and available fork subset.
+- Ran a focused `croptop-core-v6` publisher/deployer sidecar review. Reconciled stale pre-claim deployer permissions,
+  `CTProjectOwner` project-NFT authority grants, existing-tier policy reuse, terminal/hook trust, and URI mutation
+  against current tests and risk docs.
+- Hardened `CTPublisher` so documented zero-as-unlimited supply caps work and new multi-category tier batches are
+  sorted before crossing into the canonical 721 hook; ran focused publisher, regression, full-stack publish fork, and
+  broad Croptop non-fork suites.
+- Hardened `CTDeployer` so the final `JBProjects` NFT handoff uses `safeTransferFrom`; ran real-core local coverage,
+  a fork-backed Croptop deployer regression, and affected deployer/ownership suites.
+- Reworked `nana-omnichain-deployers-v6` invariant tests to keep randomized campaigns local and consolidate assertions
+  into one invariant entrypoint per handler; verified the invariant path in 51.2s and separately reran the omnichain
+  fork suite for the real V4/buyback/sucker integration layer.
+- Rechecked the buyback registry default-hook and metadata-boundary threads. Current registry logic preserves
+  historical default-hook cohorts, scopes mint permission to the resolved hook, and rekeys registry-scoped pay/cash-out
+  metadata to the resolved hook. Ran focused registry/default/metadata suites successfully.
+- Hardened `JBPrices` so direct and inverse custom price feeds returning zero fail closed with `JBPrices_ZeroPrice`
+  before downstream accounting can consume a zero price or divide by zero. Ran focused `JBPrices` and terminal-store
+  conversion suites successfully.
+- Rechecked LP split pool-preinitialization/range-manipulation hypotheses against current economic tick-bound
+  validation, permissionless terminal-token selection, local sucker-aware cash-out-rate tests, and forked V4 tick-bound
+  coverage. No new LP hook bug confirmed.
+- Rechecked Univ4 router structural arbitrage against current risk docs and tests. Cross-route V4/Juicebox arbitrage
+  remains accepted and bounded by project economics; ran the structural-arbitrage suite successfully.
+- Hardened `JBRouterTerminalRegistry` so nullable cold-start terminal resolution is preserved for `terminalOf(...)`
+  while passthrough view and transactional forwarding paths fail explicitly before accepting funds or calling a zero
+  terminal. Ran the focused registry test file, all router-terminal regression tests, and the router-terminal fork
+  suites.
+- Hardened `REVDeployer` so revnet deployments choose accounting contexts only while constructor-pinned
+  `MULTI_TERMINAL` and `ROUTER_TERMINAL_REGISTRY` define the canonical project terminals. Deployment scripts pass
+  `JBRouterTerminalRegistry` as `ROUTER_TERMINAL_REGISTRY`. Ran focused Revnet terminal/hash regressions, the broad Revnet
+  regression pack, fee-project deployer unit coverage, deploy-all router-registry verifier coverage, and the
+  deploy-all Ethereum full-stack fork test.
+- Removed `REVLoanSource`; Revnet loans now accept and persist source tokens only, with accounting contexts derived
+  from the constructor-pinned `MULTI_TERMINAL`. Ran focused loan source, reallocation, remote-state, and router-registry
+  regression suites.
+- Rechecked `nana-project-payer-v6` after the Revnet pass. The current implementation clears terminal ERC-20 allowances
+  after successful `pay` and `addToBalanceOf`, so the old residual-allowance risk text was stale; updated
+  `nana-project-payer-v6/RISKS.md` to distinguish cleared under-pull allowances from intentionally unrecoverable direct
+  token transfers.
+- Closed the ProjectPayer root-inventory gap by adding `nana-project-payer-v6` to `ARCHITECTURE.md` and
+  `USER_JOURNEYS.md`; updated `PAYER-01` from inventory gap to doc-fixed.
+- Hardened `REVOwner.afterCashOutRecordedWith` so native fee forwarding must be matched by the current call's
+  `msg.value`, preventing public callers from spending forced/stuck ETH while preserving explicit fee donations. Ran
+  focused caller-validation coverage and the existing cash-out fork fee path.
+- Hardened `JBUniswapV4LPSplitHook` so successful V4 mint paths clear both Permit2's spender allowance and the ERC-20
+  allowance granted to Permit2. Ran the focused partial-mint unit regression and fork-backed real Permit2 deploy test.
+- Hardened `REVLoans` loan-changing entrypoints with a transient callback lock so native payout, terminal, or token
+  callbacks cannot open nested loan actions against partially updated aggregate loan accounting. Ran a focused
+  contract-beneficiary regression and the matching loan fork-harness test.
+- Closed Banny standalone build drift by pinning the fixed Croptop package line, updating the deploy script to
+  `revnet.basicDeployer`, and updating generated migration Solidity snippets to call `hook.projectId()`. Verified with
+  `forge build --root banny-retail-v6 --deny notes`, the focused regression suite, the broad non-fork suite, and the
+  Banny mainnet-fork harness.
+
+## Completion Audit Status
+
+Not complete. The objective requires full ecosystem formal verification/deep invariant analysis plus reproducible
+attack-path work where promising. Current work has established the new record keeper and continuation scope, but
+broad subsystem coverage remains open.
