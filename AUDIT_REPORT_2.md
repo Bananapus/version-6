@@ -2774,6 +2774,18 @@ Initial machine-checkable spec targets:
 - Distributor rewards: hook-scoped reward balances, vesting totals, voting snapshots, and actual ERC-20/native backing
   stay solvent under callback-capable token behavior.
 
+Progress against the plan:
+
+- Strengthened `nana-core-v6/test/invariants/TerminalStoreInvariant.t.sol` so the stateful native-terminal campaign
+  runs against two independent user projects plus the fee project instead of only one user project. The handler now
+  chooses a project per operation, and `INV-TS-1`/`INV-TS-4`/`INV-TS-5` check that the terminal's ETH covers the
+  combined tracked store balances after randomized `pay`, `addToBalance`, `cashOutTokens`, and `sendPayouts`
+  sequences.
+- Verification command:
+  `forge test --root nana-core-v6 --match-path test/invariants/TerminalStoreInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 5 invariant properties passed, each with 1024 runs and 102,400 handler calls. This is bounded
+  Foundry evidence for the core native terminal solvency model, not a complete formal proof.
+
 Open formal gaps:
 
 - No external formal-verification tool is installed or wired into CI yet.
