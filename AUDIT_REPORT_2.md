@@ -3010,6 +3010,11 @@ Progress against the plan:
   `forge test --root nana-project-payer-v6 --fail-fast --summary --detailed`.
   Result: exit code 0 for all three; 53 address-registry tests passed including 1 fork test, 60 project-handle tests
   passed, and 67 project-payer tests passed including 5 fork tests and the audit regression slice.
+- Follow-up format and size commands also exited 0 for all three:
+  `forge fmt --root <repo> --check` and
+  `forge build --root <repo> --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
+  Runtime size margins were 22,735 bytes for `JBAddressRegistry`, 18,717 bytes for `JBProjectHandles`, and 17,818
+  bytes for `JBProjectPayer`.
 
 Open formal gaps:
 
