@@ -2895,6 +2895,19 @@ Progress against the plan:
 - Verification command:
   `forge test --root univ4-lp-split-hook-v6 --match-path test/invariant/LPSplitHookInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 7 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Re-ran `nana-ownable-v6/test/OwnableInvariantTests.sol`, covering address ownership, project ownership, renounce,
+  and transfer transitions. The bounded properties check that ownership cannot simultaneously belong to both a user
+  and a project, project ownership excludes address ownership, renounce zeroes ownership state, and transfer resets the
+  permission ID.
+- Verification command:
+  `forge test --root nana-ownable-v6 --match-path test/OwnableInvariantTests.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 4 invariant properties passed, each with 1024 runs and 102,400 handler calls.
+- Re-ran `defifa/test/DefifaMintCostInvariant.t.sol`, covering randomized mint/refund sequences in the mint-cost model.
+  The bounded properties check token-count consistency and that total mint cost remains equal to price times live
+  tokens under the handler's expected model.
+- Verification command:
+  `forge test --root defifa --match-path test/DefifaMintCostInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 3 invariant properties passed, each with 1024 runs and 102,400 handler calls.
 
 Open formal gaps:
 
