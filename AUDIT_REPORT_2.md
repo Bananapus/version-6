@@ -753,9 +753,10 @@ Fix applied:
 
 Verification after fix:
 
-- `forge test --root nana-project-handles-v6 --match-path test/CodexMalformedResolver.t.sol -vv`: 1 passed.
+- `forge test --root nana-project-handles-v6 --match-path test/CodexMalformedResolver.t.sol --summary --detailed`:
+  4 passed.
 - `forge fmt --root nana-project-handles-v6 --check`: passed.
-- `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 5 suites and 60
+- `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 6 suites and 67
   tests.
 
 ### OWNABLE-01. `nana-ownable-v6`: project-ownership transfer with zero `PROJECTS` reverts opaquely
@@ -2737,7 +2738,7 @@ Repo evidence snapshot:
 - Rechecked the ProjectHandles ENS boundary after the low-level resolver hardening. The canonical registry lookup is a
   trusted dependency, while name-owner controlled resolver calls soft-fail on revert or malformed return data. Updated
   stale risk/test wording and reran `forge fmt --root nana-project-handles-v6 --check` plus
-  `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 5 suites and 60
+  `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 6 suites and 67
   tests.
 - Rechecked the Omnichain deployer canonical-controller boundary. `JBOmnichainDeployer` now uses its immutable
   `CONTROLLER` and constructor-derived `DIRECTORY` for fresh launches, blank-project launches, and queues, with a
@@ -3236,6 +3237,17 @@ Progress against the plan:
   Result: exit code 0 for all five; `TestLiquidationBehavior` passed 5 tests,
   `REVLoansSourceFeeRecovery` passed 6 tests, `REVLoansSourced` passed 25 tests with 1 skipped, and the full revnet
   suite passed with invariants and fork-tagged tests.
+- Extended `nana-project-handles-v6/test/CodexMalformedResolver.t.sol` with direct resolver ABI-shape coverage for
+  `_textRecordOf(...)`. The new regressions prove resolver reverts, offset-only returns, 63-byte short returns,
+  noncanonical string offsets, and claimed string lengths that run past the returned bytes all soft-fail to `""`
+  instead of reverting handle lookup.
+- Verification commands:
+  `forge fmt --root nana-project-handles-v6 --check`;
+  `forge test --root nana-project-handles-v6 --match-path test/CodexMalformedResolver.t.sol --summary --detailed`;
+  `forge test --root nana-project-handles-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root nana-project-handles-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`.
+  Result: exit code 0 for all four; malformed resolver coverage passed 4 tests, the full suite passed 67 tests, and
+  the production build reported `JBProjectHandles` at 5,871 bytes with 18,705 bytes of runtime margin.
 
 Open formal gaps:
 
