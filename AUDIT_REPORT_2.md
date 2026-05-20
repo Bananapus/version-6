@@ -3192,6 +3192,10 @@ Progress against the plan:
   through the terminal, sets a same-project reserved-token split with a hook, and the hook pulls the exact controller
   allowance. This documents the intended distinction that hooked reserved splits are direct hook deliveries, while
   no-hook same-project splits are terminal self-payments and must revert.
+- Extended `nana-core-v6/test/WeirdTokenTests.t.sol` for decimal-boundary terminal flows. The new regression pays and
+  fully cashes out vanilla ERC-20s with `{0, 1, 27}` decimals, asserting `previewPayFor(...)` matches actual minted
+  project tokens, `previewCashOutFrom(...)` matches actual reclaimed tokens, and terminal-store balances stay in the
+  raw token decimals.
 - Extended `nana-core-v6/test/formal/HalmosSmoke.t.sol` with `check_cashOutBoundaryTaxRateTable()` and
   `nana-core-v6/test/formal/BondingCurveProperties.t.sol` with `test_cashOut_boundaryTaxRateTable()`, pinning
   audit-selected bonding-curve tax-rate edges in both the CI Halmos smoke target and the existing Forge property
@@ -3201,6 +3205,7 @@ Progress against the plan:
 - Verification commands:
   `forge fmt --root nana-core-v6 --check`;
   `forge test --root nana-core-v6 --match-path test/formal/BondingCurveProperties.t.sol --deny notes --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --match-path test/WeirdTokenTests.t.sol --summary --detailed`;
   `halmos --root nana-core-v6 --contract HalmosSmoke --solver-threads 1 --solver-timeout-assertion 30s --statistics`;
   `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`.
   Result: exit code 0 for all four; the bonding-curve property file passed 8 tests, Halmos passed 6 checks with 0
