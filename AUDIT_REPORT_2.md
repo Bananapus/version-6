@@ -3177,6 +3177,18 @@ Progress against the plan:
   Results: exit code 0 for all three; Halmos passed 4 symbolic bitmap checks across 16 total paths in 0.41s test time,
   16 bitmap unit/fuzz tests passed, and the size build passed. `JB721TiersHook` remains tight at 4 bytes of runtime
   margin, but the proof/workflow change is test/CI-only and did not alter runtime bytecode.
+- Reviewed the reported `_startingTierIdOfCategory` overwrite concern in `JB721TiersHookStore.recordAddTiers(...)`.
+  The proposed "only set if unset" fix would be wrong because same-category additions are inserted before older
+  same-category tiers in the category-sorted linked list; the category start pointer must move to the later tier so
+  traversal reaches both the new head and the older linked tier. Added an inline comment at the pointer update and
+  `nana-721-hook-v6/test/regression/CategoryStartPointer.t.sol` to pin the separate-batch same-category scenario.
+- Verification commands:
+  `forge fmt --root nana-721-hook-v6 --check`;
+  `forge test --root nana-721-hook-v6 --match-path test/regression/CategoryStartPointer.t.sol --summary --detailed`;
+  `forge test --root nana-721-hook-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root nana-721-hook-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`.
+  Result: exit code 0 for all four; the focused regression passed, the full 721 suite passed with fork and invariant
+  coverage, and the production build still reports `JB721TiersHook` at 24,572 bytes with 4 bytes of runtime margin.
 - Added `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol`, a bounded Halmos proof target for
   `JBSwapLib.getSlippageTolerance`. Full sigmoid monotonicity and broad bounds were attempted and found too
   solver-heavy for CI, so the durable proof is branch-level: zero-impact floor, pool-fee ceiling, and overflow-impact
@@ -3261,6 +3273,17 @@ Progress against the plan:
   Result: exit code 0 for all five; `TestLiquidationBehavior` passed 5 tests,
   `REVLoansSourceFeeRecovery` passed 6 tests, `REVLoansSourced` passed 25 tests with 1 skipped, and the full revnet
   suite passed with invariants and fork-tagged tests.
+- Tightened `revnet-core-v6/test/mock/MockEmptyTerminal.sol` so the router-terminal placeholder used in Revnet tests
+  implements only the controller setup selector and the terminal surplus selector. Unknown selectors now revert through
+  `MockEmptyTerminal_UnexpectedCall(...)`, preventing future tests from silently passing because the placeholder
+  returned a zero word for an unrelated call shape.
+- Verification commands:
+  `forge fmt --root revnet-core-v6 --check`;
+  `forge test --root revnet-core-v6 --match-path test/regression/MockEmptyTerminalStrictness.t.sol --summary --detailed`;
+  `forge test --root revnet-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root revnet-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`.
+  Result: exit code 0 for all four; the focused strictness test passed, the full revnet suite passed, and the production
+  build reported `REVDeployer` at 20,632 bytes and `REVLoans` at 22,374 bytes.
 - Extended `nana-project-handles-v6/test/CodexMalformedResolver.t.sol` with direct resolver ABI-shape coverage for
   `_textRecordOf(...)`. The new regressions prove resolver reverts, offset-only returns, 63-byte short returns,
   noncanonical string offsets, and claimed string lengths that run past the returned bytes all soft-fail to `""`
