@@ -456,8 +456,32 @@ Verification:
 
 - `forge test --root nana-project-payer-v6 --match-path test/audit/ProjectPayerCallbackToken.t.sol --summary --detailed`:
   1 passed.
-- `forge test --root nana-project-payer-v6 --summary --detailed`: exit code 0 across 9 suites; 67 passed, 0 failed,
+- `forge test --root nana-project-payer-v6 --summary --detailed`: exit code 0 across 9 suites; 68 passed, 0 failed,
   0 skipped, including the new callback-token audit test and the fork-backed ProjectPayer terminal path.
+
+### PAYER-05. `nana-project-payer-v6`: fallback calldata must not auto-forward funds
+
+Status: REVIEWED / COVERAGE ADDED
+
+Affected code:
+
+- `nana-project-payer-v6/src/JBProjectPayer.sol`
+- Regression update: `nana-project-payer-v6/test/JBProjectPayer.t.sol`
+
+Result:
+
+- `JBProjectPayer` intentionally implements `receive()` but no `fallback()`.
+- Added coverage proving calldata-bearing calls revert with and without `msg.value`, and do not create terminal
+  `pay(...)` or `addToBalanceOf(...)` records. Explicit routing remains through `pay(...)` and `addToBalanceOf(...)`.
+
+Verification:
+
+- `forge test --root nana-project-payer-v6 --match-path test/JBProjectPayer.t.sol --match-test test_RevertWhen_FallbackCalldataIsSent --summary --detailed`:
+  1 passed.
+- `forge test --root nana-project-payer-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`:
+  exit code 0 across 9 suites; 68 passed, 0 failed, 0 skipped.
+- `forge build --root nana-project-payer-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed;
+  `JBProjectPayer` runtime size 6,758 bytes and `JBProjectPayerDeployer` runtime size 979 bytes.
 
 ### OMNI-01. `nana-omnichain-deployers-v6`: generic extra cash-out hooks corrupt NFT cash-out semantics
 
@@ -2542,7 +2566,7 @@ Repo evidence snapshot:
 - Rechecked the remaining `nana-project-payer-v6` callback-token seam. Added
   `test/audit/ProjectPayerCallbackToken.t.sol` to prove a callback-style ERC-20 cannot distort the measured forwarded
   amount or leave stale `originalPayer` state across inbound transfer and terminal-pull phases.
-- Ran `forge test --root nana-project-payer-v6 --summary --detailed`: exit code 0. Results: 67 passed, 0 failed,
+- Ran `forge test --root nana-project-payer-v6 --summary --detailed`: exit code 0. Results: 68 passed, 0 failed,
   0 skipped across unit, edge, audit, regression, and fork suites.
 - Verified and fixed SUCKER-01 in `nana-suckers-v6/src/JBSwapCCIPSucker.sol`; added
   `nana-suckers-v6/test/regression/InitialSwapReentrantClaim.t.sol`.
@@ -3119,7 +3143,7 @@ Progress against the plan:
   `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`;
   `forge test --root nana-project-payer-v6 --fail-fast --summary --detailed`.
   Result: exit code 0 for all three; 53 address-registry tests passed including 1 fork test, 60 project-handle tests
-  passed, and 67 project-payer tests passed including 5 fork tests and the audit regression slice.
+  passed, and 68 project-payer tests passed including 5 fork tests and the audit regression slice.
 - Follow-up format and size commands also exited 0 for all three:
   `forge fmt --root <repo> --check` and
   `forge build --root <repo> --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
@@ -3240,7 +3264,8 @@ Progress against the plan:
 - Extended `nana-project-handles-v6/test/CodexMalformedResolver.t.sol` with direct resolver ABI-shape coverage for
   `_textRecordOf(...)`. The new regressions prove resolver reverts, offset-only returns, 63-byte short returns,
   noncanonical string offsets, and claimed string lengths that run past the returned bytes all soft-fail to `""`
-  instead of reverting handle lookup.
+  instead of reverting handle lookup. Clarified `nana-project-handles-v6/RISKS.md` that the 256-byte resolver text
+  cap is an intentional liveness tradeoff for name-owner-controlled resolvers, not an unfixed unbounded-copy risk.
 - Verification commands:
   `forge fmt --root nana-project-handles-v6 --check`;
   `forge test --root nana-project-handles-v6 --match-path test/CodexMalformedResolver.t.sol --summary --detailed`;
