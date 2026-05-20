@@ -756,7 +756,7 @@ Verification after fix:
 - `forge test --root nana-project-handles-v6 --match-path test/CodexMalformedResolver.t.sol --summary --detailed`:
   4 passed.
 - `forge fmt --root nana-project-handles-v6 --check`: passed.
-- `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 6 suites and 69
+- `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 6 suites and 70
   tests.
 
 ### OWNABLE-01. `nana-ownable-v6`: project-ownership transfer with zero `PROJECTS` reverts opaquely
@@ -2738,7 +2738,7 @@ Repo evidence snapshot:
 - Rechecked the ProjectHandles ENS boundary after the low-level resolver hardening. The canonical registry lookup is a
   trusted dependency, while name-owner controlled resolver calls soft-fail on revert or malformed return data. Updated
   stale risk/test wording and reran `forge fmt --root nana-project-handles-v6 --check` plus
-  `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 6 suites and 69
+  `forge test --root nana-project-handles-v6 --fail-fast --summary --detailed`: exit code 0 across 6 suites and 70
   tests.
 - Rechecked the Omnichain deployer canonical-controller boundary. `JBOmnichainDeployer` now uses its immutable
   `CONTROLLER` and constructor-derived `DIRECTORY` for fresh launches, blank-project launches, and queues, with a
@@ -3246,7 +3246,7 @@ Progress against the plan:
   `forge test --root nana-project-handles-v6 --match-path test/CodexMalformedResolver.t.sol --summary --detailed`;
   `forge test --root nana-project-handles-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
   `forge build --root nana-project-handles-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`.
-  Result: exit code 0 for all four; malformed resolver coverage passed 4 tests, the full suite passed 69 tests, and
+  Result: exit code 0 for all four; malformed resolver coverage passed 4 tests, the full suite passed 70 tests, and
   the production build reported `JBProjectHandles` at 5,871 bytes with 18,705 bytes of runtime margin.
 - Extended `nana-project-handles-v6/test/regression/JBProjectHandlesUnicodeSpoof.t.sol` with an exact Unicode
   format-control boundary table. The new tests reject all 16 blocked codepoints (`U+061C`, `U+200B`-`U+200F`,
@@ -3257,7 +3257,17 @@ Progress against the plan:
   `forge test --root nana-project-handles-v6 --match-path test/regression/JBProjectHandlesUnicodeSpoof.t.sol --summary --detailed`;
   `forge test --root nana-project-handles-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
   `forge build --root nana-project-handles-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`.
-  Result: exit code 0 for all four; Unicode spoof coverage passed 4 tests, the full suite passed 69 tests, and
+  Result: exit code 0 for all four; Unicode spoof coverage passed 4 tests, the full suite passed 70 tests, and
+  the production build reported `JBProjectHandles` at 5,871 bytes with 18,705 bytes of runtime margin.
+- Extended `nana-project-handles-v6/test/JBProjectHandles.t.sol` with a deterministic six-part verified handle
+  roundtrip. The test stores `zeta.epsilon.delta.gamma.beta.alpha` in the contract's right-to-left format, mocks the
+  resolver text record, and asserts `handleOf(...)` returns `alpha.beta.gamma.delta.epsilon.zeta`.
+- Verification commands:
+  `forge fmt --root nana-project-handles-v6 --check`;
+  `forge test --root nana-project-handles-v6 --match-path test/JBProjectHandles.t.sol --match-test test_handleOf_returnsVerifiedSixPartHandle --summary --detailed`;
+  `forge test --root nana-project-handles-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root nana-project-handles-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`.
+  Result: exit code 0 for all four; the focused six-part handle test passed, the full suite passed 70 tests, and
   the production build reported `JBProjectHandles` at 5,871 bytes with 18,705 bytes of runtime margin.
 
 Open formal gaps:
