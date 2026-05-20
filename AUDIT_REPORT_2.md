@@ -2981,6 +2981,15 @@ Progress against the plan:
   `forge test --root croptop-core-v6 --match-path test/fork/PublishFork.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0 for both; 42 local publisher-policy tests passed, including 2 fuzz properties with 4096 runs
   each, and 6 publish fork tests passed.
+- Re-ran a focused `banny-retail-v6` custody/composition slice, covering local decorate/redress lifecycles,
+  anti-stranding retention, body-transfer asset custody, removed-tier recovery, failed ERC-721 returns,
+  category-exclusivity retention, SVG/hash metadata paths, and the 9-outfit rendering gas ceiling. Also re-ran the
+  Banny fork suite against the composed 721-hook behavior for auth, lock, redress, rendering, reentrancy, SVG, and
+  multi-actor custody flows.
+- Verification commands:
+  `forge test --root banny-retail-v6 --skip '*/script/**' --match-path 'test/{DecorateFlow.t.sol,OutfitTransferLifecycle.t.sol,TestQALastMile.t.sol,regression/*.t.sol}' --fail-fast --summary --detailed`;
+  `forge test --root banny-retail-v6 --match-path test/Fork.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0 for both; 90 local custody/composition tests passed and 79 fork tests passed.
 
 Open formal gaps:
 
