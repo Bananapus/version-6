@@ -2865,6 +2865,13 @@ Progress against the plan:
   `forge test --root nana-buyback-hook-v6 --match-path test/invariant/BuybackHookInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 2 invariant properties passed with 1024 runs and 102,400 handler calls each, plus the handler
   smoke test.
+- Re-ran `nana-router-terminal-v6/test/invariant/RouterTerminalInvariant.t.sol`, which fuzzes ETH, WETH, token A,
+  token B, and project-token routing through pay, add-to-balance, and cash-out style paths. The bounded properties
+  assert the router terminal does not retain forwarded assets and that tracked ETH/token forwarding totals match the
+  handler model.
+- Verification command:
+  `forge test --root nana-router-terminal-v6 --match-path test/invariant/RouterTerminalInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 9 invariant properties passed, each with 1024 runs and 102,400 handler calls.
 
 Open formal gaps:
 
