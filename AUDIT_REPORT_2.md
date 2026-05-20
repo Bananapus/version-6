@@ -2881,6 +2881,20 @@ Progress against the plan:
   `forge test --root nana-721-hook-v6 --match-path 'test/invariants/*.t.sol' --fail-fast --summary --detailed`.
   Result: exit code 0; 9 invariant properties passed, each with 1024 runs and 102,400 handler calls. Runtime was
   14.84s for `TieredHookStoreInvariant` and 263.89s for `TierLifecycleInvariant`.
+- Re-ran `univ4-router-v6/test/Invariant.t.sol`, covering flash-accounting conservation and oracle state under swaps,
+  observations, time warps, and combined swap/observe operations. The bounded properties check accounting
+  conservation, oracle cardinality caps, oracle state consistency, and tick-cumulative bounds.
+- Verification command:
+  `forge test --root univ4-router-v6 --match-path test/Invariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 4 invariant properties passed with 1024 runs and 102,400 handler calls each, plus 3 directed
+  tests for per-swap conservation, observe monotonicity, and TWAP dampening.
+- Re-ran `univ4-lp-split-hook-v6/test/invariant/LPSplitHookInvariant.t.sol`, covering LP fee accumulation,
+  zero-accumulation, fee collection/routing, and liquidity rebalancing. The bounded properties check accumulated
+  accounting versus minted balances, balance upper bounds, fee accounting, per-project bounds, position lifecycle
+  consistency, and token-ID/deploy-count consistency.
+- Verification command:
+  `forge test --root univ4-lp-split-hook-v6 --match-path test/invariant/LPSplitHookInvariant.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 7 invariant properties passed, each with 1024 runs and 102,400 handler calls.
 
 Open formal gaps:
 
