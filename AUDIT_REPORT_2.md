@@ -2790,7 +2790,7 @@ Prompt-to-artifact checklist:
 | Prefer reduced surface / no broad unnecessary diffs | PRs removed/narrowed Revnet terminal config and loan-source surface, cleaned stale docs/tests, added narrow guards/regressions, and documented non-obvious changes inline. | Satisfied for current changes. |
 | Package PRs and version/dependency bumps | Existing PR branches carry package versions one patch above npm latest for changed packages where package metadata applies; latest follow-up commits were pushed to existing PRs. | Satisfied for current PR set; no new extra package bump was made for report-only or selector-payload follow-up commits. |
 | CI/tests/contract sizes pass | Refreshed `gh pr checks` inspection on 2026-05-20: `nana-core-v6` #152 reports passing `forge-fmt`, `forge-test`, and `halmos-smoke`; `nana-project-handles-v6` #20, `nana-project-payer-v6` #19, `nana-suckers-v6` #134, `revnet-core-v6` #158, `nana-omnichain-deployers-v6` #110, `nana-721-hook-v6` #139, `nana-distributor-v6` #29, `nana-buyback-hook-v6` #134, `nana-router-terminal-v6` #118, `nana-ownable-v6` #77, `nana-permission-ids-v6` #72, `nana-univ4-lp-split-hook-v6` #132, `banny-retail-v6` #117, `croptop-core-v6` #137, `nana-fee-project-deployer-v6` #78, and `deploy-all-v6` #143 all report passing required jobs. `version-6` #151 reports no checks. | Satisfied for opened PRs as of 2026-05-20. |
-| Formal verification top to bottom | Halmos 0.3.3 is installed, `nana-core-v6/test/formal/HalmosSmoke.t.sol` has a passing symbolic smoke proof for zero-fee `JBFees` behavior, and `nana-core-v6/.github/workflows/halmos.yml` wires that smoke proof into core CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and the first narrow Halmos proof. | Not satisfied. This blocks completion. |
+| Formal verification top to bottom | Halmos 0.3.3 is installed, `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, and full-width standard-fee subtraction safety, and `nana-core-v6/.github/workflows/halmos.yml` wires that smoke target into core CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
 
 Remaining uncovered requirements:
 
@@ -2811,8 +2811,8 @@ Current tooling state on 2026-05-20:
 - Available: Foundry 1.6.0-v1.7.0, including the existing fuzz and invariant harnesses.
 - Available: Halmos 0.3.3, installed during this pass for Solidity-level symbolic execution.
 - Not currently installed in the workspace shell: `certoraRun`, `scribble`, `echidna`, and `medusa`.
-- Existing machine-checkable evidence is bounded Foundry tests/invariants, fork/integration tests, and one narrow
-  Halmos smoke proof. This is valuable adversarial evidence, but it is not a top-to-bottom formal proof.
+- Existing machine-checkable evidence is bounded Foundry tests/invariants, fork/integration tests, and narrow Halmos
+  smoke proofs. This is valuable adversarial evidence, but it is not a top-to-bottom formal proof.
 
 Existing invariant-harness inventory:
 
@@ -3060,12 +3060,17 @@ Progress against the plan:
   bytes for `JBProjectPayer`.
 - Bootstrapped an external symbolic proof lane with Halmos 0.3.3 and added
   `nana-core-v6/test/formal/HalmosSmoke.t.sol` as a deliberately narrow CI-ready proof target for `JBFees`.
-  Full-width fee additivity was attempted and found too solver-heavy for a first gate, so the durable smoke proof only
-  checks zero-fee/zero-amount fee behavior and records the widening as future formal work.
+  Full-width fee additivity and full-width/uint64 standard-fee helper equivalence were attempted and found too
+  solver-heavy for a first gate, so the durable smoke proof records the widening as future formal work.
 - Verification command:
   `halmos --root nana-core-v6 --match-contract HalmosSmoke --solver-threads 1 --solver-timeout-assertion 30s --statistics`.
-  Result: exit code 0; 2 symbolic tests passed (`check_zeroAmountHasNoFee(uint16)` and
-  `check_zeroFeeDoesNotCharge(uint256)`) across 4 total symbolic paths in 0.01s test time.
+  Result: exit code 0; 5 symbolic tests passed across 30 total symbolic paths in 6.65s test time:
+  `check_zeroAmountHasNoFee(uint16)`, `check_zeroFeeDoesNotCharge(uint256)`,
+  `check_standardFeeMatchesGeneric(uint16)`, `check_standardFeeResultingInMatchesGeneric(uint8)`, and
+  `check_standardFeeDoesNotExceedAmount(uint256)`.
+- Related Foundry verification command:
+  `forge test --root nana-core-v6 --match-path test/units/static/JBFees/TestFeesFuzz.sol --fail-fast --summary --detailed`.
+  Result: exit code 0; 6 fee fuzz tests passed.
 - Added `nana-core-v6/.github/workflows/halmos.yml`, scoped to the same `HalmosSmoke` contract. The workflow installs
   Halmos 0.3.3 and runs the smoke proof separately from the long Foundry test job, creating a first CI-enforced
   symbolic lane without broadening runtime contract surface. `gh pr checks` for `nana-core-v6` #152 now reports
@@ -3073,7 +3078,7 @@ Progress against the plan:
 
 Open formal gaps:
 
-- Halmos is installed and wired for one narrow core smoke proof, but no broad external formal-verification lane exists
+- Halmos is installed and wired for a narrow core smoke proof suite, but no broad external formal-verification lane exists
   for the rest of the ecosystem yet.
 - Foundry invariants are bounded/randomized properties, not exhaustive proofs.
 - No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
