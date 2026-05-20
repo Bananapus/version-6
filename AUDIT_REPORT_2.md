@@ -464,6 +464,25 @@ Verification:
 - `forge test --root nana-project-payer-v6 --summary --detailed`: exit code 0 across 9 suites; 68 passed, 0 failed,
   0 skipped, including the new callback-token audit test and the fork-backed ProjectPayer terminal path.
 
+Formal follow-up:
+
+- Added `test/formal/JBProjectPayerHalmos.t.sol`, a narrow Halmos target for `_originalPayerOrSender()` and the
+  ProjectPayer ERC-165 surface. The proof pins direct-caller fallback, constructor-time no-code fallback,
+  reverting/nonconformant tracker fallback, zero-upstream fallback, non-zero upstream propagation, and advertised
+  interface IDs.
+- Added a dedicated Halmos CI workflow for that target. This complements the fork-backed router refund tests by
+  proving the small identity-resolution branch table that downstream router-style terminals rely on.
+
+Verification after formal follow-up:
+
+- `forge fmt --root nana-project-payer-v6 --check`: passed.
+- `forge test --root nana-project-payer-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`: exit
+  code 0 across 9 suites; 68 passed, 0 failed, 0 skipped.
+- `forge build --root nana-project-payer-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**'`: passed;
+  `JBProjectPayer` runtime size 6,758 bytes and `JBProjectPayerDeployer` runtime size 979 bytes.
+- `halmos --root nana-project-payer-v6 --match-contract JBProjectPayerHalmos --solver-threads 1
+  --solver-timeout-assertion 30s --statistics`: 7 passed across 12 total paths; symbolic test time 0.09s.
+
 ### PAYER-05. `nana-project-payer-v6`: fallback calldata must not auto-forward funds
 
 Status: REVIEWED / COVERAGE ADDED
@@ -2336,7 +2355,7 @@ evidence, but they are not a substitute for a full formal proof of the composed 
 | Reproducible PoCs for promising threads | Verified findings include local or fork regression tests for core ERC-20 intake, distributor funding, ProjectPayer under-pulls, sucker callbacks, Revnet loan reentrancy, Croptop publish/deploy liveness, and deploy-all replay guards. | Temporary PoCs removed after fixes are documented, but final completion should ensure surviving PoCs/regressions remain in-repo for all fixed critical paths. |
 | Cross-component dynamics get fork/integration tests where feasible | Evidence includes deploy-all full-stack forks, ProjectPayer+terminal fork, buyback/V4 forks, router-terminal forks, LP split forks, sucker forks, Revnet forks, Croptop publish fork, Defifa/Banny broad non-fork coverage, and focused integration tests. | Some slow omnichain/fork suites are intentionally path-scoped; final completion should list any skipped suites and why they are not required. |
 | Prefer reduced surface over unnecessary code | Several fixes removed or narrowed configurable surfaces: Revnet terminal configs, `REVLoanSource`, duplicate groups/splits, leftover allowances, broad callback windows, and weak replay guards. | Continue challenging whether new abstractions are necessary before adding code. |
-| Formal verification “top to bottom” | Current evidence is adversarial review plus unit/regression/fork/invariant tests, with narrow Halmos smoke proofs added for core fee math, permission namespace stability, address-registry CREATE derivation, ownable ownership-state transitions, 721 bitmap updates, buyback slippage branches, and sucker peer-value/merkle helper behavior. | Not complete: no comprehensive formal spec, proof harness, or exhaustive composed-system verifier exists yet. |
+| Formal verification “top to bottom” | Current evidence is adversarial review plus unit/regression/fork/invariant tests, with narrow Halmos smoke proofs added for core fee math, permission namespace stability, address-registry CREATE derivation, ownable ownership-state transitions, ProjectPayer tracker identity propagation, 721 bitmap updates, buyback slippage branches, and sucker peer-value/merkle helper behavior. | Not complete: no comprehensive formal spec, proof harness, or exhaustive composed-system verifier exists yet. |
 
 ### Module-to-Invariant Coverage Manifest (pass 1)
 
@@ -2935,7 +2954,7 @@ Prompt-to-artifact checklist:
 | Prefer reduced surface / no broad unnecessary diffs | PRs removed/narrowed Revnet terminal config and loan-source surface, cleaned stale docs/tests, added narrow guards/regressions, and documented non-obvious changes inline. | Satisfied for current changes. |
 | Package PRs and version/dependency bumps | Existing PR branches carry package versions one patch above npm latest for changed packages where package metadata applies; latest follow-up commits were pushed to existing PRs. | Satisfied for current PR set; no new extra package bump was made for report-only or selector-payload follow-up commits. |
 | CI/tests/contract sizes pass | Refreshed `gh pr checks` inspection on 2026-05-20: `nana-core-v6` #152, `nana-address-registry-v6` #72, `nana-ownable-v6` #77, `nana-permission-ids-v6` #72, `nana-721-hook-v6` #139, `nana-buyback-hook-v6` #134, and `nana-suckers-v6` #134 report passing their Foundry job plus `halmos-smoke`; `nana-project-handles-v6` #20, `nana-project-payer-v6` #19, `revnet-core-v6` #158, `nana-omnichain-deployers-v6` #110, `nana-distributor-v6` #29, `nana-router-terminal-v6` #118, `nana-univ4-lp-split-hook-v6` #132, `banny-retail-v6` #117, `croptop-core-v6` #137, `nana-fee-project-deployer-v6` #78, and `deploy-all-v6` #143 all report passing required jobs. `version-6` #151 reports no checks. | Satisfied for opened PRs as of 2026-05-20. |
-| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, full-width standard-fee subtraction safety, and an audit-selected `JBCashOuts` bonding-curve boundary table; `nana-core-v6/test/formal/BondingCurveProperties.t.sol` now also pins the same cash-out tax-rate boundary table in the existing Forge property suite; `nana-permission-ids-v6/test/formal/JBPermissionIdsHalmos.t.sol` has passing symbolic checks for permission namespace stability; `nana-address-registry-v6/test/formal/JBAddressRegistryHalmos.t.sol` has passing symbolic proofs for CREATE RLP nonce-width branches; `nana-ownable-v6/test/formal/JBOwnableHalmos.t.sol` has passing symbolic proofs for ownership-state transitions and invalid owner encodings; `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior; `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol` has passing branch proofs for slippage floor/ceiling behavior; and `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol` has passing same-currency peer-value conversion, merkle branch-root, and bounded tree-root helper proofs. The core, permission-ids, address-registry, ownable, 721, buyback, and suckers repos now wire those smoke targets into CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
+| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, full-width standard-fee subtraction safety, and an audit-selected `JBCashOuts` bonding-curve boundary table; `nana-core-v6/test/formal/BondingCurveProperties.t.sol` now also pins the same cash-out tax-rate boundary table in the existing Forge property suite; `nana-permission-ids-v6/test/formal/JBPermissionIdsHalmos.t.sol` has passing symbolic checks for permission namespace stability; `nana-address-registry-v6/test/formal/JBAddressRegistryHalmos.t.sol` has passing symbolic proofs for CREATE RLP nonce-width branches; `nana-ownable-v6/test/formal/JBOwnableHalmos.t.sol` has passing symbolic proofs for ownership-state transitions and invalid owner encodings; `nana-project-payer-v6/test/formal/JBProjectPayerHalmos.t.sol` has passing symbolic checks for tracker identity propagation and ERC-165 advertising; `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior; `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol` has passing branch proofs for slippage floor/ceiling behavior; and `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol` has passing same-currency peer-value conversion, merkle branch-root, and bounded tree-root helper proofs. The core, permission-ids, address-registry, ownable, 721, buyback, and suckers repos now wire those smoke targets into CI; ProjectPayer has a local passing workflow pending PR CI confirmation. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
 
 Remaining uncovered requirements:
 
@@ -3375,8 +3394,9 @@ Progress against the plan:
 Open formal gaps:
 
 - Halmos is installed and wired for narrow core fee, permission namespace stability, address-registry CREATE derivation,
-  ownable ownership-state transitions, 721 bitmap, buyback slippage, sucker peer-value, and merkle helper proof suites,
-  but no broad external formal-verification lane exists for the rest of the ecosystem yet.
+  ownable ownership-state transitions, ProjectPayer tracker identity propagation, 721 bitmap, buyback slippage, sucker
+  peer-value, and merkle helper proof suites, but no broad external formal-verification lane exists for the rest of the
+  ecosystem yet.
 - Foundry invariants are bounded/randomized properties, not exhaustive proofs.
 - No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
 - Some low-fund peripheral repos still rely on unit/fork tests plus accepted trust-boundary docs rather than dedicated
