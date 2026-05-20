@@ -2972,6 +2972,15 @@ Progress against the plan:
   `forge test --root nana-omnichain-deployers-v6 --match-path 'test/invariants/*.t.sol' --fail-fast --summary --detailed`.
   Result: exit code 0; `CrossChainDeployerInvariant` passed 1 combined property in 23.71s and
   `OmnichainDeployerInvariant` passed 1 combined property in 27.19s, each with 1024 runs and 102,400 handler calls.
+- Re-ran a focused `croptop-core-v6` publisher-policy slice covering allowance packing, allowlist replacement,
+  existing-tier reuse after policy changes, URI cache drift, duplicate metadata protection, hook boundary behavior,
+  category sorting, split-percent limits, and fee math. Also re-ran the publish fork suite to keep the policy review
+  tied to the composed terminal and 721-hook execution path.
+- Verification commands:
+  `forge test --root croptop-core-v6 --match-path 'test/{CTPublisher.t.sol,regression/RegressionPolicyReuse.t.sol,regression/RegressionCroptopPublisherBoundary.t.sol,regression/RegressionPublishHookBoundary.t.sol,regression/RegressionUriDrift.t.sol,regression/CroptopRegressionFixes.t.sol}' --fail-fast --summary --detailed`;
+  `forge test --root croptop-core-v6 --match-path test/fork/PublishFork.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0 for both; 42 local publisher-policy tests passed, including 2 fuzz properties with 4096 runs
+  each, and 6 publish fork tests passed.
 
 Open formal gaps:
 
