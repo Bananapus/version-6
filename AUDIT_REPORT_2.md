@@ -3682,6 +3682,9 @@ Progress against the plan:
   Result: exit code 0 for all four; the focused regression passed, the LP/buyback interop suite passed 8 tests, and
   the production build had no changes to compile.
 - Remote CI after the deploy-all follow-up: `deploy-all-v6` #143 reports `forge-build` and `forge-fmt` passing.
+- Release-gate note: any future cross-repo dependency/version drift checks should live in `deploy-all-v6`, because it
+  already owns the npm package graph, artifact build manifest, and composed deployment shape. The runtime package PRs
+  should not each grow their own ecosystem-wide dependency assertions.
 - Follow-up on 2026-05-21: refreshed the literal source manifest and the multiple-sucker same-chain evidence after the
   final proof PR checks. The exact in-scope runtime manifest command still returns 295 production `src/*.sol` files
   across the 18 runtime repos, and a path-by-path `comm` comparison against `AUDIT_SRC_MANIFEST.md` returned no
