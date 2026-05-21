@@ -3049,6 +3049,8 @@ Repo evidence snapshot:
     `forge test --match-path test/MultiSuckerFork.t.sol --fail-fast --summary --detailed`.
     Result: exit code 0 for all four; aggregation regression/fuzz coverage passed 11 tests including 2 fuzz properties
     with 4096 runs each, stale-max aggregation passed 2 tests, and `MultiSuckerForkTest` passed 10 tests.
+  - `gh pr checks 134 --repo Bananapus/nana-suckers-v6`: `forge-fmt`, `forge-test`, and `halmos-smoke` passed on the
+    pushed branch.
 
 ## Completion Audit Status
 
