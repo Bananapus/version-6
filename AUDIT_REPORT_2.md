@@ -3720,6 +3720,20 @@ Progress against the plan:
   `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
   `forge build --root nana-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
   Result: exit code 0 for both. The size build passes, but `JBMultiTerminal` has only 5 bytes of runtime margin.
+- Follow-up on 2026-05-21: added a real data-hook composition path to
+  `nana-core-v6/test/TestDataHookFuzzing.sol`. The new `RecordingRulesetDataHook` is not a `vm.mockCall`; it validates
+  the terminal-store pre-record pay context, returns a pay-hook spec, receives the real terminal pay-hook callback and
+  forwarded ETH, then validates the pre-record cash-out context and receives a real cash-out hook callback. This pins
+  the data-hook half of `CORE-LEDGER-02`: data hooks can alter weight/pricing and request hook forwards, but the
+  terminal/store path must debit forwarded value exactly once and carry matching metadata/context into post-record
+  hooks. Verification commands:
+  `forge fmt --root nana-core-v6 --check`;
+  `forge test --root nana-core-v6 --match-path test/TestDataHookFuzzing.sol --deny notes --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root nana-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
+  Result: exit code 0 for all four. The focused suite passed 9 tests, including
+  `test_dataHookCompositionForwardsRealPayAndCashOutHookContexts`; the full core suite passed; the size build still
+  reports `JBMultiTerminal` at 24,571 bytes with 5 bytes of runtime margin.
 
 Open formal gaps:
 
@@ -3731,7 +3745,9 @@ Open formal gaps:
   repo-level proof lanes, not a broad composed formal-verification model for the whole ecosystem.
 - Foundry invariants are bounded/randomized properties, not exhaustive proofs.
 - No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
-  The new core hook-composition invariant covers real split-hook callback re-entry inside core, but does not cover data
-  hooks, external product hooks, cross-chain suckers, or Revnet loans in the same model.
+  The new core hook-composition invariant covers real split-hook callback re-entry inside core, and the data-hook
+  composition test covers real data-hook-driven pay/cash-out hook callbacks, but these are still separate bounded
+  Foundry campaigns rather than one symbolic model that also includes external product hooks, cross-chain suckers, or
+  Revnet loans.
 - Some low-fund peripheral repos still rely on unit/fork tests plus accepted trust-boundary docs rather than dedicated
   invariant harnesses.
