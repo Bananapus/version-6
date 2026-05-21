@@ -3651,6 +3651,19 @@ Progress against the plan:
   deployment script build passed.
 - Remote CI after these follow-ups: `nana-omnichain-deployers-v6` #110 reports `forge-fmt`, `forge-test`, and
   `halmos-smoke` passing; `nana-fee-project-deployer-v6` #78 reports `forge-fmt` and `forge-test` passing.
+- Follow-up on 2026-05-21: added `deploy-all-v6/test/fork/LPBuybackInteropFork.t.sol`
+  `test_interop_revnet_routerTerminalUsesLPSplitPool`, moving the deferred all-hook cross-repo composition check into
+  the package that already owns every dependency. The test builds a Revnet with the LP split hook, sends reserved
+  tokens through the split hook, deploys the LP position through the real mainnet PoolManager/PositionManager path on
+  the fork, verifies the buyback hook's normalized-native pool key matches the LP split hook parameters, then pays via a
+  real `JBRouterTerminal` into the multi-terminal/buyback path and checks no native or wrapped-native leftovers remain
+  on the router. Verification commands:
+  `forge fmt --root deploy-all-v6 --check`;
+  `forge test --root deploy-all-v6 --match-test test_interop_revnet_routerTerminalUsesLPSplitPool --fail-fast --summary --detailed`;
+  `forge test --root deploy-all-v6 --match-contract LPBuybackInteropForkTest --fail-fast --summary --detailed`;
+  `forge build --root deploy-all-v6 --deny notes --skip '*/test/**' --skip '*/script/**'`.
+  Result: exit code 0 for all four; the focused regression passed, the LP/buyback interop suite passed 8 tests, and
+  the production build had no changes to compile.
 
 Open formal gaps:
 
