@@ -3588,6 +3588,9 @@ Progress against the plan:
   Result: exit code 0 for all four; Halmos passed 9 checks, the full Croptop suite passed with fork coverage, and the
   production build reported `CTPublisher` at 12,585 bytes with 11,991 bytes of runtime margin and `CTDeployer` at
   12,058 bytes with 12,518 bytes of runtime margin.
+- Refreshed CI after the final proof commits. `nana-univ4-router-v6` #109, `nana-omnichain-deployers-v6` #110, and
+  `croptop-core-v6` #137 all report `forge-fmt`, `forge-test`, and `halmos-smoke` passing. Root `version-6` #151
+  reports no checks.
 
 Open formal gaps:
 
