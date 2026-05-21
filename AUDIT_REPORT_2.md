@@ -2497,10 +2497,9 @@ boundaries; it does not replace a machine-checked formal spec.
 
 ### Source File Coverage Checkpoint
 
-This is an intermediate path-partition manifest for the 295 in-scope production `src/*.sol` files. It is not a formal
-proof and it is not yet the final literal per-file appendix, but every concrete file returned by `rg --files <repo>/src`
-belongs to one partition below. A future completion pass should expand any partition that needs file-by-file evidence
-before relying on this as the final manifest.
+`AUDIT_SRC_MANIFEST.md` is the literal per-file appendix for the 295 in-scope production `src/*.sol` files. It is not a
+formal proof, but every concrete file returned by `rg --files <repo>/src` is listed there and mapped to the relevant
+evidence bucket. The partition table below remains as the compact report-level summary.
 
 | Repo | File partitions checked | Evidence bucket |
 | --- | --- | --- |
@@ -3048,7 +3047,7 @@ Prompt-to-artifact checklist:
 | --- | --- | --- |
 | Use `AUDIT_REPORT_2.md` as record keeper | This file contains the findings, risk decisions, command log, module manifest, and this completion audit. | Satisfied for current work; keep extending it. |
 | Include all intended smart-contract repos | Workspace inventory on 2026-05-21 shows 295 production `src/*.sol` files across 18 in-scope runtime repos: `banny-retail-v6`, `croptop-core-v6`, `defifa`, `nana-721-hook-v6`, `nana-address-registry-v6`, `nana-buyback-hook-v6`, `nana-core-v6`, `nana-distributor-v6`, `nana-omnichain-deployers-v6`, `nana-ownable-v6`, `nana-permission-ids-v6`, `nana-project-handles-v6`, `nana-project-payer-v6`, `nana-router-terminal-v6`, `nana-suckers-v6`, `revnet-core-v6`, `univ4-lp-split-hook-v6`, and `univ4-router-v6`. `nana-fee-project-deployer-v6` and `deploy-all-v6` are deployment/script packages. | Satisfied for smart-contract scope, subject to user exclusions. |
-| Map modules/dependencies/interactions | Module-to-invariant manifest and repo evidence snapshot map each runtime repo to reviewed module groups, invariants, and trust boundaries. | Partially satisfied: repo/module-group level exists, but not a per-function formal dependency graph. |
+| Map modules/dependencies/interactions | Module-to-invariant manifest and repo evidence snapshot map each runtime repo to reviewed module groups, invariants, and trust boundaries. `AUDIT_SRC_MANIFEST.md` now lists all 295 in-scope production `src/*.sol` files and ties each file to the relevant evidence bucket. | Partially satisfied: per-file coverage exists, but not a per-function formal dependency graph. |
 | Deep invariant analysis | Findings and regressions cover pooled terminal accounting, split conservation, callback ordering, bridge-bound values, registry freshness, Revnet loans, deployment provenance, router/swap boundaries, 721 tier lifecycle, distributor snapshots, Croptop policy, Banny custody, and Defifa game flow. | Partially satisfied: substantial adversarial coverage, not exhaustive formal proof. |
 | Reproducible PoCs for promising threads | Verified findings have in-repo regression/fork tests where relevant; temporary gas/attack harnesses are documented when removed. | Satisfied for confirmed findings in this pass; future confirmed threads should add durable tests. |
 | Cross-component fork/integration tests | Report records fork/integration evidence for deploy-all, ProjectPayer+terminal, buyback/V4, router terminal, Univ4 router, LP split, sucker, Revnet, Croptop, Banny, Defifa, and omnichain deployer paths. | Satisfied for the current reviewed findings; no single exhaustive cross-chain campaign exists. |
@@ -3063,8 +3062,7 @@ Remaining uncovered requirements:
   controller/terminal/store, hooks, suckers, Revnet loans, router/swap paths, 721 tier accounting, distributor rewards,
   deployers, and games/apps, then choose proof tooling per layer.
 - Convert the strongest cross-component invariants into machine-checkable specs or bounded model/property harnesses.
-- Expand the source-file coverage checkpoint into a final literal per-file manifest that ties each `src/*.sol` file,
-  not only each path partition, to a concrete invariant, test, trust boundary, or proof artifact.
+- Keep `AUDIT_SRC_MANIFEST.md` refreshed whenever the production `src/*.sol` inventory changes.
 - Decide whether the accepted slow-suite split for omnichain/fork coverage is sufficient for release gates, and record
   exact commands that CI should run versus local release-only verification.
 - Re-run this completion audit after formal-spec/proof artifacts exist; until then, do not mark the goal complete.
@@ -3124,8 +3122,9 @@ Candidate implementation path:
 2. Add a proof-tool lane once an external verifier is approved/installed. Halmos is the most natural first target for
    Solidity-level bounded symbolic properties; Certora/Scribble/Echidna remain candidates for richer rule specs and
    long-running campaigns.
-3. Produce a per-`src/*.sol` manifest before completion. Each file should map to one of: a proved invariant, a Foundry
-   property, a fork/integration regression, or an explicitly accepted trust boundary.
+3. Keep the per-`src/*.sol` manifest in `AUDIT_SRC_MANIFEST.md` synchronized with production source changes. Each file
+   maps to one of: a proved invariant, a Foundry property, a fork/integration regression, or an explicitly accepted
+   trust boundary.
 
 Initial machine-checkable spec targets:
 
