@@ -3102,6 +3102,21 @@ Remaining uncovered requirements:
   exact commands that CI should run versus local release-only verification.
 - Re-run this completion audit after formal-spec/proof artifacts exist; until then, do not mark the goal complete.
 
+2026-05-21 stop-request addendum:
+
+- The user requested to stop and call the thread done after the final deploy-all merge/Sphinx env update. No tracked
+  Sphinx credentials were changed; the API key/org id update was limited to the gitignored local
+  `deploy-all-v6/.env`.
+- The active broad formal-verification objective is still not evidence-complete under the completion criteria above.
+  The current artifact set is strong bounded audit evidence, but there is still no composed machine-checkable proof that
+  joins core terminal accounting, hooks, suckers, Revnet loans, and deployers into one protocol model.
+- A post-merge deploy-all dependency spot-check compared sibling package versions to `deploy-all-v6/package.json`.
+  `@bananapus/address-registry-v6` local `0.0.27`, `@bananapus/project-handles-v6` local `0.0.16`, and
+  `@bananapus/project-payer-v6` local `0.0.15` remain ahead of deploy-all's ranges, but `npm view` on 2026-05-21 still
+  reports the latest published versions as `0.0.26`, `0.0.14`, and `0.0.14` respectively. Current deploy-all ranges
+  therefore match npm-published packages; update deploy-all after those newer packages are published, if they remain
+  intended inputs.
+
 ## Formal Verification Plan
 
 `AUDIT_FORMAL_SPEC.md` is the standalone protocol-level proof-obligation plan. It assigns invariant IDs to the core
