@@ -3035,6 +3035,20 @@ Repo evidence snapshot:
     exit code 0; 6 symbolic checks passed across fee arithmetic and the cash-out tax-rate boundary table. The compile
     step still emits known test-only `unsafe-typecast` lint warnings in `SelfReferencingPayoutRevert.t.sol` and
     `TestSplits.sol`; they did not affect the proof result.
+- Post-handoff cross-sucker aggregation follow-up on 2026-05-21:
+  - Strengthened `nana-suckers-v6/test/regression/RecordPeerValueAggregation.t.sol` with a mixed active/deprecated
+    two-chain fuzz property. The property checks that a peer chain with any active lane selects the active lane, while
+    a peer chain with only deprecated lanes falls back to the freshest deprecated snapshot with MAX only as the
+    same-freshness tie-break.
+  - Updated `nana-suckers-v6/test/MultiSuckerFork.t.sol` so the dual-active same-chain fork test proves freshness-first
+    aggregation by giving the stale lane a higher value and the fresh lane a lower value.
+  - Verification commands in `nana-suckers-v6`:
+    `forge fmt --check`;
+    `forge test --match-path test/regression/RecordPeerValueAggregation.t.sol --fail-fast --summary --detailed`;
+    `forge test --match-path test/regression/RegistryStaleMaxAggregation.t.sol --fail-fast --summary --detailed`;
+    `forge test --match-path test/MultiSuckerFork.t.sol --fail-fast --summary --detailed`.
+    Result: exit code 0 for all four; aggregation regression/fuzz coverage passed 11 tests including 2 fuzz properties
+    with 4096 runs each, stale-max aggregation passed 2 tests, and `MultiSuckerForkTest` passed 10 tests.
 
 ## Completion Audit Status
 
