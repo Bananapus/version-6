@@ -3638,6 +3638,17 @@ Progress against the plan:
   hooks/plugins, cross-chain/Revnet, apps, and deployment layers. It records current evidence status, preferred
   tooling, and the completion criteria required before the broad "top to bottom formal verification" objective can be
   claimed complete.
+- Follow-up on 2026-05-21: strengthened the standalone fee-project deployer replay-guard regression so it checks that
+  `script/Deploy.s.sol` keeps the current canonical surfaces wired into the replay path: exact fee-revnet dependency,
+  exact configuration hash, operator, project URI, reserved-token split routing, native multi-terminal accounting, and
+  router terminal registry. This keeps `nana-fee-project-deployer-v6` synchronized with the stricter deploy-all NANA
+  guard. Verification commands:
+  `forge fmt --root nana-fee-project-deployer-v6 --check`;
+  `forge test --root nana-fee-project-deployer-v6 --match-path test/regression/RegressionCanonicalGuard.t.sol --fail-fast --summary --detailed`;
+  `forge test --root nana-fee-project-deployer-v6 --deny notes --no-match-path '*Fork.t.sol' --fail-fast --summary --detailed`;
+  `forge build --root nana-fee-project-deployer-v6 --deny notes --skip '*/test/**'`.
+  Result: exit code 0 for all four; focused guard coverage passed 6 tests, the broad package suite passed, and the
+  deployment script build passed.
 
 Open formal gaps:
 

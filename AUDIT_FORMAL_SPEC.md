@@ -81,7 +81,7 @@ Excluded by user direction:
 | APP-DEFIFA-01 | Launch, phase transition, scorecard, reserve, no-contest, refund, and weighted cash-out flows preserve game pot and payout semantics. | DEFIFA-01, pinned fork suite, `DefifaHookLibHalmos`. Status: `CI-proof` for helper, `Invariant/Fork` for game flow. | Game lifecycle invariant with randomized phase/attestation/scorecard actions. |
 | APP-BANNY-01 | Resolver custody and body-transfer semantics cannot strand assets except for documented burned-token behavior. | BANNY-01/02 and `BannyResolverHalmos`. Status: `CI-proof` for resolver helpers, `Regression` for custody behavior. | Stateful resolver custody invariant if app surface expands. |
 | DEPLOY-01 | Deployment scripts fail closed on dirty artifacts, stale manifests, wrong salts, wrong libraries, wrong constructor args, and configured-revnet replay drift. | DEPLOY-VERIFY-01, DEPLOYCONFIG-01, deploy-all fork rehearsals. Status: `Invariant/Fork`. | Per-chain production rehearsal evidence for every intended production chain. |
-| DEPLOY-02 | Fee project deployment replays only the canonical fee-project shape and rejects project-1 squat or config drift. | FEEDEPLOY-01. Status: `Regression`. | Keep replay guard synchronized with Revnet config evolution. |
+| DEPLOY-02 | Fee project deployment replays only the canonical fee-project shape and rejects project-1 squat or config drift. | FEEDEPLOY-01 and standalone fee-project guard-source synchronization regression. Status: `Regression`. | Keep replay guard synchronized with Revnet config evolution. |
 
 ## Tooling Plan
 
