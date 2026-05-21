@@ -3202,6 +3202,8 @@ Progress against the plan:
   102,400 calls each, `migrateBalance` was hit about 20k times per invariant, and the broader invariant set passed
   Tokens, Rulesets, Phase3Deep, and TerminalStore campaigns. The full non-script core suite also passed, including the
   heavier Comprehensive, Economic, Phase3, Permissions, and fork-regression campaigns.
+- Remote CI after this core follow-up: `nana-core-v6` #152 reports `forge-fmt`, `forge-test`, and `halmos-smoke`
+  passing. The `forge-test` job took 21m57s, below the current 30-minute practical ceiling for the heavy core suite.
 - Strengthened `nana-distributor-v6/test/invariant/JB721DistributorInvariant.t.sol` with exact reward-token backing and
   vesting-reserve equality checks. The new equality exposed DIST-05, and the fixed suite now proves across the bounded
   campaign that tracked hook rewards equal actual ERC-20 backing and aggregate vesting equals the remaining token-ID
