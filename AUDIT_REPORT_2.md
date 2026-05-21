@@ -3664,6 +3664,7 @@ Progress against the plan:
   `forge build --root deploy-all-v6 --deny notes --skip '*/test/**' --skip '*/script/**'`.
   Result: exit code 0 for all four; the focused regression passed, the LP/buyback interop suite passed 8 tests, and
   the production build had no changes to compile.
+- Remote CI after the deploy-all follow-up: `deploy-all-v6` #143 reports `forge-build` and `forge-fmt` passing.
 
 Open formal gaps:
 
