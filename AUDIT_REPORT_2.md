@@ -3187,6 +3187,21 @@ Progress against the plan:
   `forge test --root nana-core-v6 --match-path test/invariants/TerminalStoreInvariant.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0; 5 invariant properties passed, each with 1024 runs and 102,400 handler calls. This is bounded
   Foundry evidence for the core native terminal solvency model, not a complete formal proof.
+- Follow-up on 2026-05-21: extended the same terminal-store invariant campaign to cover terminal migration. The two
+  fuzz projects now accept native ETH through both test multi-terminals, handler actions may touch either terminal, and
+  the new `migrateBalance` action moves project balances between the tracked terminal pair while treating migration as
+  internal value movement rather than external inflow/outflow. The tracked actual balance and recorded-balance
+  assertions now sum both terminals plus the fee project, so migration fees must remain backed inside the modeled
+  terminal set.
+- Verification commands:
+  `forge fmt --root nana-core-v6 --check`;
+  `forge test --root nana-core-v6 --match-path test/invariants/TerminalStoreInvariant.t.sol --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --match-path 'test/invariants/*.t.sol' --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`.
+  Result: exit code 0 for all four; the focused terminal-store campaign passed 5 invariants with 1024 runs and
+  102,400 calls each, `migrateBalance` was hit about 20k times per invariant, and the broader invariant set passed
+  Tokens, Rulesets, Phase3Deep, and TerminalStore campaigns. The full non-script core suite also passed, including the
+  heavier Comprehensive, Economic, Phase3, Permissions, and fork-regression campaigns.
 - Strengthened `nana-distributor-v6/test/invariant/JB721DistributorInvariant.t.sol` with exact reward-token backing and
   vesting-reserve equality checks. The new equality exposed DIST-05, and the fixed suite now proves across the bounded
   campaign that tracked hook rewards equal actual ERC-20 backing and aggregate vesting equals the remaining token-ID
