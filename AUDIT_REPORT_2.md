@@ -3055,7 +3055,7 @@ Prompt-to-artifact checklist:
 | Prefer reduced surface / no broad unnecessary diffs | PRs removed/narrowed Revnet terminal config and loan-source surface, cleaned stale docs/tests, added narrow guards/regressions, and documented non-obvious changes inline. | Satisfied for current changes. |
 | Package PRs and version/dependency bumps | Existing PR branches carry package versions one patch above npm latest for changed packages where package metadata applies; latest follow-up commits were pushed to existing PRs. | Satisfied for current PR set; no new extra package bump was made for report-only or selector-payload follow-up commits. |
 | CI/tests/contract sizes pass | Refreshed `gh pr checks` inspection on 2026-05-21: `nana-core-v6` #152, `nana-address-registry-v6` #72, `nana-ownable-v6` #77, `nana-permission-ids-v6` #72, `nana-project-handles-v6` #20, `nana-project-payer-v6` #19, `nana-721-hook-v6` #139, `nana-distributor-v6` #29, `nana-buyback-hook-v6` #134, `nana-router-terminal-v6` #118, `nana-univ4-lp-split-hook-v6` #132, `banny-retail-v6` #117, `nana-suckers-v6` #134, and `revnet-core-v6` #158 report passing their Foundry job plus `halmos-smoke`; `nana-omnichain-deployers-v6` #110, `croptop-core-v6` #137, `nana-fee-project-deployer-v6` #78, and `deploy-all-v6` #143 all report passing required jobs. `version-6` #151 reports no checks. | Satisfied for opened PRs as of 2026-05-21. |
-| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, full-width standard-fee subtraction safety, and an audit-selected `JBCashOuts` bonding-curve boundary table; `nana-core-v6/test/formal/BondingCurveProperties.t.sol` now also pins the same cash-out tax-rate boundary table in the existing Forge property suite; `nana-permission-ids-v6/test/formal/JBPermissionIdsHalmos.t.sol` has passing symbolic checks for permission namespace stability; `nana-address-registry-v6/test/formal/JBAddressRegistryHalmos.t.sol` has passing symbolic proofs for CREATE RLP nonce-width branches; `nana-project-handles-v6/test/formal/JBProjectHandlesHalmos.t.sol` has passing symbolic checks for ENS resolver text-record parsing; `nana-ownable-v6/test/formal/JBOwnableHalmos.t.sol` has passing symbolic proofs for ownership-state transitions and invalid owner encodings; `nana-project-payer-v6/test/formal/JBProjectPayerHalmos.t.sol` has passing symbolic checks for tracker identity propagation and ERC-165 advertising; `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior; `nana-distributor-v6/test/formal/JBVestingMathHalmos.t.sol` has passing checks for vesting locked-share, final dust, no-claim, and partial-unlock cumulative-delta behavior; `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol` has passing branch proofs for slippage floor/ceiling behavior; `nana-router-terminal-v6/test/formal/JBSwapLibHalmos.t.sol` has passing symbolic checks for router-terminal slippage, impact, and price-limit helper branches; `univ4-lp-split-hook-v6/test/formal/JBUniswapV4LPSplitHookHalmos.t.sol` has passing tick-alignment, token-ordering, and native-currency helper checks; `banny-retail-v6/test/formal/BannyResolverHalmos.t.sol` has passing checks for category-name boundaries and retained-outfit membership behavior; `defifa/test/formal/DefifaHookLibHalmos.t.sol` has passing phase/refund/weighted-cash-out helper checks; `revnet-core-v6/test/formal/REVLoansHalmos.t.sol` has passing source-fee timing checks for prepaid-window zero fees, expired-loan rejection, max-prepay denominator safety, and an active-ramp boundary table; and `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol` has passing same-currency peer-value conversion, merkle branch-root, and bounded tree-root helper proofs. The core, permission-ids, address-registry, project-handles, ownable, project-payer, 721, distributor, buyback, router-terminal, LP split hook, Banny, Defifa, Revnet, and suckers repos now wire those smoke targets into CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Not satisfied. This blocks completion. |
+| Formal verification top to bottom | Halmos 0.3.3 is installed; `nana-core-v6/test/formal/HalmosSmoke.t.sol` has passing symbolic smoke proofs for zero-fee `JBFees` behavior, bounded standard-fee helper equivalence, full-width standard-fee subtraction safety, and an audit-selected `JBCashOuts` bonding-curve boundary table; `nana-core-v6/test/formal/BondingCurveProperties.t.sol` now also pins the same cash-out tax-rate boundary table in the existing Forge property suite; `nana-permission-ids-v6/test/formal/JBPermissionIdsHalmos.t.sol` has passing symbolic checks for permission namespace stability; `nana-address-registry-v6/test/formal/JBAddressRegistryHalmos.t.sol` has passing symbolic proofs for CREATE RLP nonce-width branches; `nana-project-handles-v6/test/formal/JBProjectHandlesHalmos.t.sol` has passing symbolic checks for ENS resolver text-record parsing; `nana-ownable-v6/test/formal/JBOwnableHalmos.t.sol` has passing symbolic proofs for ownership-state transitions and invalid owner encodings; `nana-project-payer-v6/test/formal/JBProjectPayerHalmos.t.sol` has passing symbolic checks for tracker identity propagation and ERC-165 advertising; `nana-721-hook-v6/test/formal/JBBitmapHalmos.t.sol` has passing symbolic smoke proofs for removed-tier bitmap behavior; `nana-distributor-v6/test/formal/JBVestingMathHalmos.t.sol` has passing checks for vesting locked-share, final dust, no-claim, and partial-unlock cumulative-delta behavior; `nana-buyback-hook-v6/test/formal/JBSwapLibHalmos.t.sol` has passing branch proofs for slippage floor/ceiling behavior; `nana-router-terminal-v6/test/formal/JBSwapLibHalmos.t.sol` has passing symbolic checks for router-terminal slippage, impact, and price-limit helper branches; `univ4-router-v6/test/formal/OracleHalmos.t.sol` has passing oracle ring-buffer, interpolation, oldest-observation, and accumulator checks; `univ4-lp-split-hook-v6/test/formal/JBUniswapV4LPSplitHookHalmos.t.sol` has passing tick-alignment, token-ordering, and native-currency helper checks; `nana-omnichain-deployers-v6/test/formal/JBOmnichainDeployerHalmos.t.sol` has passing controller/salt/default-721 and local-vs-remote sucker cash-out checks; `croptop-core-v6/test/formal/CroptopHalmos.t.sol` has passing publisher policy/sorting/reuse checks plus deployer sucker-accounting checks; `banny-retail-v6/test/formal/BannyResolverHalmos.t.sol` has passing checks for category-name boundaries and retained-outfit membership behavior; `defifa/test/formal/DefifaHookLibHalmos.t.sol` has passing phase/refund/weighted-cash-out helper checks; `revnet-core-v6/test/formal/REVLoansHalmos.t.sol` has passing source-fee timing checks for prepaid-window zero fees, expired-loan rejection, max-prepay denominator safety, and an active-ramp boundary table; and `nana-suckers-v6/test/formal/JBSuckerLibHalmos.t.sol` has passing same-currency peer-value conversion, merkle branch-root, and bounded tree-root helper proofs. The core, permission-ids, address-registry, project-handles, ownable, project-payer, 721, distributor, buyback, router-terminal, Univ4 router, LP split hook, omnichain deployers, Croptop, Banny, Defifa, Revnet, and suckers repos now wire those smoke targets into CI. No broad Certora/Scribble/Halmos/K/Coq/SMT-style composed proof suite, invariant spec set, or exhaustive protocol model has been added or run. Current evidence is tests, fuzz/invariants, fork tests, manual review, subagent review, and narrow Halmos proofs. | Partially satisfied for bounded repo-level proof lanes; no composed protocol proof. |
 
 Remaining uncovered requirements:
 
@@ -3090,12 +3090,13 @@ Existing invariant-harness inventory:
 | `nana-buyback-hook-v6` | `test/invariant/BuybackHookInvariant.t.sol` and `test/formal/JBSwapLibHalmos.t.sol`. |
 | `nana-router-terminal-v6` | `test/invariant/RouterTerminalInvariant.t.sol` and `test/formal/JBSwapLibHalmos.t.sol`. |
 | `nana-suckers-v6` | `test/invariants/ConversionParityInvariant.t.sol`, `test/unit/invariants.t.sol`, and `test/formal/JBSuckerLibHalmos.t.sol`. |
-| `nana-omnichain-deployers-v6` | `test/invariants/**` local deployer/721/terminal/sucker campaigns. |
+| `nana-omnichain-deployers-v6` | `test/invariants/**` local deployer/721/terminal/sucker campaigns and `test/formal/JBOmnichainDeployerHalmos.t.sol`. |
 | `revnet-core-v6` | `REVLoans.invariants.t.sol`, `REVInvincibility.t.sol`, `test/invariants/PoolPriceInvariant.t.sol`, and `test/formal/REVLoansHalmos.t.sol`. |
 | `defifa` | `test/DefifaMintCostInvariant.t.sol` and `test/formal/DefifaHookLibHalmos.t.sol`. |
 | `nana-ownable-v6` | `test/OwnableInvariantTests.sol`. |
 | `univ4-lp-split-hook-v6` | `test/invariant/LPSplitHookInvariant.t.sol` and `test/formal/JBUniswapV4LPSplitHookHalmos.t.sol`. |
-| `univ4-router-v6` | `test/Invariant.t.sol`. |
+| `croptop-core-v6` | `test/formal/CroptopHalmos.t.sol` plus publisher/deployer/fork regression suites. |
+| `univ4-router-v6` | `test/Invariant.t.sol` and `test/formal/OracleHalmos.t.sol`. |
 | `deploy-all-v6` | `test/fork/FlashLoanInvariantsFork.t.sol` for deployed-composition checks. |
 
 Proof layers to build next:
@@ -3553,14 +3554,49 @@ Progress against the plan:
   production build reported `REVLoans` at 22,384 bytes with 2,192 bytes of runtime margin and `REVDeployer` at 20,632
   bytes with 3,944 bytes of runtime margin, and the full Revnet suite passed. PR #158 CI reports `forge-fmt`,
   `forge-test`, and `halmos-smoke` passing.
+- Added `univ4-router-v6/test/formal/OracleHalmos.t.sol` and `.github/workflows/halmos.yml`. The proof target covers
+  the production oracle library's initialization, grow/no-op/sentinel behavior, circular overwrite, same-timestamp
+  write no-op, interpolation, counterfactual zero-seconds-ago observation, and predates-oldest rejection without
+  modeling the full pool manager.
+- Verification commands:
+  `forge fmt --root univ4-router-v6 --check`;
+  `halmos --root univ4-router-v6 --match-contract OracleHalmos --solver-threads 1 --solver-timeout-assertion 30s --statistics`;
+  `forge test --root univ4-router-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root univ4-router-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
+  Result: exit code 0 for all four; Halmos passed 10 checks, the full Univ4 router suite passed with fork and invariant
+  coverage, and the production build reported `JBUniswapV4Hook` at 17,000 bytes with 7,576 bytes of runtime margin.
+- Added `nana-omnichain-deployers-v6/test/formal/JBOmnichainDeployerHalmos.t.sol` and `.github/workflows/halmos.yml`.
+  The proof target covers local-vs-remote cash-out accounting, sucker cash-out tax bypass, locally scoped cash-outs
+  avoiding remote reads, 721 deployment salt behavior, default 721 config derivation, immutable-controller validation,
+  sucker mint permission, and advertised interfaces.
+- Verification commands:
+  `forge fmt --root nana-omnichain-deployers-v6 --check`;
+  `halmos --root nana-omnichain-deployers-v6 --match-contract JBOmnichainDeployerHalmos --solver-threads 1 --solver-timeout-assertion 30s --statistics`;
+  `forge test --root nana-omnichain-deployers-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root nana-omnichain-deployers-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
+  Result: exit code 0 for all four; Halmos passed 12 checks, the full omnichain deployer suite passed, and the
+  production build reported `JBOmnichainDeployer` at 21,248 bytes with 3,328 bytes of runtime margin.
+- Added `croptop-core-v6/test/formal/CroptopHalmos.t.sol` and `.github/workflows/halmos.yml`. The proof target covers
+  allowance packing, duplicate/empty URI rejection, category sorting with mint-order preservation, existing-tier price
+  reuse, non-sucker default cash-out passthrough, sucker local cash-out accounting, sucker mint permission, and deployer
+  interface advertising.
+- Verification commands:
+  `forge fmt --root croptop-core-v6 --check`;
+  `halmos --root croptop-core-v6 --match-contract CroptopHalmos --solver-threads 1 --solver-timeout-assertion 30s --statistics`;
+  `forge test --root croptop-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root croptop-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
+  Result: exit code 0 for all four; Halmos passed 9 checks, the full Croptop suite passed with fork coverage, and the
+  production build reported `CTPublisher` at 12,585 bytes with 11,991 bytes of runtime margin and `CTDeployer` at
+  12,058 bytes with 12,518 bytes of runtime margin.
 
 Open formal gaps:
 
 - Halmos is installed and wired for narrow core fee, permission namespace stability, address-registry CREATE derivation,
   project-handle resolver parsing, ownable ownership-state transitions, ProjectPayer tracker identity propagation, 721
-  bitmap, distributor vesting math, buyback slippage, router-terminal swap math, Banny resolver helpers, Defifa cash-out
-  helper behavior, Revnet source-fee timing, sucker peer-value, and merkle helper proof suites, but no broad external
-  formal-verification lane exists for the rest of the ecosystem yet.
+  bitmap, distributor vesting math, buyback slippage, router-terminal swap math, Univ4 router oracle behavior, LP split
+  helpers, omnichain deployer accounting, Croptop publisher/deployer boundaries, Banny resolver helpers, Defifa cash-out
+  helper behavior, Revnet source-fee timing, sucker peer-value, and merkle helper proof suites. These are bounded
+  repo-level proof lanes, not a broad composed formal-verification model for the whole ecosystem.
 - Foundry invariants are bounded/randomized properties, not exhaustive proofs.
 - No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
 - Some low-fund peripheral repos still rely on unit/fork tests plus accepted trust-boundary docs rather than dedicated
