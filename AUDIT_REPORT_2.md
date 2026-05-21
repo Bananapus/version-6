@@ -3018,6 +3018,23 @@ Repo evidence snapshot:
   `@bananapus/distributor-v6` `0.0.22`, and `@rev-net/core-v6` `0.0.60`. Direct `@bananapus/core-v6` dependency
   ranges in downstream packages stay on the latest published line so CI can install before `0.0.57` is published.
   `npm pack --dry-run` passed in each edited package.
+- Post-handoff local core verification recheck on 2026-05-21:
+  - `forge test --match-path test/invariants/TerminalStoreInvariant.t.sol --fail-fast --summary --detailed` in
+    `nana-core-v6`: exit code 0; 5 invariants passed, each with 1024 runs and 102,400 handler calls; every handler
+    action had zero reverts.
+  - `forge test --match-path test/ComprehensiveInvariant.t.sol --fail-fast --summary --detailed` in `nana-core-v6`:
+    exit code 0; 8 comprehensive invariants passed, and the direct handler sanity tests passed, with 1024 runs and
+    102,400 handler calls per invariant and zero handler reverts.
+  - `forge test --match-path test/EconomicSimulation.t.sol --fail-fast --summary --detailed` in `nana-core-v6`: exit
+    code 0; 6 economic invariants passed with 1024 runs and 102,400 handler calls each, covering multi-project
+    recorded balances, split cascades, fee-project monotonicity, and no-profit cash-out assumptions.
+  - `forge test --match-path test/invariants/Phase3DeepInvariant.t.sol --fail-fast --summary --detailed` in
+    `nana-core-v6`: exit code 0; 8 phase-3 invariants passed with 1024 runs and 102,400 handler calls each, covering
+    held-fee, allowance, reserve, burn, claim-credit, and global conservation paths.
+  - `halmos --contract HalmosSmoke --solver-threads 1 --solver-timeout-assertion 30s --statistics` in `nana-core-v6`:
+    exit code 0; 6 symbolic checks passed across fee arithmetic and the cash-out tax-rate boundary table. The compile
+    step still emits known test-only `unsafe-typecast` lint warnings in `SelfReferencingPayoutRevert.t.sol` and
+    `TestSplits.sol`; they did not affect the proof result.
 
 ## Completion Audit Status
 
