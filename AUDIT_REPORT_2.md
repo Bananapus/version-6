@@ -3610,6 +3610,15 @@ Progress against the plan:
   `forge build --root nana-omnichain-deployers-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
   Result: exit code 0 for all four; Halmos passed 12 checks, the full omnichain deployer suite passed, and the
   production build reported `JBOmnichainDeployer` at 21,248 bytes with 3,328 bytes of runtime margin.
+- Follow-up on 2026-05-21: strengthened `CrossChainDeployerInvariant` so the per-actor no-profit assertion includes
+  the mocked sucker address, not just regular users. The inline comment documents the model boundary: remote aggregate
+  supply/surplus is mocked for cash-out accounting, but the handler never grants the sucker extra local backing, so its
+  zero-tax local cash-outs still must not extract more than local inflows. Verification commands:
+  `forge fmt --root nana-omnichain-deployers-v6 --check`;
+  `forge test --root nana-omnichain-deployers-v6 --match-contract CrossChainDeployerInvariant --fail-fast --summary --detailed`;
+  `forge test --root nana-omnichain-deployers-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`.
+  Result: exit code 0 for all three; the focused invariant passed 1024 runs and 102,400 handler calls with zero
+  reverts, and the full non-script suite passed including both local invariant campaigns and fork suites.
 - Added `croptop-core-v6/test/formal/CroptopHalmos.t.sol` and `.github/workflows/halmos.yml`. The proof target covers
   allowance packing, duplicate/empty URI rejection, category sorting with mint-order preservation, existing-tier price
   reuse, non-sucker default cash-out passthrough, sucker local cash-out accounting, sucker mint permission, and deployer
