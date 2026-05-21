@@ -3682,6 +3682,17 @@ Progress against the plan:
   Result: exit code 0 for all four; the focused regression passed, the LP/buyback interop suite passed 8 tests, and
   the production build had no changes to compile.
 - Remote CI after the deploy-all follow-up: `deploy-all-v6` #143 reports `forge-build` and `forge-fmt` passing.
+- Follow-up on 2026-05-21: refreshed the literal source manifest and the multiple-sucker same-chain evidence after the
+  final proof PR checks. The exact in-scope runtime manifest command still returns 295 production `src/*.sol` files
+  across the 18 runtime repos, and a path-by-path `comm` comparison against `AUDIT_SRC_MANIFEST.md` returned no
+  differences. Re-ran the sucker tests that pin the user-requested risk-lane behavior: two parallel suckers for the
+  same chain pair can both map ETH and USDC routes, while each sucker keeps its own reverse remote-token reservation
+  and same-peer aggregate views remain freshness-biased rather than additive. Verification commands:
+  `forge test --root nana-suckers-v6 --match-path test/regression/RemoteTokenMappingUniqueness.t.sol --fail-fast --summary --detailed`;
+  `forge test --root nana-suckers-v6 --match-path test/regression/RecordPeerValueAggregation.t.sol --fail-fast --summary --detailed`;
+  `forge test --root nana-suckers-v6 --match-path test/MultiSuckerFork.t.sol --fail-fast --summary --detailed`.
+  Result: exit code 0 for all three; remote-token mapping passed 5 tests, peer-value aggregation passed 11 tests
+  including 4096-run fuzz checks, and the multi-sucker registry suite passed 10 tests.
 
 Open formal gaps:
 
