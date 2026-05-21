@@ -3696,6 +3696,21 @@ Progress against the plan:
   `forge test --root nana-suckers-v6 --match-path test/MultiSuckerFork.t.sol --fail-fast --summary --detailed`.
   Result: exit code 0 for all three; remote-token mapping passed 5 tests, peer-value aggregation passed 11 tests
   including 4096-run fuzz checks, and the multi-sucker registry suite passed 10 tests.
+- Follow-up on 2026-05-21: added `nana-core-v6/test/invariants/CoreHookCompositionInvariant.t.sol`, a narrow composed
+  Foundry invariant for the core ledger path with real split-hook callbacks. The model launches fee/origin/target
+  projects through the controller, routes origin payouts through a split hook, has that hook re-enter
+  `JBMultiTerminal.pay(...)` into the target project, then fuzzes origin payments, origin payouts, and target cashouts
+  while asserting terminal backing covers fee/origin/target recorded balances and origin/target token supplies stay
+  internally consistent. Two direct sanity tests prove the handler reaches the hook callback path and cashes out
+  hook-minted target supply, so the invariant is not relying on `fail_on_revert = false` vacuity. Verification
+  commands:
+  `forge fmt --root nana-core-v6 --check`;
+  `forge test --root nana-core-v6 --match-path test/invariants/CoreHookCompositionInvariant.t.sol --deny notes --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --match-path test/regression/SplitHookBalanceDeltaReentrancy.t.sol --deny notes --fail-fast --summary --detailed`;
+  `forge test --root nana-core-v6 --match-path test/ComprehensiveInvariant.t.sol --deny notes --fail-fast --summary --detailed`.
+  Result: exit code 0 for all four; the new hook-composition invariant passed 3 invariant properties with 1024 runs and
+  102,400 handler calls each plus 2 sanity tests, the split-hook regression passed 2 tests, and the existing
+  comprehensive invariant file passed 18 tests/properties.
 
 Open formal gaps:
 
@@ -3707,5 +3722,7 @@ Open formal gaps:
   repo-level proof lanes, not a broad composed formal-verification model for the whole ecosystem.
 - Foundry invariants are bounded/randomized properties, not exhaustive proofs.
 - No cross-repo symbolic model composes core terminal accounting with hooks, suckers, Revnet loans, and deployers.
+  The new core hook-composition invariant covers real split-hook callback re-entry inside core, but does not cover data
+  hooks, external product hooks, cross-chain suckers, or Revnet loans in the same model.
 - Some low-fund peripheral repos still rely on unit/fork tests plus accepted trust-boundary docs rather than dedicated
   invariant harnesses.
