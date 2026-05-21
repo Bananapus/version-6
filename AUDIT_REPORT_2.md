@@ -3708,9 +3708,14 @@ Progress against the plan:
   `forge test --root nana-core-v6 --match-path test/invariants/CoreHookCompositionInvariant.t.sol --deny notes --fail-fast --summary --detailed`;
   `forge test --root nana-core-v6 --match-path test/regression/SplitHookBalanceDeltaReentrancy.t.sol --deny notes --fail-fast --summary --detailed`;
   `forge test --root nana-core-v6 --match-path test/ComprehensiveInvariant.t.sol --deny notes --fail-fast --summary --detailed`.
-  Result: exit code 0 for all four; the new hook-composition invariant passed 3 invariant properties with 1024 runs and
-  102,400 handler calls each plus 2 sanity tests, the split-hook regression passed 2 tests, and the existing
-  comprehensive invariant file passed 18 tests/properties.
+  Result: exit code 0 for all four; the new hook-composition invariant passed 1 combined property with 1024 runs and
+  102,400 handler calls plus 2 sanity tests, the split-hook regression passed 2 tests, and the existing comprehensive
+  invariant file passed 18 tests/properties. The assertions are intentionally combined into one public invariant so the
+  same handler campaign checks terminal backing plus origin/target token supply consistency without tripling CI runtime.
+  Local release-gate recheck after the consolidation:
+  `forge test --root nana-core-v6 --deny notes --fail-fast --summary --detailed --skip '*/script/**'`;
+  `forge build --root nana-core-v6 --deny notes --sizes --skip '*/test/**' --skip '*/script/**' --skip SphinxUtils`.
+  Result: exit code 0 for both. The size build passes, but `JBMultiTerminal` has only 5 bytes of runtime margin.
 
 Open formal gaps:
 
