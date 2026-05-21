@@ -3649,6 +3649,8 @@ Progress against the plan:
   `forge build --root nana-fee-project-deployer-v6 --deny notes --skip '*/test/**'`.
   Result: exit code 0 for all four; focused guard coverage passed 6 tests, the broad package suite passed, and the
   deployment script build passed.
+- Remote CI after these follow-ups: `nana-omnichain-deployers-v6` #110 reports `forge-fmt`, `forge-test`, and
+  `halmos-smoke` passing; `nana-fee-project-deployer-v6` #78 reports `forge-fmt` and `forge-test` passing.
 
 Open formal gaps:
 
