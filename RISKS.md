@@ -55,6 +55,16 @@ Primary repos and roles:
 - directory, controller, and terminal provenance
 - registry-level identity surfaces
 
+## Shared Authority Matrix
+
+| Authority | Cross-repo effect | Verification focus |
+|-----------|-------------------|--------------------|
+| Deployment safes and scripts | Choose singleton addresses, project IDs, peers, feeds, and terminal wiring. | Artifact parity, replay/resume checks, and post-deploy ownership review. |
+| `JBPermissions` operators | Can exercise delegated project powers across composed repos. | Wildcard grants, broad deployer grants, and permission-specific wrapper checks. |
+| Sucker registries and deployers | Define which bridge contracts receive privileged mint/cash-out treatment. | Allowed deployers, explicit peers, token mappings, and peer symmetry. |
+| Price/feed owners | Affect surplus, borrowing, routing, cash-out, and LP calculations. | Feed address parity, staleness settings, and sequencer-gate behavior. |
+| Project owners | Configure hooks, terminals, splits, rulesets, and forwarding routes. | Self-inflicted DoS paths, circular routing, and hook provenance. |
+
 ## Systemic Call Chains
 
 ### 1. Price feed -> surplus -> loans -> LP positioning
