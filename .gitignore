@@ -2,15 +2,27 @@
 .audit/
 .audit-findings-*/
 .audit-logs/
-AUDIT_FINDINGS*.md
-AUDIT_REPORT.md
+.cdsecurity-skills/
+.deepsec/
+.pashov-skills/
+.superpowers/
+.two-heads-*/
+.playwright-mcp/
+AUDIT_*.md
+HACKER*.md
+TRIAGE.md
+TEST_IMPROVEMENT_*.md
+GEM_AUDIT*.md
+GEMINI.md
 NEMESIS_SCOPE.md
 
 # Audit/CI scripts
 run-nemesis-all.sh
 run-nemesis-all-codex.sh
+run-nemesis-all-gemini.sh
 run-pashov-all.sh
 run-pashov-all-codex.sh
+run-pashov-all-gemini.sh
 
 # Claude conveniences
 .claude/
