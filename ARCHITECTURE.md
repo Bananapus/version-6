@@ -89,6 +89,7 @@ Key point:
 
 - Core settlement always starts in `nana-core-v6`.
 - NFT minting, buybacks, routing, and product logic enter through hooks or wrappers.
+- Two currency systems meet here and must not be conflated: a ruleset's `baseCurrency` is a *standard* ID (`JBCurrencyIds.ETH = 1`, `USD = 2`) that denominates the issuance `weight`, while an accounting context's `currency` is *token-keyed* (`uint32(uint160(token))`). The split exists so a ruleset is chain-portable: the same byte-identical ruleset (and its cross-chain identity hash, which keys deterministic addresses and sucker peering) must deploy on every chain, yet the concrete asset is chain-specific (USDC's address differs per chain; the native token need not be ETH). So a ruleset normally denominates in a chain-independent standard unit and each chain binds its local token + price feed in a per-chain accounting context (a token-keyed `baseCurrency` is valid only when the token has the same address on every chain the revnet spans, or for a deliberate feed dynamic — see the nana-core Currency model). When the accepted token's currency differs from `baseCurrency` — every USD revnet accepting USDC, and even native-token revnets via the identity feed — `JBTerminalStore` reads a `JBPrices` feed for that pair on every pay/cash-out, so the pair's feed (with a backup where it matters) must stay live. See `nana-core-v6/ARCHITECTURE.md` (Currency model) and `RISKS.md`.
 
 ### Cash Outs
 
