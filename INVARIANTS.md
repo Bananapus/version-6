@@ -1,6 +1,6 @@
 # Invariants of Revnets 1–7
 
-Last updated: 2026-05-27.
+Last updated: 2026-06-03.
 
 Scope: the seven projects deployed by `deploy-all-v6/script/Deploy.s.sol` once that script completes and the projects begin receiving payments.
 
@@ -33,8 +33,7 @@ The **per-contract** mechanics (what each function does, who can call it, what i
 | [nana-721-hook-v6](./nana-721-hook-v6/INVARIANTS.md) | NFT tiers data hook + store + project deployer | Powers CPN (project 2) and BAN (project 4) tier issuance and split routing |
 | [nana-router-terminal-v6](./nana-router-terminal-v6/INVARIANTS.md) | Multi-token routing terminal + registry + route resolver | Optional terminal-of-record that lets payers fund a revnet with any token |
 | [nana-omnichain-deployers-v6](./nana-omnichain-deployers-v6/INVARIANTS.md) | Cross-chain project launcher with `OMNICHAIN_RULESET_OPERATOR` bypass | Launches revnets 1–7 with deterministic CREATE3 addressing and sucker wiring |
-| [nana-distributor-v6](./nana-distributor-v6/INVARIANTS.md) | Per-hook reward distribution + vesting (base + IVotes + 721 variants) | Used by `JBReferralSplitHook` to disburse referral credits to IVotes holders |
-| [nana-referral-split-hook-v6](./nana-referral-split-hook-v6/INVARIANTS.md) | Cross-chain referral attribution split hook | Receives referral splits from the fee project (project 1) and routes credit across chains |
+| [nana-distributor-v6](./nana-distributor-v6/INVARIANTS.md) | Per-hook reward distribution + vesting (base + IVotes + 721 variants) | Standalone distribution package; not wired into current deploy-all fee attribution |
 | [nana-project-payer-v6](./nana-project-payer-v6/INVARIANTS.md) | Cloneable per-user pay forwarder | Wrapper contracts payers can use to bind a default project/beneficiary |
 | [nana-ownable-v6](./nana-ownable-v6/INVARIANTS.md) | Project-NFT ownership delegation | Pattern used by `REVOwner` and `CTProjectOwner` |
 | [nana-permission-ids-v6](./nana-permission-ids-v6/INVARIANTS.md) | Permission ID constants | Numbering authority for every permission referenced throughout this doc |
@@ -68,7 +67,6 @@ When reasoning about a specific contract's invariants, **the per-repo doc is the
 - A failed cashout hook does not strand funds: the cashout proceeds to the beneficiary first, then hooks fire via try/catch with balance return on failure.
 - Bridged tokens (via suckers) preserve 1:1 value with the source-chain project tokens. The dual-tree merkle design prevents double-claims (`executedFor` bitmap + per-leaf hash check).
 - `claim` on a sucker can only mint to the beneficiary encoded in the merkle leaf. A third party calling `claim` cannot redirect tokens to themselves.
-- Bridged claims cannot be "stolen" by a front-running EOA: `JBReferralSplitHook` (the only known contract-as-beneficiary) re-derives the leaf hash from caller-supplied data and rejects forged claim data.
 - Cross-chain bridging cannot be re-routed mid-flight: once a token mapping has any outbox entries, the mapping is immutable (can only be disabled, never remapped).
 - Sucker emergency exit and deprecation paths require a 14-day delay; users have time to exit before any operator-initiated sucker shutdown completes.
 
@@ -186,11 +184,7 @@ Per-contract operation inventories (external/public functions grouped by role, w
 
 `DefifaDeployer`, `DefifaGovernor`, `DefifaHook` — see [`./defifa/INVARIANTS.md`](./defifa/INVARIANTS.md) (+ [`./defifa/CRYPTO_ECON.md`](./defifa/CRYPTO_ECON.md) for the game economics). Phase machine (COUNTDOWN → MINT → REFUND → SCORING → COMPLETE, with NO_CONTEST short-circuit), BWA self-attestation gate, single-ratification, and commitment-fulfillment one-shot are documented there.
 
-## C.12 Referral split hook
-
-`JBReferralSplitHook` — see [`./nana-referral-split-hook-v6/INVARIANTS.md`](./nana-referral-split-hook-v6/INVARIANTS.md). Same-chain `pushTo` HWM monotonicity, cross-chain `bridgeRemote` via registered sucker, `claimAndPush` per-leaf hash authentication against `sucker.claim` front-running, and the anti-strand burn path for missing local twins are documented there.
-
-## C.13 Project payer
+## C.12 Project payer
 
 `JBProjectPayer` — see [`./nana-project-payer-v6/INVARIANTS.md`](./nana-project-payer-v6/INVARIANTS.md). Cloneable per-payer wrapper that binds default project/beneficiary, sets `originalPayer` transient for downstream router authentication, and rejects `msg.value` on ERC-20 paths.
 
@@ -204,13 +198,12 @@ Per-contract operation inventories (external/public functions grouped by role, w
 4. **Circular-forward rejection.** `JBRouterTerminalRegistry` rejects not just one-hop but transitive forwarding cycles via `JBForwardingCheck` before any irreversible lock.
 5. **Balance-delta accounting everywhere.** Pre-existing balances on hooks/routers are never swept; only deltas produced by *this* execution move. Stranded-token attacks blocked.
 6. **One-shot deployer setters.** `setChainSpecificConstants` (buyback hook, router terminal, Defifa deployer), `REVOwner.setDeployer`, `JBProjectPayer.initialize`, `DefifaGovernor.initializeGame`, `DefifaHook.initialize`/`setTierCashOutWeightsTo` — all one-time bindings, irreversible.
-7. **Reentrancy discipline without ReentrancyGuard.** State writes precede external calls (`processHeldFeesOf` advances index before fee call; `pushTo`/`bridgeRemote` advance HWM before external call; `REVOwner.autoIssueFor` zeroes before mint). Transient `_acceptingToken` / `_routing` guards block specific callback chains. `nonReentrantLoanAction` (transient) gates REVLoans.
+7. **Reentrancy discipline without ReentrancyGuard.** State writes precede external calls (`processHeldFeesOf` advances index before fee call; `REVOwner.autoIssueFor` zeroes before mint). Transient `_acceptingToken` / `_routing` guards block specific callback chains. `nonReentrantLoanAction` (transient) gates REVLoans.
 8. **Sucker holders always get 0% cashout tax** (REVOwner, JBOmnichainDeployer, CTDeployer). Keeps bridge accounting loss-less.
-9. **HWM monotonicity** (JBReferralSplitHook). `bridgedOutOf` and `pushedLocallyOf` advance before any external call; burns are permanent.
-10. **Permissionless settlement triggers never extract beyond canonical allocation.** `autoIssueFor`, `burnHeldTokensOf`, `fulfillCommitmentsOf`, `triggerNoContestFor`, `bridgeRemote`, `claimAndPush`, `burnUnbridgeableCreditFor`, `pushTo`, `processHeldFeesOf`, `sendPayoutsOf`, `sendReservedTokensToSplitsOf` — caller can never extract value beyond what config authorizes.
-11. **Defifa phase gating.** MINT/REFUND/COUNTDOWN driven by ruleset cycle number; NO_CONTEST latched by `triggerNoContestFor`; COMPLETE latched by `cashOutWeightIsSet`. Reserve mints blocked in NO_CONTEST. Delegate changes restricted to MINT.
-12. **BWA voting** (DefifaGovernor). Beneficiaries cannot self-attest at full power; concentration-adjusted quorum prevents one tier from rubber-stamping; revocation disabled after QUEUED.
-13. **Frozen rulesets post-deploy.** No address holds `LAUNCH_RULESETS` or `QUEUE_RULESETS` for revnets 1–7 after `Deploy.s.sol` completes — the load-bearing invariant that closes the largest attack class.
+9. **Permissionless settlement triggers never extract beyond canonical allocation.** `autoIssueFor`, `burnHeldTokensOf`, `fulfillCommitmentsOf`, `triggerNoContestFor`, `processHeldFeesOf`, `sendPayoutsOf`, `sendReservedTokensToSplitsOf` — caller can never extract value beyond what config authorizes.
+10. **Defifa phase gating.** MINT/REFUND/COUNTDOWN driven by ruleset cycle number; NO_CONTEST latched by `triggerNoContestFor`; COMPLETE latched by `cashOutWeightIsSet`. Reserve mints blocked in NO_CONTEST. Delegate changes restricted to MINT.
+11. **BWA voting** (DefifaGovernor). Beneficiaries cannot self-attest at full power; concentration-adjusted quorum prevents one tier from rubber-stamping; revocation disabled after QUEUED.
+12. **Frozen rulesets post-deploy.** No address holds `LAUNCH_RULESETS` or `QUEUE_RULESETS` for revnets 1–7 after `Deploy.s.sol` completes — the load-bearing invariant that closes the largest attack class.
 
 ---
 
@@ -325,7 +318,6 @@ These are NOT third-party attack vectors but are powers held by privileged addre
 - Held-fee processing reentrancy guard: `nana-core-v6/src/JBMultiTerminal.sol:724-790`
 - OMNICHAIN_RULESET_OPERATOR back-stop: `nana-omnichain-deployers-v6/src/JBOmnichainDeployer.sol:842-857, 893-898`
 - Permissions auth: `nana-core-v6/src/JBPermissions.sol:66-101`
-- Referral split anti-strand: `nana-referral-split-hook-v6/src/JBReferralSplitHook.sol:266-269, 401, 555-589`
 - 721 hook tier mint auth: `nana-721-hook-v6/src/JB721TiersHook.sol:382`
 - Banny decoration ownership check: `banny-retail-v6/src/Banny721TokenUriResolver.sol:1141, 1504-1521`
 - Defifa BWA self-attest gate: `defifa/src/DefifaGovernor.sol:168-177`
