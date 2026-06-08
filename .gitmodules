@@ -58,3 +58,6 @@
 [submodule "nana-project-payer-v6"]
 	path = nana-project-payer-v6
 	url = https://github.com/Bananapus/nana-project-payer-v6
+[submodule "nana-jbx-distributor-v6"]
+	path = nana-jbx-distributor-v6
+	url = https://github.com/Bananapus/nana-jbx-distributor-v6.git
