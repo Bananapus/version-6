@@ -100,7 +100,7 @@ Use this file after the workspace-level `SKILLS.md` has already routed you to th
 2. **`primaryTerminalOf()`** returns `IJBTerminal`, not `address`
 3. **`terminalsOf()`** returns `IJBTerminal[]`, not `address[]`
 4. **`pricePerUnitOf()`** lives on `IJBPrices`, not `IJBController`
-5. **`sendPayoutsOf()`** reverts when amount > payout limit — no auto-cap
+5. **`sendPayoutsOf()`** auto-caps amount to the remaining payout limit — it does NOT revert (returns `0` when none is left; pass `minTokensPaidOut` to enforce a floor)
 6. **`weight = 1`** means inherit decayed weight from previous ruleset; **`weight = 0`** means no issuance
 7. **ROOT permission** is ID 1 (not 255)
 8. **NFT `discountPercent`** denominator is 200 (not 100) — so `200 = 100% discount = free mint`
