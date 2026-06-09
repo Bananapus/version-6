@@ -180,9 +180,9 @@ Reserved tokens accumulate in `pendingReservedTokenBalanceOf` but are NOT auto-d
 
 *Source: `nana-core-v6/src/JBController.sol`, `nana-core-v6/src/JBTerminalStore.sol`*
 
-### 10. `sendPayoutsOf()` reverts on over-limit — no auto-cap
+### 10. `sendPayoutsOf()` auto-caps to the remaining payout limit — it does NOT revert
 
-`sendPayoutsOf()` reverts when the requested amount exceeds the payout limit for the current ruleset. It does not silently cap the amount. Callers must check the available payout limit before calling.
+`sendPayoutsOf()` caps the requested amount to the remaining payout limit for the current ruleset instead of reverting (`JBTerminalStore.recordPayoutFor` — "Cap the amount to the remaining payout limit instead of reverting"), and returns `0` when nothing is left. A sub-unit amount that rounds to zero after currency conversion also returns without consuming any limit (anti-grief). To enforce a minimum, pass `minTokensPaidOut`. (This is a V6 behavior change — V5 reverted.)
 
 *Source: `nana-core-v6/src/JBMultiTerminal.sol`, `nana-core-v6/src/JBTerminalStore.sol`*
 
