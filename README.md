@@ -2,7 +2,7 @@
 
 This directory is the main entrypoint into the Juicebox V6 EVM ecosystem.
 
-It is not a single Foundry package. It is a coordinated workspace of sibling repos that are developed together, versioned separately, and composed through npm packages and local `file:` dependencies. The center of gravity is [`nana-core-v6`](./nana-core-v6), but most real deployments also compose hooks, routers, deployers, or product repos around it.
+It is not a single Foundry package. It is a coordinated workspace of sibling repos that are developed together, versioned separately, and composed through npm packages and local `file:` dependencies. The center of gravity is [`nana-core-v6`](https://github.com/Bananapus/nana-core-v6), but most real deployments also compose hooks, routers, deployers, or product repos around it.
 
 Use this README when you need to answer four questions quickly:
 
@@ -60,32 +60,32 @@ The main reading rule is simple:
 | run or structure an audit | [AUDIT_INSTRUCTIONS.md](./AUDIT_INSTRUCTIONS.md) |
 | follow local documentation norms | [STYLE_GUIDE.md](./STYLE_GUIDE.md) |
 
-If you are new to Juicebox V6, start with [`nana-core-v6/README.md`](./nana-core-v6/README.md) and then move outward into the repo that changes the execution path you care about.
+If you are new to Juicebox V6, start with [`nana-core-v6/README.md`](https://github.com/Bananapus/nana-core-v6/blob/main/README.md) and then move outward into the repo that changes the execution path you care about.
 
 ## High-Signal Entrypoints
 
-If you need the shortest path into the codebase, start from these contracts and then branch into the attached extension repo:
+If you need the shortest path into the codebase, start from these contracts and then branch into the attached extension repo. These links point to the owning repositories because the workspace-level directories are Git submodules.
 
-- [`nana-core-v6/src/JBController.sol`](./nana-core-v6/src/JBController.sol)
-- [`nana-core-v6/src/JBMultiTerminal.sol`](./nana-core-v6/src/JBMultiTerminal.sol)
-- [`nana-core-v6/src/JBTerminalStore.sol`](./nana-core-v6/src/JBTerminalStore.sol)
-- [`nana-721-hook-v6/src/JB721TiersHook.sol`](./nana-721-hook-v6/src/JB721TiersHook.sol)
-- [`nana-buyback-hook-v6/src/JBBuybackHook.sol`](./nana-buyback-hook-v6/src/JBBuybackHook.sol)
-- [`nana-router-terminal-v6/src/JBRouterTerminal.sol`](./nana-router-terminal-v6/src/JBRouterTerminal.sol)
-- [`nana-suckers-v6/src/JBSucker.sol`](./nana-suckers-v6/src/JBSucker.sol)
-- [`univ4-router-v6/src/JBUniswapV4Hook.sol`](./univ4-router-v6/src/JBUniswapV4Hook.sol)
-- [`revnet-core-v6/src/REVDeployer.sol`](./revnet-core-v6/src/REVDeployer.sol)
+- [`nana-core-v6/src/JBController.sol`](https://github.com/Bananapus/nana-core-v6/blob/main/src/JBController.sol)
+- [`nana-core-v6/src/JBMultiTerminal.sol`](https://github.com/Bananapus/nana-core-v6/blob/main/src/JBMultiTerminal.sol)
+- [`nana-core-v6/src/JBTerminalStore.sol`](https://github.com/Bananapus/nana-core-v6/blob/main/src/JBTerminalStore.sol)
+- [`nana-721-hook-v6/src/JB721TiersHook.sol`](https://github.com/Bananapus/nana-721-hook-v6/blob/main/src/JB721TiersHook.sol)
+- [`nana-buyback-hook-v6/src/JBBuybackHook.sol`](https://github.com/Bananapus/nana-buyback-hook-v6/blob/main/src/JBBuybackHook.sol)
+- [`nana-router-terminal-v6/src/JBRouterTerminal.sol`](https://github.com/Bananapus/nana-router-terminal-v6/blob/main/src/JBRouterTerminal.sol)
+- [`nana-suckers-v6/src/JBSucker.sol`](https://github.com/Bananapus/nana-suckers-v6/blob/main/src/JBSucker.sol)
+- [`univ4-router-v6/src/JBUniswapV4Hook.sol`](https://github.com/Bananapus/nana-univ4-router-v6/blob/main/src/JBUniswapV4Hook.sol)
+- [`revnet-core-v6/src/REVDeployer.sol`](https://github.com/rev-net/revnet-core-v6/blob/main/src/REVDeployer.sol)
 
 ## Reading Order
 
 If the goal is fast orientation, use this order:
 
-1. [`nana-core-v6`](./nana-core-v6)
-2. [`nana-permission-ids-v6`](./nana-permission-ids-v6), [`nana-ownable-v6`](./nana-ownable-v6), [`nana-address-registry-v6`](./nana-address-registry-v6)
-3. [`nana-721-hook-v6`](./nana-721-hook-v6), [`nana-buyback-hook-v6`](./nana-buyback-hook-v6), [`nana-router-terminal-v6`](./nana-router-terminal-v6), [`univ4-router-v6`](./univ4-router-v6), [`univ4-lp-split-hook-v6`](./univ4-lp-split-hook-v6)
-4. [`nana-suckers-v6`](./nana-suckers-v6), [`nana-omnichain-deployers-v6`](./nana-omnichain-deployers-v6)
-5. [`nana-distributor-v6`](./nana-distributor-v6), [`nana-project-handles-v6`](./nana-project-handles-v6), [`nana-fee-project-deployer-v6`](./nana-fee-project-deployer-v6), [`deploy-all-v6`](./deploy-all-v6)
-6. [`revnet-core-v6`](./revnet-core-v6), [`croptop-core-v6`](./croptop-core-v6), [`banny-retail-v6`](./banny-retail-v6), [`defifa`](./defifa)
+1. [`nana-core-v6`](https://github.com/Bananapus/nana-core-v6)
+2. [`nana-permission-ids-v6`](https://github.com/Bananapus/nana-permission-ids-v6), [`nana-ownable-v6`](https://github.com/Bananapus/nana-ownable-v6), [`nana-address-registry-v6`](https://github.com/Bananapus/nana-address-registry-v6)
+3. [`nana-721-hook-v6`](https://github.com/Bananapus/nana-721-hook-v6), [`nana-buyback-hook-v6`](https://github.com/Bananapus/nana-buyback-hook-v6), [`nana-router-terminal-v6`](https://github.com/Bananapus/nana-router-terminal-v6), [`univ4-router-v6`](https://github.com/Bananapus/nana-univ4-router-v6), [`univ4-lp-split-hook-v6`](https://github.com/Bananapus/nana-univ4-lp-split-hook-v6)
+4. [`nana-suckers-v6`](https://github.com/Bananapus/nana-suckers-v6), [`nana-omnichain-deployers-v6`](https://github.com/Bananapus/nana-omnichain-deployers-v6)
+5. [`nana-distributor-v6`](https://github.com/Bananapus/nana-distributor-v6), [`nana-project-handles-v6`](https://github.com/Bananapus/nana-project-handles-v6), [`nana-fee-project-deployer-v6`](https://github.com/Bananapus/nana-fee-project-deployer-v6), [`deploy-all-v6`](https://github.com/Bananapus/deploy-all-v6)
+6. [`revnet-core-v6`](https://github.com/rev-net/revnet-core-v6), [`croptop-core-v6`](https://github.com/mejango/croptop-core-v6), [`banny-retail-v6`](https://github.com/mejango/banny-retail-v6), [`defifa`](https://github.com/BallKidz/defifa)
 
 If the goal is a live-path audit, start here instead:
 
