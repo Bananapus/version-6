@@ -28,7 +28,7 @@ Read the stack in this order:
 
 1. `deploy-all-v6` for who receives power at deployment time.
 2. `nana-core-v6` for the base control plane: directory, controller, terminals, prices, permissions, and feeless switches.
-3. Registry-style repos for global allowlists and defaults:
+3. Registry-style repos for global allowlists, default routes, and defaults:
    `nana-buyback-hook-v6`, `nana-router-terminal-v6`, `nana-suckers-v6`.
 4. Project-local extension repos for per-project or per-hook authority:
    `nana-721-hook-v6`, `nana-omnichain-deployers-v6`, `univ4-lp-split-hook-v6`, `croptop-core-v6`, `revnet-core-v6`, `banny-retail-v6`, `defifa`.
@@ -43,7 +43,7 @@ Read the stack in this order:
 | `nana-core-v6` | Core protocol authority | Protocol owner, project owner, delegated operator, controller, terminal | [nana-core-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-core-v6/ADMINISTRATION.md) |
 | `nana-buyback-hook-v6` | Global hook allowlist plus project-local buyback config | Registry owner plus project-local delegates | [nana-buyback-hook-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-buyback-hook-v6/ADMINISTRATION.md) |
 | `nana-router-terminal-v6` | Global router terminal allowlist and defaults | Registry owner plus project-local delegates | [nana-router-terminal-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-router-terminal-v6/ADMINISTRATION.md) |
-| `nana-suckers-v6` | Sucker deployer registry and bridge safety controls | Registry owner, project owner, deployer configurator | [nana-suckers-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/ADMINISTRATION.md) |
+| `nana-suckers-v6` | Sucker deployer registry, bridge safety controls, and route-scoped token mapping approvals | Registry owner, project owner, deployer configurator | [nana-suckers-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-suckers-v6/ADMINISTRATION.md) |
 | `nana-721-hook-v6` | Per-hook NFT-tier administration | Hook owner or project owner plus delegated permissions | [nana-721-hook-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-721-hook-v6/ADMINISTRATION.md) |
 | `nana-omnichain-deployers-v6` | Omnichain launch and runtime wrapper config | Mixed deployer and project-local authority | [nana-omnichain-deployers-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/nana-omnichain-deployers-v6/ADMINISTRATION.md) |
 | `univ4-lp-split-hook-v6` | Per-project LP split-hook lifecycle | Project owner or `SET_BUYBACK_POOL` delegate | [univ4-lp-split-hook-v6/ADMINISTRATION.md](/Users/jango/Documents/jb/v6/evm/univ4-lp-split-hook-v6/ADMINISTRATION.md) |
@@ -69,6 +69,7 @@ Read the stack in this order:
 | Default buyback hook and hook allowlist | Registry owner | `nana-buyback-hook-v6` |
 | Default router terminal and terminal allowlist | Registry owner | `nana-router-terminal-v6` |
 | Approved sucker deployers and remote fee config | Registry owner | `nana-suckers-v6` |
+| Sucker token mapping approvals for native/native and different-address local/remote pairs | Registry owner, keyed by local token, remote chain ID, and remote token | `nana-suckers-v6` |
 | Sucker deployer singleton and chain constants | Deployer configurator | `nana-suckers-v6` |
 | Revnet split-operator assignment and runtime boundaries | Split operator per revnet | `revnet-core-v6` |
 
