@@ -64,3 +64,9 @@
 [submodule "nana-swap-split-hook-v6"]
 	path = nana-swap-split-hook-v6
 	url = https://github.com/Bananapus/nana-swap-split-hook-v6.git
+[submodule "bendystraw-v6"]
+	path = bendystraw-v6
+	url = https://github.com/peripheralist/bendystraw.git
+[submodule "website"]
+	path = website
+	url = https://github.com/mejango/juicebox-v6-website.git
