@@ -67,9 +67,18 @@
 [submodule "bendystraw-v6"]
 	path = bendystraw-v6
 	url = https://github.com/peripheralist/bendystraw.git
-[submodule "website"]
-	path = website
-	url = https://github.com/mejango/juicebox-v6-website.git
+[submodule "webclients/juicebox-money"]
+	path = webclients/juicebox-money
+	url = https://github.com/mejango/juicebox-money.git
+[submodule "webclients/revnet-money"]
+	path = webclients/revnet-money
+	url = https://github.com/mejango/revnet-money.git
+[submodule "webclients/juicy-vision"]
+	path = webclients/juicy-vision
+	url = https://github.com/mejango/juicy-vision.git
+[submodule "webclients/juicescan"]
+	path = webclients/juicescan
+	url = https://github.com/mejango/juicescan.git
 [submodule "skills"]
 	path = skills
 	url = https://github.com/mejango/juicebox-skills.git
