@@ -12,7 +12,7 @@ Use this README when you need to answer four questions quickly:
 - which directories are active workspace surfaces versus supporting material
 
 App: <https://juicebox.money>  
-Canonical webapp reference: [`website`](./website) ([mejango/juicebox-v6-website](https://github.com/mejango/juicebox-v6-website))  
+Canonical webapp reference: [`webclients/juicescan`](./webclients/juicescan) ([mejango/juicescan](https://github.com/mejango/juicescan))\
 Docs: <https://docs.juicebox.money>  
 Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md)  
 User journeys: [USER_JOURNEYS.md](./USER_JOURNEYS.md)  
@@ -26,14 +26,14 @@ RISKS maintenance: [RISKS_MAINTENANCE.md](./RISKS_MAINTENANCE.md)
 
 This workspace contains:
 
-- active protocol and product repos at the top level
+- active protocol repos at the top level and application repos under [`webclients`](./webclients)
 - workspace-level guidance docs
 - templates under [`documentation_templates`](./documentation_templates)
 - maintenance notes under [`docs`](./docs)
 - archived packages under [`archive`](./archive)
 - audit artifacts and local tooling
 
-If you are tracing live behavior, start from active top-level repos, not `archive/`, templates, or old audit output.
+If you are tracing live behavior, start from an active protocol repo or an application under [`webclients`](./webclients), not `archive/`, templates, or old audit output.
 
 ## What This Workspace Contains
 
@@ -44,7 +44,7 @@ The V6 EVM surface is organized into a few recurring roles:
 - cross-chain repos move project tokens and reclaimed assets between chains
 - deployer repos package multi-contract compositions into launch surfaces
 - application repos build opinionated products on top of the shared protocol primitives
-- [`website`](./website) is the canonical webapp reference for how Juicebox V6 is presented and operated from the user-facing interface
+- [`webclients/juicescan`](./webclients/juicescan) is the canonical webapp reference for how Juicebox V6 is presented and operated from the user-facing interface
 
 The main reading rule is simple:
 
@@ -110,7 +110,7 @@ Start from the question you are trying to answer:
 - handles and naming: `nana-project-handles-v6`
 - reward distribution outside the main terminal path: `nana-distributor-v6`
 - deployment sequencing: `deploy-all-v6`
-- canonical webapp behavior, copy, and user-facing protocol affordances: `website`
+- canonical webapp behavior, copy, and user-facing protocol affordances: `webclients/juicescan`
 
 ## Common Reading Mistakes
 

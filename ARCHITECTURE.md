@@ -30,7 +30,10 @@ This document covers the active EVM repos in `/v6/evm`:
 - `defifa`
 - `nana-fee-project-deployer-v6`
 - `deploy-all-v6`
-- `website`
+- `webclients/juicebox-money`
+- `webclients/revnet-money`
+- `webclients/juicy-vision`
+- `webclients/juicescan`
 
 ## Layers
 
@@ -64,7 +67,10 @@ Product / application layer
   -> banny-retail-v6
   -> defifa
   -> nana-fee-project-deployer-v6
-  -> website
+  -> webclients/juicebox-money
+  -> webclients/revnet-money
+  -> webclients/juicy-vision
+  -> webclients/juicescan
 ```
 
 Dependency direction matters:
@@ -212,7 +218,10 @@ If a bug crosses one of these seams, assume the blast radius may be larger than 
 | `defifa` | Prediction-game product with phased rulesets, scorecard governance, and game-piece cash-out logic |
 | `nana-fee-project-deployer-v6` | Deployment of the canonical protocol fee sink project |
 | `deploy-all-v6` | Canonical deployment, resume, and verification orchestration |
-| `website` | Canonical webapp reference for user-facing V6 flows, copy, warnings, and protocol affordances |
+| `webclients/juicebox-money` | Primary Juicebox Money application |
+| `webclients/revnet-money` | Revnet-focused application |
+| `webclients/juicy-vision` | Juicy Vision application and service client |
+| `webclients/juicescan` | Canonical webapp reference for user-facing V6 flows, copy, warnings, and protocol affordances |
 
 ## Common Compositions
 
