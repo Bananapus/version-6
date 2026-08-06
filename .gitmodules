@@ -73,8 +73,8 @@
 [submodule "webclients/revnet-money"]
 	path = webclients/revnet-money
 	url = https://github.com/mejango/revnet-money.git
-[submodule "webclients/juicy-vision"]
-	path = webclients/juicy-vision
+[submodule "webclients/archived/juicy-vision"]
+	path = webclients/archived/juicy-vision
 	url = https://github.com/mejango/juicy-vision.git
 [submodule "webclients/juicescan"]
 	path = webclients/juicescan
