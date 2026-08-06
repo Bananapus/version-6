@@ -32,8 +32,9 @@ This document covers the active EVM repos in `/v6/evm`:
 - `deploy-all-v6`
 - `webclients/juicebox-money`
 - `webclients/revnet-money`
-- `webclients/juicy-vision`
 - `webclients/juicescan`
+
+`webclients/archived/juicy-vision` is retained for reference but is outside the active workspace scope.
 
 ## Layers
 
@@ -69,7 +70,6 @@ Product / application layer
   -> nana-fee-project-deployer-v6
   -> webclients/juicebox-money
   -> webclients/revnet-money
-  -> webclients/juicy-vision
   -> webclients/juicescan
 ```
 
@@ -220,8 +220,13 @@ If a bug crosses one of these seams, assume the blast radius may be larger than 
 | `deploy-all-v6` | Canonical deployment, resume, and verification orchestration |
 | `webclients/juicebox-money` | Primary Juicebox Money application |
 | `webclients/revnet-money` | Revnet-focused application |
-| `webclients/juicy-vision` | Juicy Vision application and service client |
 | `webclients/juicescan` | Canonical webapp reference for user-facing V6 flows, copy, warnings, and protocol affordances |
+
+## Archived Repositories
+
+| Repo | Status |
+| --- | --- |
+| `webclients/archived/juicy-vision` | Retained for reference; excluded from ongoing webclient work unless explicitly requested |
 
 ## Common Compositions
 
