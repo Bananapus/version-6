@@ -26,7 +26,8 @@ A hosted service that lets anyone pay an eligible Juicebox V6 project by credit 
 | Token hold | 120 days for card payments (full dispute window) before the donor can access tokens. Bank-transfer payments unlock at settlement finality (days). |
 | Per-project risk tiering | Rejected — unnecessary complexity; the 120-day hold covers all projects uniformly. |
 | Card ceiling | Cards accepted up to a configurable ceiling (initial: $500); above it, checkout steers to bank transfer. |
-| Donor wallet | None required at checkout — email only. Claim link after unlock; donor connects/pastes a wallet then. Embedded wallets are a later upgrade. |
+| Donor wallet | Email only at checkout. A Para pregenerated wallet (keyed to the email) is created silently and preset as the on-chain beneficiary; crypto-native donors can supply their own address instead. Donor can redirect to any wallet before release (48h effectiveness delay). |
+| Release | Permissionless: after unlockAt, anyone can call `release(paymentId)` — no address argument; tokens go to the recorded beneficiary. Zero-click delivery; the service disappearing cannot strand unlocked tokens. |
 | Donor visibility | Logged-in account page (email magic link): payments, expected token amounts, unlock countdowns, claim flow. |
 | Business model | Default path free (donation + Stripe cost only). Premium fee buys T+0 execution; premium fees → $PROCESSOR revnet, donor's escrow entry as beneficiary. Premium never shortens the token hold. |
 | Project access | Application-gated eligibility with config review; not open to all projects. |
@@ -60,11 +61,13 @@ One API service, one worker, one small frontend, one Postgres DB.
 - Queue-driven, idempotent, retries with backoff; every payment ID pays at most once.
 
 ### 4. Escrow + hold — `JBProcessorEscrow` contract
-- A small (~100-line) escrow contract on Base enforces the hold **on-chain**: entries keyed by payment ID hold `{token, amount, unlockAt}`. `release(paymentId, to)` reverts before `unlockAt`; `forfeit(paymentId)` (operator-only) works only *before* `unlockAt` and sends tokens to the treasury for cash-out recovery. A compromised worker key cannot unlock anything early, and donors/projects can verify the hold publicly.
+- A small escrow contract on Base enforces the hold **on-chain**: entries keyed by payment ID hold `{token, amount, unlockAt, beneficiary}`. The beneficiary (the donor's Para pregen wallet, or their own address) is committed at `processPayment` time — when there is nothing yet worth stealing. `release(paymentId)` is **permissionless**, takes no address, reverts before `unlockAt`, and pays the recorded beneficiary — a keeper cranks it, but anyone can, so unlocked tokens can never be stranded by the service dying. `forfeit(paymentId)` (operator-only) works only *before* `unlockAt` and sends tokens to the treasury for cash-out recovery.
+- Redirects: `setBeneficiary(paymentId, to)` (operator, driven by the donor from the account page) takes effect after a 48h delay, with the pending change visible on-chain and release blocked while one is in flight — a compromised worker key redirecting claims gives monitoring at least two days of public notice, never instant theft.
 - The escrow itself executes the pay: `processPayment(...)` pulls USDC from the worker, calls `pay()` with itself as beneficiary, and records the received token amount atomically — project tokens never touch the worker wallet.
 - Card: unlockAt = payment + 120 days. Bank transfer: unlockAt = settlement finality.
 - Dispute during the window → `forfeit` → tokens to treasury → cash out against the project (cash-out floor) to recoup; shortfall absorbed by premium revenue / reserve. Cash-out execution is a manual runbook step in v1.
-- Claim: after unlock, donor provides a wallet address via the account page; worker calls `release`. The contract enforces timing and single-use; recipient designation is necessarily operator-directed since donors are identified by email, not on-chain.
+- Delivery: zero-click. After unlock, the keeper cranks `release` for due entries; tokens land in the preset wallet with no donor action. The account page offers redirect-to-another-wallet as the optional path, and instructions for claiming the Para wallet via email auth.
+- Para vendor risk, bounded: if Para disappeared before a donor claims their pregen wallet, tokens released there would strand. Mitigations: donors can redirect any time pre-release, and self-supplied addresses skip Para entirely.
 - Eligibility prerequisite: the project must have its ERC-20 deployed (escrow holds ERC-20s, not credits).
 
 ### 5. Donor account page
@@ -122,7 +125,7 @@ Dispute during hold → forfeit entry → cash out tokens → recoup
 
 ## Out of scope for v1
 
-Other chains; embedded wallets; embeddable widget; recurring donations; per-project risk tiering (rejected); custom MoR deals; automated eligibility review.
+Other chains; embeddable widget; recurring donations; per-project risk tiering (rejected); custom MoR deals; automated eligibility review. (Embedded wallets moved IN scope: Para pregen wallets as the default beneficiary.)
 
 ## Open questions
 
