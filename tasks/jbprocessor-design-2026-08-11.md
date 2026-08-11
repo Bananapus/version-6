@@ -31,6 +31,8 @@ A hosted service that lets anyone pay an eligible Juicebox V6 project by credit 
 | Business model | Default path free (donation + Stripe cost only). Premium fee buys T+0 execution; premium fees → $PROCESSOR revnet, donor's escrow entry as beneficiary. Premium never shortens the token hold. |
 | Project access | Application-gated eligibility with config review; not open to all projects. |
 | Chain | Base only in v1. |
+| Escrow custody | On-chain `JBProcessorEscrow` contract enforcing unlockAt (revised from Safe + DB ledger for trustlessness). |
+| Code location | New repo `juice-processor`, submoduled at `extensions/juice-processor`. TypeScript Next.js app + Foundry contracts, deployed on Railway. |
 
 ## Architecture
 
@@ -57,12 +59,13 @@ One API service, one worker, one small frontend, one Postgres DB.
 - Record `{paymentId, txHash, tokensOut, unlockAt}`. Email receipt.
 - Queue-driven, idempotent, retries with backoff; every payment ID pays at most once.
 
-### 4. Escrow + hold
-- Tokens sit in a Processor-controlled Safe on Base; a DB ledger maps payment → token amount → unlockAt.
+### 4. Escrow + hold — `JBProcessorEscrow` contract
+- A small (~100-line) escrow contract on Base enforces the hold **on-chain**: entries keyed by payment ID hold `{token, amount, unlockAt}`. `release(paymentId, to)` reverts before `unlockAt`; `forfeit(paymentId)` (operator-only) works only *before* `unlockAt` and sends tokens to the treasury for cash-out recovery. A compromised worker key cannot unlock anything early, and donors/projects can verify the hold publicly.
+- The escrow itself executes the pay: `processPayment(...)` pulls USDC from the worker, calls `pay()` with itself as beneficiary, and records the received token amount atomically — project tokens never touch the worker wallet.
 - Card: unlockAt = payment + 120 days. Bank transfer: unlockAt = settlement finality.
-- Dispute during the window → entry forfeited → worker cashes out the tokens against the project (cash-out floor) to recoup what it can; shortfall is absorbed by the fee revenue / reserve.
-- Claim: after unlock, donor provides a wallet address; escrow transfers the ERC-20 out. If the project token is unclaimed credits (no ERC-20 deployed), the escrow claims to ERC-20 first or holds until claimable.
-- No custom contract in v1 — Safe + DB ledger.
+- Dispute during the window → `forfeit` → tokens to treasury → cash out against the project (cash-out floor) to recoup; shortfall absorbed by premium revenue / reserve. Cash-out execution is a manual runbook step in v1.
+- Claim: after unlock, donor provides a wallet address via the account page; worker calls `release`. The contract enforces timing and single-use; recipient designation is necessarily operator-directed since donors are identified by email, not on-chain.
+- Eligibility prerequisite: the project must have its ERC-20 deployed (escrow holds ERC-20s, not credits).
 
 ### 5. Donor account page
 - Email magic-link login. Payments list: amount, project, status (processing / held / unlocked / claimed / refunded), expected tokens, days until unlock, claim flow.
@@ -76,14 +79,14 @@ One API service, one worker, one small frontend, one Postgres DB.
 
 ### 7. Project eligibility (application-gated)
 - Projects apply; a human review approves before any checkout can target them. This protects the merchant account and prevents laundering set-ups (e.g. a bogus project with 100% payout splits that turns stolen-card payments into instant on-chain exits).
-- Review checklist: ruleset config sanity (splits, payout limits, cash-out terms, owner), token/issuance behavior, project legitimacy (site, team, purpose), sanctions screening of the owner where feasible.
+- Review checklist: ruleset config sanity (splits, payout limits, cash-out terms, owner), token/issuance behavior, ERC-20 deployed, project legitimacy (site, team, purpose), sanctions screening of the owner where feasible.
 - **Auto-suspension:** eligibility is revoked automatically if the project's ruleset configuration changes after approval (bendystraw watch on queued/activated rulesets); re-review to restore. Prevents the apply-benign-then-reconfigure attack.
 - v1 launch cohort: Artizen (ART).
 
 ### 8. Ops
 - No standing float: the settlement wallet is a pass-through with near-zero resting balance on the default path.
 - Instant-capacity pool: small, hard-capped, funded/grown by premium fees; exposure at any moment is bounded by the cap. Premium option disappears from checkout when the pool lacks headroom and returns as settlements repay it.
-- Hot-wallet security: settlement wallet, instant pool, and escrow are Safes; the worker signs via a constrained session key / module, not an owner key.
+- Hot-wallet security: settlement wallet is a hot EOA holding funds for minutes; the instant pool is a Safe whose exposure is bounded by a USDC allowance to the worker equal to the pool cap; the escrow contract enforces the hold on-chain regardless of key compromise.
 - Rolling reserve: hold a percentage of premium revenue against dispute shortfalls.
 - Monitoring: payment funnel metrics, dispute rate (keep well under the ~0.9% card-network monitoring threshold), float level, quote-drift refund rate.
 
