@@ -82,3 +82,6 @@
 [submodule "skills"]
 	path = skills
 	url = https://github.com/mejango/juicebox-skills.git
+[submodule "extensions/juice-processor"]
+	path = extensions/juice-processor
+	url = https://github.com/mejango/jbprocessor
