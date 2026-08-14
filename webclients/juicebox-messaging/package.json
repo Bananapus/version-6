@@ -1,0 +1,54 @@
+{
+  "name": "@juicebox/juicebox-messaging",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@10.9.8",
+  "engines": {
+    "node": ">=22.23.1"
+  },
+  "scripts": {
+    "dev": "next dev --webpack -p 3004",
+    "dev:shared": "node scripts/dev-shared.mjs",
+    "specs:check": "node scripts/check-production-specs.mjs",
+    "build": "next build --webpack && node scripts/stage-standalone.mjs",
+    "build:lab": "node scripts/run-local-lab.mjs build",
+    "start": "node scripts/start-standalone.mjs",
+    "start:lab": "node scripts/run-local-lab.mjs start",
+    "lint": "eslint . --max-warnings=0 --no-cache",
+    "typecheck": "next typegen && tsc --noEmit --incremental false",
+    "typecheck:lab": "node scripts/run-local-lab.mjs typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build:lab && playwright test",
+    "test:e2e:production-security": "playwright test --config playwright.production-security.config.ts",
+    "test:e2e:shared": "playwright test --config playwright.shared.config.ts",
+    "deps:check": "node scripts/check-release-supply-chain.mjs dependencies",
+    "audit:production": "node scripts/check-release-supply-chain.mjs audit",
+    "sbom:release": "node scripts/check-release-supply-chain.mjs sbom",
+    "release:nested-npm-version": "npm --version",
+    "test:release-launcher": "node scripts/check-release-supply-chain.mjs launcher",
+    "check:supply-chain": "node scripts/check-release-supply-chain.mjs all",
+    "check": "npm run specs:check && npm run lint && npm run typecheck:lab && npm run test && npm run build:lab",
+    "check:all": "npm run check && playwright test && npm run test:e2e:production-security && npm run test:e2e:shared",
+    "check:release": "node scripts/check-release-supply-chain.mjs release"
+  },
+  "dependencies": {
+    "next": "16.3.1",
+    "qrcode": "1.5.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.61.1",
+    "@types/node": "24.10.1",
+    "@types/qrcode": "1.5.6",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.9"
+  }
+}
