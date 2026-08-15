@@ -1,4 +1,0 @@
-export const ROOM_TTL_MS = 24 * 60 * 60 * 1000;
-export const MAX_ENCODED_ENVELOPE_CHARS = 32 * 1024;
-export const MAX_ENVELOPES_PER_ROOM = 1_000;
-export const MAX_ENCODED_CIPHERTEXT_CHARS_PER_ROOM = 8 * 1024 * 1024;
