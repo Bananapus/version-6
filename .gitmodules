@@ -85,6 +85,6 @@
 [submodule "extensions/JBSticky"]
 	path = extensions/JBSticky
 	url = https://github.com/mejango/jbsticky.git
-[submodule "extensions/juicebox-messaging"]
-	path = extensions/juicebox-messaging
+[submodule "extensions/JBChat"]
+	path = extensions/JBChat
 	url = https://github.com/mejango/jbchat.git
