@@ -88,3 +88,6 @@
 [submodule "extensions/JBChat"]
 	path = extensions/JBChat
 	url = https://github.com/mejango/jbchat.git
+[submodule "extensions/eth-shop"]
+	path = extensions/eth-shop
+	url = https://github.com/mejango/eth-shop.git
