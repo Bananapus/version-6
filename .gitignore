@@ -40,3 +40,7 @@ docs/
 
 # OS files
 .DS_Store
+.gstack/
+
+# Local working notes (see CLAUDE.md)
+tasks/
