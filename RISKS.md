@@ -26,7 +26,7 @@ Primary repos and roles:
 - `revnet-core-v6`: revnet deployer, owner logic, loans, fee handling, and hook composition
 - `nana-suckers-v6`: cross-chain bridge and registry surfaces
 - `nana-omnichain-deployers-v6`: omnichain deployer logic
-- `nana-router-terminal-v6`: router terminal and registry
+- `nana-router-terminal-v6`: registry, router gateway custody, and route execution
 - `nana-721-hook-v6`, `croptop-core-v6`, `banny-retail-v6`, `defifa`: NFT and app-layer compositions
 - deployment repos: operational authority, deployment ordering, recovery, and artifact truth
 
@@ -71,11 +71,13 @@ Primary repos and roles:
 
 - **Chain:** `JBPrices` -> terminal and store surplus math -> `REVLoans` -> `JBUniswapV4LPSplitHook`
 - **Risk:** One bad upstream price input can distort borrowing capacity, LP range placement, and payout math.
+- **Ratio feeds:** `JBRatioPriceFeed` derives USDC/native and USDC/ETH conversions from the configured USD feeds. Verify both underlying feeds and the actual `JBPrices` project/default selection; a deployment record alone does not establish registration or a usable price. Missing, stale, sequencer-gated, or circular feed dependencies remain failures, not a zero-price success.
 
 ### 2. Data hook -> buyback -> V4 router -> terminal
 
 - **Chain:** buyback or revnet data hooks -> `JBUniswapV4Hook` -> `JBMultiTerminal.pay`
 - **Risk:** Weight, quote, fee, and terminal assumptions can diverge across layers.
+- **Buyback generations:** Hook 1.4.0 requires a present `pay` metadata entry to contain `(amountToSwapWith, minimumSwapAmountOut, skipSplits)`. A swap below its derived TWAP floor unwinds and falls back to minting; explicit settlement minima remain binding. Resolve the project's actual hook generation because retired hooks continue serving existing projects.
 
 ### 3. Sucker registry -> omnichain deployers -> core cash-out semantics
 
@@ -92,11 +94,18 @@ Primary repos and roles:
 - **Chain:** deployer repos -> per-chain project creation order -> peers, fee references, and router references
 - **Risk:** Deployment can succeed while still creating an invalid ecosystem if IDs or peers drift.
 
+### 6. Router registry -> gateway custody -> route settlement or source refund
+
+- **Chain:** `JBRouterTerminalRegistry.terminalOf(projectId)` -> selected gateway -> `ROUTER()` -> destination terminal. Existing project pins and historical default cohorts may still select a previous router. The new raw router is not the selectable gateway.
+- **Risk:** An eligible failed fee or protocol-payer route can complete its outer transaction while the original input remains in gateway custody. A queued call is neither a settled payment nor a core-forgiven fee. Ordinary calls without the gateway's retention eligibility still revert.
+- **Recovery:** Index queue, qualified failure, process, and refund events from each gateway's deployment block. Preserve the full queued call, memo, and metadata to reconstruct commitment-checked retries. Key custody by chain, gateway, source project, and token; the issued pending-call counter is not the outstanding-call count. Failed refunds leave custody pending. Qualified source refunds do not restore core `feeFreeSurplusOf`; that accepted economic tradeoff remains in the router risk register.
+
 ## Failure Mode Matrix
 
 | Surface | Typical failure mode | What usually happens |
 |---------|----------------------|----------------------|
 | fee processing in core terminals | fail-open | fee can be forgiven or returned rather than blocking the main flow |
+| eligible routes through a router gateway | retained for retry | outer success may leave original-token custody pending; a `ProcessPendingCall` event confirms settlement, while a retry transaction can record another failure and remain pending; qualified finalization may refund source-project accounting |
 | buyback routing | mixed, often fail-open | some failures fall back to direct minting |
 | mature TWAP observation in `JBUniswapV4Hook` | fail-closed | swap can revert when the oracle surface is unsafe |
 | revnet debt aggregation with zero-price feeds | best-effort / under-reporting | affected source can be skipped |
@@ -109,6 +118,10 @@ Primary repos and roles:
 - project ID alignment
 - sucker peer symmetry
 - feed configuration parity
+- rollout capability follows executed canonical records separately on each chain; deterministic addresses, package versions, and proposals do not activate consumer migration actions
+- as recorded by deploy-all commit `8522541297557c80f8bc2dd674c3098f8849b527`, Sepolia, Base Sepolia, and Arbitrum Sepolia have the new hook/router/gateway; OP Sepolia has the ratio feed only; mainnet canonical records still describe the previous stack
+- generated SDK, clients, skills, MCP, catalog, and indexer data must preserve retired addresses and chain-specific ABIs; regenerate after execution rather than changing inline address literals
+- mirroring an operator batch must revalidate the target chain's deployment generation, live registry allowance, and hook/pool dependency order; failed RPC reads must not become an empty pool or a safe migration default
 
 ## Post-Deploy Verification Checklist
 
@@ -121,6 +134,8 @@ Primary repos and roles:
 7. Verify price feed addresses and currency mappings.
 8. Verify router and deployer references used by downstream repos.
 9. Verify that monitoring distinguishes fail-open paths from fail-closed paths.
+10. Verify the project's selected gateway/router path independently of registry defaults, and reconcile retained original-token amounts against queue, settlement, and refund events.
+11. After each production execution, distribute canonical and numbered retired artifacts, regenerate all consumers, and compare chain capabilities before merging or releasing their rollout updates.
 
 ## Ecosystem Invariants
 
