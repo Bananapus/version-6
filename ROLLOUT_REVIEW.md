@@ -11,7 +11,7 @@ Usage documentation describes the completed rollout. Runtime activation follows 
 - [x] Compare four rollout contracts across eight chains and eight consumer surfaces: 256 comparisons, zero mismatches. Both Next client snapshots are identical.
 - [x] Document three-word buyback metadata, TWAP-floor mint fallback, registry → gateway → router resolution, retained custody, and ratio-feed dependencies.
 - [x] Record the shared routing and custody assumptions in workspace and consumer risk documentation.
-- [x] Fold the four documentation branches into the supplied production artifact PRs and close the superseded documentation drafts. Consumer and coordination PRs remain drafts.
+- [x] Fold the four documentation branches into the supplied production artifact PRs and close the superseded documentation drafts. Consumer and coordination PRs are ready for review.
 - [x] Record the completed Ethereum, Optimism, Base, and Arbitrum executions, preserving the outgoing hook/router as previous generations.
 - [x] Regenerate all consumers and rerun their gates against the executed production records. Existing project operators still need their own migrations.
 - [x] Buyback 1.4.1 and core 1.2.1 are published; their earlier npm permission failures are superseded. Router 1.3.2 is also published after the maintainer merged router PR #158.
@@ -41,7 +41,7 @@ All four production executions are represented by successful canonical receipts.
 - Revnet Money: [final CI](https://github.com/mejango/revnet-money/actions/runs/34648855148) passed on `b262d9c`: 1,404 tests, 105 browser/accessibility checks, coverage, production build, standalone/bundle checks, and OCI smoke. Local cold build also passes.
 - Juicescan: [final CI](https://github.com/mejango/juicescan/actions/runs/34649735788) passed on `eae40b3`, including coverage, build, audit, and browser/accessibility. Local checks include 62 focused tests, 36 documents against both GraphQL schemas, and all 72 browser cases. Source digest is `sha256:16794edcdd7a6be201477f4f2797087e0a613eb3f1714a6cc0b27c36a1ca0b43`.
 - The Next apps include Next 16.3.3 and sharp 0.35.4 dependency patches required by their release gates. Mainnet batch tests cover live routing reads, unsupported OP Sepolia actions, dependent pool steps, reordered batches, and failed RPC reads.
-- Workspace `bash docs/check_risks_docs.sh` passes. Consumer and coordination PRs remain drafts for review; app/indexer deployments and project-specific migrations remain separate operational steps.
+- Workspace `bash docs/check_risks_docs.sh` passes. Consumer and coordination PRs are ready for review; app/indexer deployments and project-specific migrations remain separate operational steps.
 
 ## Coordinated PRs
 
@@ -121,4 +121,4 @@ For Juicescan, obtain the new source digest from its generator without writing f
 node -e 'console.log(require("./build/sync-deployments.js").deploymentSourceDigest(process.argv[1]))' "$DEPLOY_REPO/deployments"
 ```
 
-Review and commit generated changes, rerun each repository's full release gates and cross-client parity, then refresh these drafts. SDK and Juicescan checks that require clean generated files run after committing their reviewed outputs. Indexer production deployment/reindex and existing-project operator migrations remain separate steps.
+Review and commit generated changes, rerun each repository's full release gates and cross-client parity, then refresh these PRs. SDK and Juicescan checks that require clean generated files run after committing their reviewed outputs. Indexer production deployment/reindex and existing-project operator migrations remain separate steps.
