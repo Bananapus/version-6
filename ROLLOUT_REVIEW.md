@@ -37,13 +37,13 @@ This is the state of the pinned records, not an assertion about later production
 - Canonical address/availability parity: SDK fixtures, both Next clients, Juicescan, skills, Center catalog, MCP rollout records, and Bendystraw, 256 comparisons.
 - Contract documentation: all router, buyback, core, and deploy-all PR checks passed, including Foundry tests and formatting; the three contract repositories also passed their Halmos smoke checks.
 - Batch review: actual cross-chain mirroring, absent mainnet and OP Sepolia generations, dependent pool steps, reordered source batches, and failed RPC reads.
-- SDK: effective gateway/router path, explicit unknown states, three-word payment metadata, previous-hook cash-outs; 449 core tests and 153 React tests pass.
-- Skills: 17 updated skills validated, all eight chains and 12 rollout ABI files checked against artifacts, receipt/ABI-drift rejection verified, all 55 archives built and inspected.
+- SDK: effective gateway/router path, explicit unknown states, three-word payment metadata, previous-hook cash-outs; 449 core tests and 153 React tests pass. Receipt validation also passes 20 generator boundary cases. Final CI passed on `c7e13fa` ([run 34645510353](https://github.com/Bananapus/juice-sdk-v4/actions/runs/34645510353)).
+- Skills: 17 updated skills validated, all eight chains and 12 rollout ABI files checked against artifacts, receipt/ABI-drift rejection verified, all 55 archives built and inspected. Final ratio-feed guidance and archive text match ETH/USD divided by USDC/USD, registered with USDC as pricing currency; all four executed feed constructors agree.
 - Bendystraw: isolated Ponder/PGlite smoke synchronized the Sepolia router and gateway from actual receipt blocks through block 11684073 and reached realtime. No gateway events occurred in that interval, so empty live custody rows are correct. The handler harness covers populated queue, retry, error-class reset, settlement, and refund states.
 - jbcenter release gate: 53 Foundry tests, 5 target-evidence checks, 378 MCP tests, and 1,403 Center tests passed; 119 optional PostgreSQL cases were skipped because `TEST_DATABASE_URL` is not configured.
-- Juicebox Money: final Next build, typecheck, lint, 252 protocol comparisons, generated-data equality, and focused transaction/routing regressions passed. Build-time Bendystraw DNS requests failed nonfatally; no live runtime network smoke was performed.
+- Juicebox Money: Next build, typecheck, lint, 252 protocol comparisons, generated-data equality, and all 1,364 unit tests across 150 files passed with coverage thresholds intact. Build-time Bendystraw DNS requests failed nonfatally; no live runtime network smoke was performed.
 - Revnet Money: final cached Next production build, TypeScript, lint/format, canonical 44-artifact checks, and focused routing/mirroring suites passed.
-- Juicescan: final-source CI passed unit/encoding/coverage gates, production browser/accessibility, source/manifest reproduction, dependency audit, and bundle budgets ([run 34643735807](https://github.com/mejango/juicescan/actions/runs/34643735807)).
+- Juicescan: final-source CI passed unit/encoding/coverage gates, production browser/accessibility, source/manifest reproduction, dependency audit, and bundle budgets on `5a84282` ([run 34645975262](https://github.com/mejango/juicescan/actions/runs/34645975262)).
 - CI found stale artifact checkout pins and vulnerable Next/sharp dependencies in the Next apps. Their draft PRs include minimal dependency patches and aligned CI/release pins; final reruns are recorded on the PRs.
 - Final source-bundle and repository gates are linked from the draft PRs.
 
@@ -51,6 +51,7 @@ This is the state of the pinned records, not an assertion about later production
 
 | Repository | Draft PR |
 | --- | --- |
+| Workspace coordination and risks | [#241](https://github.com/Bananapus/version-6/pull/241) |
 | Router | [#157](https://github.com/Bananapus/nana-router-terminal-v6/pull/157) |
 | Buyback | [#178](https://github.com/Bananapus/nana-buyback-hook-v6/pull/178) |
 | Core | [#209](https://github.com/Bananapus/nana-core-v6/pull/209) |
@@ -98,3 +99,29 @@ rg -l -i -e '0x0fbcbb3d' -e '0x77bee1ad' \
 - [x] `webclients/revnet-money/test/safe-batch-preset.test.ts` — Explicit previous-hook migration fixture and regression coverage, never a selectable default.
 
 `extensions/juicebox-mcp` is a symlink into jbcenter, so MCP is counted once. Both Bendystraw checkouts carry the focused patch with one upstream PR. Dated audit/task records and archived Juicy Vision remain historical evidence. The inspected `jb-press` and `documentation_templates` sources contained no related stale deployment claims.
+
+## Refresh after production execution
+
+Use each repository's pinned Node/npm toolchain. In the commands below, `EVM_WORKSPACE` is the absolute workspace path, `DEPLOY_REPO` is its `deploy-all-v6` checkout, and `DEPLOY_REF` is the reviewed, committed production-artifact SHA. The checkout must match that SHA. Only refresh chains whose transactions executed; absent records continue to disable unsupported actions.
+
+Run from each repository root unless noted. These are follow-up commands, not evidence that production execution has happened.
+
+| Repository | Refresh and verify |
+| --- | --- |
+| Deploy-all | Verify execution with `npm run deploy:verify:buyback-floor-fix -- --rpc-url "$RPC_URL" -vvv`, then run `./script/post-deploy-buyback-floor-fix.sh --chains=<executed-aliases>`. This uses the matching chain RPC variables and `ETHERSCAN_API_KEY`, distributes flat sibling artifacts, and preserves numbered retirements. Commit the reviewed artifacts before generating consumers. |
+| SDK | Run `export PROTOCOL_DEPLOYMENTS_DIR="$DEPLOY_REPO"`; run `npm run generate --workspace @bananapus/nana-sdk-core`, `npm run protocol:check -- --update-fixture`, then `npm run protocol:check`. Advance the deploy-all pins in `.github/workflows/{ci,release}.yml` and `TESTING.md`. |
+| Juicebox Money | Run `export PROTOCOL_DEPLOYMENTS_DIR="$DEPLOY_REPO"`; run `npm run protocol:generate` then `npm run protocol:check`. Advance pins in `.github/workflows/{ci,release-image}.yml`, `TESTING.md`, and `docs/protocol-rollout.md`. The generator refreshes rollout data, gateway ABI, and the protocol fixture. |
+| Revnet Money | Run `export PROTOCOL_DEPLOYMENTS_DIR="$DEPLOY_REPO"`; run `npm run protocol:rollout:generate`, `npm run protocol:rollout:check`, and `npm run protocol:check`. Advance pins in `.github/workflows/{ci,release-container}.yml`, `TESTING.md`, and the architecture reference. |
+| Juicescan | Run `export DEPLOY_ALL_DEPLOYMENTS_DIR="$DEPLOY_REPO/deployments"`; run `npm run sync-deployments`, `npm run extract-sources`, and `npm run generate`. Advance `.github/workflows/test.yml`, the commit/digest constants in `scripts/check-deployment-parity.mjs`, and `TESTING.md`. Run `npm run check:deployments`, `npm run check:sources`, and `npm run bundle`. |
+| Skills, from `plugins/juicebox-v6` | Run `python3 scripts/gen-chain-config.py "$DEPLOY_REPO/deployments"`, `bash build-skills.sh`, then `python3 scripts/gen-chain-config.py "$DEPLOY_REPO/deployments" --check`. Shared-reference changes also require rebuilding archives. |
+| Both Bendystraw checkouts | Run `npm run generate:rollout -- --deployments "$DEPLOY_REPO/deployments" --ref "$DEPLOY_REF"`, `npm run typecheck`, and `npm test`. Commit the manifest and three generated ABIs together. `--ref` reads the committed source, not uncommitted artifacts. |
+| Center catalog | Advance only reviewed source entries in `src/rest/contracts/data/pins.json`, then run `node scripts/rest/generate-contracts.mjs --workspace "$EVM_WORKSPACE"` and repeat with `--check`. `--refresh` instead advances all 22 repository pins, so use it only when every local HEAD is intended. Generation requires matching compiler outputs/dependencies. |
+| Center/MCP bundles | Once source commits stabilize, run `npm --prefix mcp run rollout:sync -- --workspace "$EVM_WORKSPACE"`, `npm --prefix mcp run knowledge:sync -- --workspace "$EVM_WORKSPACE" --skills "$EVM_WORKSPACE/skills"`, `npm --prefix mcp run development:sync -- --workspace "$EVM_WORKSPACE"`, and `npm --prefix mcp run catalog:generate`. Repeat using `rollout:check`, `knowledge:check`, `development:check`, and `catalog:check`; then run Center's `npm run check`. |
+
+For Juicescan, obtain the new source digest from its generator without writing files:
+
+```sh
+node -e 'console.log(require("./build/sync-deployments.js").deploymentSourceDigest(process.argv[1]))' "$DEPLOY_REPO/deployments"
+```
+
+Review and commit generated changes, rerun each repository's full release gates and cross-client parity, then refresh these drafts. SDK and Juicescan checks that require clean generated files run after committing their reviewed outputs. Indexer production deployment/reindex and existing-project operator migrations remain separate steps.
