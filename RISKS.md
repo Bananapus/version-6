@@ -119,9 +119,11 @@ Primary repos and roles:
 - sucker peer symmetry
 - feed configuration parity
 - rollout capability follows executed canonical records separately on each chain; deterministic addresses, package versions, and proposals do not activate consumer migration actions
-- as recorded by deploy-all commit `8522541297557c80f8bc2dd674c3098f8849b527`, Sepolia, Base Sepolia, and Arbitrum Sepolia have the new hook/router/gateway; OP Sepolia has the ratio feed only; mainnet canonical records still describe the previous stack
+- as recorded by deploy-all commit `a6ab40c5806b52ff4cb21f9eaefe275e621796f9`, Ethereum, Optimism, Base, Arbitrum, Sepolia, Base Sepolia, and Arbitrum Sepolia have the new hook/router/gateway and ratio feed; OP Sepolia has the ratio feed only; previous and v1 records remain available for existing project selections and history
 - generated SDK, clients, skills, MCP, catalog, and indexer data must preserve retired addresses and chain-specific ABIs; regenerate after execution rather than changing inline address literals
+- retirement verification must check the immediately outgoing hook/router generation (`_deprecated1` for this rollout), falling back to `_deprecated` only for earlier artifact layouts; an already-retired oldest generation cannot prove the previous implementation is disallowed for new selection
 - mirroring an operator batch must revalidate the target chain's deployment generation, live registry allowance, and hook/pool dependency order; failed RPC reads must not become an empty pool or a safe migration default
+- receipt outcome proofs must recognize the actually used current or retired hook/router/gateway and its caller/payer path; an installed SDK's older address cannot hide a valid failure event or admit an unrelated emitter. Interpret generation-specific registration values using the effective hook generation before declaring an outcome verified
 
 ## Post-Deploy Verification Checklist
 
