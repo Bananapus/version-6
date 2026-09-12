@@ -27,7 +27,9 @@ Successful publication evidence: [buyback 1.4.1](https://github.com/Bananapus/na
 
 All four production executions are represented by successful canonical receipts. Updating artifacts and regenerating data enables each chain without inline address edits. Existing projects may continue using previous contracts after defaults change; resolve their live hook and terminal selections separately.
 
-## Review and validation
+## Initial artifact rollout review and validation
+
+These results record the original artifact rollout. Subsequent indexed-data integration and payment-recovery checks are recorded below.
 
 - Artifact parity: 57 aggregate/sibling records match exactly, all 41 pre-production record identities remain unchanged, and 256 comparisons across four contracts, eight chains, and eight consumers have zero mismatches. Both Next snapshots and both Bendystraw manifests agree.
 - Router: the pre-gateway reader test now uses a fixed historical fixture; a separate test checks all four current mainnet gateways. Four focused tests pass, and [final Forge CI](https://github.com/Bananapus/nana-router-terminal-v6/actions/runs/34651109726), formatting, and Halmos pass on `13d974a`.
@@ -35,7 +37,7 @@ All four production executions are represented by successful canonical receipts.
 - Core and buyback: production artifact/documentation PRs passed their checks and were merged by the maintainer. Both packages published successfully.
 - SDK: 468 core and 153 React tests pass, including 20 receipt-validation boundary cases. Builds, types, package budgets, formatting, dependency checks, and production audit pass; 280 deployment slots, 274 artifacts, and 35 canonical ABI surfaces match the source. [Final CI](https://github.com/Bananapus/juice-sdk-v4/actions/runs/34648914127) passed on `81f6297`.
 - Skills: 17 updated skills, eight chains, 57 ABI/receipt mappings, all eight ratio constructor orderings, and all 55 rebuilt archives validate. Ratio-feed guidance matches ETH/USD divided by USDC/USD, registered with USDC as pricing currency.
-- Bendystraw: code generation, TypeScript, four validation scripts, and scoped lint pass. Isolated Ponder/PGlite smokes synchronized router/gateway records across all four mainnets over 21-block windows; readiness, GraphQL, and deployment queries passed. No gateway events occurred in those windows; populated queue/retry/settlement/refund cases are covered by the handler harness. Production indexers have not been deployed or reindexed by this change.
+- Bendystraw: code generation, TypeScript, four validation scripts, and scoped lint pass. Isolated Ponder/PGlite smokes synchronized router/gateway records across all four mainnets over 21-block windows; readiness, GraphQL, and deployment queries passed. No gateway events occurred in those windows; populated queue/retry/settlement/refund cases are covered by the handler harness. The maintainer subsequently confirmed that Bendystraw PRs #30 and #31 were deployed and indexed on September 12, 2026.
 - Center/MCP: current and retired receipt emitters, router/gateway payer paths, and generation-specific hook registration windows are checked. The repaired proof tests reject unrelated emitters and recognize actual failure events. All 395 MCP tests, 1,403 outer Center cases, 53 Foundry tests, and five target-evidence checks pass, along with builds, types, formatting, and tool-catalog checks. Optional PostgreSQL cases require `TEST_DATABASE_URL`. Final source commit `c0c7c9e` includes deploy-all `0e2743c`, router `13d974a`, and Juicescan `eae40b3`; 453 knowledge references, 103 development references, 57 rollout records, 719 catalog records, and 29 focused corpus tests validate. No imported files are dirty and no old rollout pins remain. [Final CI](https://github.com/mejango/jbcenter/actions/runs/34652243125) passed the full application/contract gate, both production dependency audits, and the container build.
 - Juicebox Money: [final CI](https://github.com/mejango/juicebox-money/actions/runs/34648778069) passed on `5e2a642`: 1,384 unit/coverage tests, 44 browser checks, production build, budgets, and OCI smoke. Local cold build, 252 protocol comparisons, generated-data equality, lint, and focused mainnet regressions pass.
 - Revnet Money: [final CI](https://github.com/mejango/revnet-money/actions/runs/34648855148) passed on `b262d9c`: 1,404 tests, 105 browser/accessibility checks, coverage, production build, standalone/bundle checks, and OCI smoke. Local cold build also passes.
@@ -55,10 +57,20 @@ All four production executions are represented by successful canonical receipts.
 | Skills | [#5](https://github.com/mejango/juicebox-skills/pull/5) |
 | Bendystraw | [#31](https://github.com/peripheralist/bendystraw/pull/31) |
 | SDK | [#103](https://github.com/Bananapus/juice-sdk-v4/pull/103) |
-| Juicebox Money | [#82](https://github.com/mejango/juicebox-money/pull/82) |
-| Revnet Money | [#43](https://github.com/mejango/revnet-money/pull/43) |
+| Juicebox Money | [#82](https://github.com/mejango/juicebox-money/pull/82), [#83](https://github.com/mejango/juicebox-money/pull/83) |
+| Revnet Money | [#43](https://github.com/mejango/revnet-money/pull/43), [#44](https://github.com/mejango/revnet-money/pull/44) |
 | Juicescan | [#50](https://github.com/mejango/juicescan/pull/50) |
 | jbcenter and MCP | [#21](https://github.com/mejango/jbcenter/pull/21) |
+
+## Indexed-data and payment-recovery follow-up
+
+SDK core 2.5.0 is published and consumed by the merged Money #82 and Revnet #43 updates. Bendystraw #30 and #31 are indexed; no indexer deployment is required for the webclient follow-up.
+
+All three clients show “Payments awaiting routing” above Activity when pending payments exist. They authenticate each complete indexed source-project call against its recorded gateway's live commitment, preserve the original beneficiary, and reuse the standard transaction review for individual attempts and batches. Batches execute in durable, gas-bounded direct/Safe rounds. Cooldowns remain visible; final attempts disclose possible return to source-project accounting. Receipts distinguish routing, returns, retained failures, and canonical reverted attempts. Never-submitted calls advanced by another keeper can be reconciled; ambiguous wallet submissions stay guarded, and obsolete Safe proposals retain their cancellation information.
+
+Revnet's current liquidity composition consumes indexed net tick ranges with complete pagination and the existing live-price calculation and RPC fallback. Ownership and historical-price reads keep their original data sources. Juicescan no longer treats a failed fee preview as exemption or a promised refund.
+
+Follow-up local validation: Money 1,446 unit and 46 browser tests; Revnet 1,459 unit tests (one optional skip) and 110 browser tests; Juicescan 1,740 unit and 76 browser tests. Production builds, coverage, schema checks, transaction inventories, deployment checks, dependency audits, and bundle budgets pass. Nonempty pending-payment fixtures cover desktop/mobile layouts, cooldowns, final attempts, and placement above Activity. Money preserves its existing page and chunk caps and adjusts the aggregate ceiling; Juicescan adjusts the affected JavaScript/CSS and total asset ceilings. Both changes reflect measured additions. Revnet passes its existing budgets unchanged.
 
 ## Remaining old-address hits
 
