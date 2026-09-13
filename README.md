@@ -2,7 +2,7 @@
 
 This directory is the main entrypoint into the Juicebox V6 EVM ecosystem.
 
-It is not a single Foundry package. It is a coordinated workspace of sibling repos that are developed together, versioned separately, and composed through npm packages and local `file:` dependencies. The center of gravity is [`nana-core-v6`](https://github.com/Bananapus/nana-core-v6), but most real deployments also compose hooks, routers, deployers, or product repos around it.
+It is a coordinated workspace of sibling repos that are developed together, versioned separately, and composed through npm packages and local `file:` dependencies. The center of gravity is [`nana-core-v6`](https://github.com/Bananapus/nana-core-v6), but most real deployments also compose hooks, routers, deployers, or product repos around it.
 
 Use this README when you need to answer four questions quickly:
 
@@ -11,9 +11,12 @@ Use this README when you need to answer four questions quickly:
 - where should I start if I am auditing, integrating, or debugging
 - which directories are active workspace surfaces versus supporting material
 
-App: <https://juicebox.money>  
+App: [JuiceScan](ipfs://bafybeibyaqslp5c5swmzehi7knsrkqg6qrizivtoqmro6kadihel3b45se/)\
 Canonical webapp reference: [`webclients/juicescan`](./webclients/juicescan) ([mejango/juicescan](https://github.com/mejango/juicescan))\
-Docs: <https://docs.juicebox.money>  
+Docs: [JuiceScan docs](ipfs://bafybeibyaqslp5c5swmzehi7knsrkqg6qrizivtoqmro6kadihel3b45se/#learn)\
+Juicebox Center: <https://juicebox.center>\
+Juicebox Money: <https://juicebox.money>\
+Revnet Money: <https://revnet.money>\
 Architecture: [ARCHITECTURE.md](./ARCHITECTURE.md)  
 User journeys: [USER_JOURNEYS.md](./USER_JOURNEYS.md)  
 Workspace navigation: [SKILLS.md](./SKILLS.md)  
@@ -27,6 +30,7 @@ RISKS maintenance: [RISKS_MAINTENANCE.md](./RISKS_MAINTENANCE.md)
 This workspace contains:
 
 - active protocol repos at the top level and application repos under [`webclients`](./webclients)
+- add-ons and extensions under [`extensions`](./extensions)
 - workspace-level guidance docs
 - templates under [`documentation_templates`](./documentation_templates)
 - maintenance notes under [`docs`](./docs)
