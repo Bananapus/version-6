@@ -41,7 +41,7 @@ with no gas and no chain interaction.
 | Stage timestamps | Absolute, frozen at signing, honored as signed. No draft expiry. |
 | Who triggers sponsorship | Anyone, within caps. |
 | Which drafts list | All of them, marked as drafts. |
-| Multi-chain execution | Center's existing Relayr wrapper, on mainnets. Center's direct lane on testnets. |
+| Execution | Center's existing Relayr wrapper for every sponsored deploy, mainnets and testnets alike. Testnet setup mirrors mainnet. |
 
 ## 1. The draft
 
@@ -76,16 +76,15 @@ Exactly one party deploys all of a draft's chains, so every chain sees the same 
 
 **Sponsored.** Center's sponsor key is one EOA used on every chain.
 
-- Mainnets (Base, Optimism, Arbitrum): Center signs one ERC-2771 `ForwardRequest` per chain
-  with the sponsor key, `from` = sponsor, target = the draft's `to`, data = the draft's
-  `data`, value = the live creation fee. It submits the set through its existing Relayr
-  sponsorship adapter and pays the bundle from the sponsor wallet, the way the keeper pays
-  Relayr in prepaid mode. Relayr owns per-chain nonces and gas.
-- Testnets (Base Sepolia, OP Sepolia, Arbitrum Sepolia, Sepolia): the Relayr adapter does
-  not serve testnets, so Center broadcasts directly from the sponsor key through a lane per
-  chain, generalized from the Base wallet-creation lane (durable nonce, gas and fee caps,
-  settlement accounting, pause fence).
-- Ethereum mainnet is never sponsored. A draft that includes it is self-paid in full.
+- Center signs one ERC-2771 `ForwardRequest` per chain with the sponsor key, `from` =
+  sponsor, target = the draft's `to`, data = the draft's `data`, value = the live creation
+  fee. It submits the set through its existing Relayr sponsorship adapter and pays the
+  bundle from the sponsor wallet, the way the keeper pays Relayr in prepaid mode. Relayr
+  owns per-chain nonces and gas. The same Relayr API serves both network families, so the
+  testnet setup is the mainnet setup: Base Sepolia, OP Sepolia, Arbitrum Sepolia and
+  Sepolia are sponsored exactly like Base, Optimism and Arbitrum.
+- A bundle spans one family only, mainnets or testnets. Ethereum mainnet is never
+  sponsored. A draft that includes it is self-paid in full.
 - Policy, enforced before anything is signed: once per draft per chain; 5 sponsored deploys
   per requester per day, where the requester is the calling origin plus IP; a global daily
   wei budget across chains, default 0.05 ETH; per-request gas and value caps; a pause
@@ -93,8 +92,8 @@ Exactly one party deploys all of a draft's chains, so every chain sees the same 
   a draft that already has any chain deployed by another sender.
 - Endpoint: `POST /v1/intents/:id/deploy` on the origin-gated `/v1` surface, idempotent per
   intent. It returns a job. `GET /v1/intents/:id` gains per-chain deploy status
-  (`queued`, `sent`, `confirmed`, `failed`) plus tx hashes. Center records its own
-  deployments from the receipts it already waits on, with no trace needed.
+  (`queued`, `sent`, `confirmed`, `failed`) plus the Relayr bundle id and tx hashes. Center
+  records its own deployments through the same verifier as self-paid ones.
 - Center pays the creation fee and, through `JBPayerTrackerLib.resolve`, receives the
   fee-project tokens. That offsets cost and needs no code.
 
@@ -153,8 +152,8 @@ them, runs it, and navigates to the deployed URL when done.
 
 ## 4. Rollout
 
-1. Center: supersede, withdraw, deploy endpoint, sponsor lanes and Relayr signing, policy
-   caps, fast-path verification, testnet verifier configs, publish rate limits. SDK
+1. Center: supersede, withdraw, deploy endpoint, the Relayr sponsor lane, policy caps,
+   fast-path verification, testnet verifier configs, publish rate limits. SDK
    additions and the skill. Nothing user-facing depends on anything else.
 2. juicebox.money and revnet.money together, the same change in both.
 3. homerun, succulent and JBSticky create flows; juicescan rendering and search. JBSticky's
@@ -164,8 +163,9 @@ them, runs it, and navigates to the deployed URL when done.
 ## 5. Testing
 
 - Center: unit tests for supersede, withdraw, policy caps, the fast-path verifier, and the
-  per-chain lane. One integration run per sponsored chain against Center dev with a funded
-  testnet sponsor key. One Relayr rehearsal on a mainnet with a real draft.
+  Relayr lane. One integration run against Center dev with a funded testnet sponsor key
+  deploying a two-chain testnet draft through Relayr. One rehearsal on a mainnet with a
+  real draft.
 - SDK: decoder round-trips for the five launch targets built from each client's own
   encoder; merger ordering; `ensureDeployed` against a fake Center.
 - Clients: the existing vitest suites gain draft cases for the create step, the search

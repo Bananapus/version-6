@@ -4,7 +4,7 @@
 
 **Goal:** Make juicebox.center able to hold a project draft through its whole life (publish, supersede, withdraw, sponsored or self-paid deploy, redirect) and give every webclient one SDK surface to consume it.
 
-**Architecture:** Center's existing intent store gains lifecycle columns, a deploy queue and a sponsor worker. The worker deploys mainnet drafts through the existing Relayr ERC-2771 wrapper signed by Center's sponsor key, and testnet drafts directly from the same key. The SDK core package gains lifecycle calls, a launch-calldata decoder, a search merger and an `ensureDeployed` pre-step. A new skill states the norm.
+**Architecture:** Center's existing intent store gains lifecycle columns, a deploy queue and a sponsor worker. The worker deploys drafts on both network families through the existing Relayr ERC-2771 wrapper, signed by Center's sponsor key; the testnet setup is the mainnet setup. The SDK core package gains lifecycle calls, a launch-calldata decoder, a search merger and an `ensureDeployed` pre-step. A new skill states the norm.
 
 **Tech Stack:** Center: Hono 4, Node 22, Postgres via `pg` raw SQL, viem, vitest. SDK: TypeScript, viem, vitest with 95/95/92/82 coverage floors. Skills: Agent Skills SKILL.md format.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Sponsored chains: mainnets `10, 8453, 42161` through Relayr; testnets `11155111, 11155420, 84532, 421614` through the direct lane. Ethereum mainnet `1` is never sponsored.
+- Sponsored chains: mainnets `10, 8453, 42161` and testnets `11155111, 11155420, 84532, 421614`, all through Relayr at `https://api.relayr.ba5ed.com`. One bundle spans one family. Ethereum mainnet `1` is never sponsored.
 - Exactly one sender deploys every chain of a draft. Center refuses to sponsor an intent whose status is not `undeployed`.
 - Policy defaults, all Center env vars: `SPONSOR_DEPLOYS_PER_REQUESTER_PER_DAY=5`, `SPONSOR_DAILY_BUDGET_WEI=50000000000000000` (0.05 ETH), `SPONSOR_MAX_GAS=8000000`, `SPONSOR_MAX_FEE_PER_GAS=1000000000` (1 gwei), `SPONSOR_PAUSED=0`. Publish limits `PUBLISH_PER_PUBLISHER_PER_DAY=20`, `PUBLISH_PER_IP_PER_HOUR=60`.
 - The intent signing message stays `Juice Central project intent\nVersion: 1\nContent hash: <hash>`. Existing signatures must keep verifying: an envelope without `supersedes` canonicalizes exactly as before.
@@ -34,9 +34,9 @@ Center (`extensions/jbcenter`):
 - Modify `src/intent.ts`: optional `supersedes` in `normalizeEnvelope`; `withdrawMessage(id)`.
 - Modify `src/app.ts`: supersede on publish, withdraw route, publish limits, deploy route, `AppOptions.sponsor`.
 - Modify `src/deploymentVerifier.ts`: top-level fast path, all eight chains.
-- Create `src/sponsor/policy.ts`: chain sets, transport choice, policy parsing.
-- Create `src/sponsor/direct.ts`: direct lane (sign + send from the sponsor key).
-- Create `src/sponsor/relayr.ts`: Relayr lane (ERC-2771 requests signed by the sponsor key, prepayment from the sponsor key).
+- Create `src/sponsor/policy.ts`: chain families, sponsorability, policy parsing.
+- Create `src/sponsor/chain.ts`: shared `PROJECTS_ABI`, `CREATE_TOPIC`, `SponsorSigner`, `DeployLane`, `LaneReport` types.
+- Create `src/sponsor/relayr.ts`: the one lane (ERC-2771 requests signed by the sponsor key, prepayment from the sponsor key, both families).
 - Create `src/sponsor/worker.ts`: queue claim, transport dispatch, verify, record.
 - Modify `src/index.ts`: env parsing and wiring; `README.md` and `.env.example`.
 - Tests: `test/app.test.ts` (MemoryStore + routes), `test/deploymentVerifier.test.ts`, `test/sponsor/*.test.ts`.
@@ -79,7 +79,6 @@ CREATE TABLE intent_deploys (
   intent_id uuid NOT NULL REFERENCES intents(id) ON DELETE CASCADE,
   chain_id bigint NOT NULL,
   requester text NOT NULL,
-  transport text NOT NULL CHECK (transport IN ('direct', 'relayr')),
   status text NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sent', 'confirmed', 'failed')),
   bundle_uuid text,
   transaction_hash text,
@@ -105,7 +104,6 @@ export type IntentDeployStatus = "queued" | "sent" | "confirmed" | "failed";
 
 export type IntentDeploy = {
   chainId: number;
-  transport: "direct" | "relayr";
   status: IntentDeployStatus;
   transactionHash: Hex | null;
   bundleUuid: string | null;
@@ -160,7 +158,7 @@ export interface Store {
   search(query: string, limit: number, offset: number): Promise<SearchPage>;
   recordDeployment(intentId: string, value: NewDeployment): Promise<Deployment>;
   withdrawIntent(id: string, publisher: Address): Promise<Intent | null>;
-  queueDeploys(intentId: string, chainIds: number[], requester: string, transport: "direct" | "relayr", reservedWeiPerChain: bigint): Promise<IntentDeploy[]>;
+  queueDeploys(intentId: string, chainIds: number[], requester: string, reservedWeiPerChain: bigint): Promise<IntentDeploy[]>;
   listDeploys(intentId: string): Promise<IntentDeploy[]>;
   claimQueuedDeploys(leaseSeconds: number, limit: number): Promise<{ intentId: string; chainIds: number[] }[]>;
   updateDeploy(intentId: string, chainId: number, patch: DeployPatch): Promise<void>;
@@ -205,9 +203,9 @@ test("withdraw hides the intent and returns null for a stranger", async () => {
 
 test("deploy queue is idempotent, leases rows, and sums wei", async () => {
   const { intent } = await store.createIntent(newIntent({ name: "one", chainIds: [84532, 421614] }), limits);
-  const rows = await store.queueDeploys(intent.id, [84532, 421614], "browser:x", "direct", 1000n);
+  const rows = await store.queueDeploys(intent.id, [84532, 421614], "browser:x", 1000n);
   expect(rows.map((r) => r.status)).toEqual(["queued", "queued"]);
-  expect(await store.queueDeploys(intent.id, [84532, 421614], "browser:x", "direct", 1000n)).toHaveLength(2);
+  expect(await store.queueDeploys(intent.id, [84532, 421614], "browser:x", 1000n)).toHaveLength(2);
   expect(await store.sponsoredWeiSince(new Date(Date.now() - 60_000))).toBe(2000n);
   const claimed = await store.claimQueuedDeploys(30, 10);
   expect(claimed).toEqual([{ intentId: intent.id, chainIds: [84532, 421614] }]);
@@ -240,7 +238,7 @@ deploys,
 `getIntent` adds a third parallel query:
 
 ```sql
-SELECT chain_id, transport, status, bundle_uuid, transaction_hash, error, created_at, updated_at
+SELECT chain_id, status, bundle_uuid, transaction_hash, error, created_at, updated_at
 FROM intent_deploys WHERE intent_id = $1 ORDER BY chain_id
 ```
 
@@ -280,12 +278,12 @@ async withdrawIntent(id: string, publisher: Address): Promise<Intent | null> {
   return result.rowCount ? this.getIntent(id) : null;
 }
 
-async queueDeploys(intentId, chainIds, requester, transport, reservedWeiPerChain) {
+async queueDeploys(intentId, chainIds, requester, reservedWeiPerChain) {
   await this.pool.query(
-    `INSERT INTO intent_deploys (intent_id, chain_id, requester, transport, reserved_wei)
-     SELECT $1, unnest($2::bigint[]), $3, $4, $5::numeric
+    `INSERT INTO intent_deploys (intent_id, chain_id, requester, reserved_wei)
+     SELECT $1, unnest($2::bigint[]), $3, $4::numeric
      ON CONFLICT (intent_id, chain_id) DO NOTHING`,
-    [intentId, chainIds, requester, transport, reservedWeiPerChain.toString()],
+    [intentId, chainIds, requester, reservedWeiPerChain.toString()],
   );
   return this.listDeploys(intentId);
 }
@@ -614,7 +612,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   export const SPONSORED_MAINNETS = [10, 8453, 42161] as const;
   export const SPONSORED_TESTNETS = [11155111, 11155420, 84532, 421614] as const;
   export type SponsorPolicy = { paused: boolean; perRequesterPerDay: number; dailyBudgetWei: bigint; maximumGas: bigint; maximumFeePerGas: bigint; confirmations: number };
-  export function sponsorTransport(chainIds: number[]): "relayr" | "direct" | null;
+  export function sponsorFamily(chainIds: number[]): "mainnet" | "testnet" | null; // one family only; null for mixed, empty, or any chain outside the sponsored sets
   export function reservationWei(policy: SponsorPolicy, chainCount: number): bigint; // chainCount * (maximumGas * maximumFeePerGas + 100_000_000_000_000n)
   export function readSponsorPolicy(env: NodeJS.ProcessEnv): SponsorPolicy;
   export type SponsorRuntime = { policy: SponsorPolicy; kick(): void };
@@ -624,11 +622,12 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 1: Failing policy tests**
 
 ```ts
-test("transport by chain set", () => {
-  expect(sponsorTransport([8453, 10])).toBe("relayr");
-  expect(sponsorTransport([84532])).toBe("direct");
-  expect(sponsorTransport([1, 8453])).toBeNull();
-  expect(sponsorTransport([8453, 84532])).toBeNull();
+test("family by chain set", () => {
+  expect(sponsorFamily([8453, 10])).toBe("mainnet");
+  expect(sponsorFamily([84532, 11155111])).toBe("testnet");
+  expect(sponsorFamily([1, 8453])).toBeNull();
+  expect(sponsorFamily([8453, 84532])).toBeNull();
+  expect(sponsorFamily([])).toBeNull();
 });
 
 test("policy from env with defaults", () => {
@@ -686,9 +685,9 @@ export const SPONSORED_MAINNETS = [10, 8453, 42161] as const;
 export const SPONSORED_TESTNETS = [11155111, 11155420, 84532, 421614] as const;
 const CREATION_FEE_CEILING = 100_000_000_000_000n; // 0.0001 ETH today; MAX_CREATION_FEE on chain is 0.001 ETH
 
-export function sponsorTransport(chainIds: number[]): "relayr" | "direct" | null {
-  if (chainIds.length && chainIds.every((id) => (SPONSORED_MAINNETS as readonly number[]).includes(id))) return "relayr";
-  if (chainIds.length && chainIds.every((id) => (SPONSORED_TESTNETS as readonly number[]).includes(id))) return "direct";
+export function sponsorFamily(chainIds: number[]): "mainnet" | "testnet" | null {
+  if (chainIds.length && chainIds.every((id) => (SPONSORED_MAINNETS as readonly number[]).includes(id))) return "mainnet";
+  if (chainIds.length && chainIds.every((id) => (SPONSORED_TESTNETS as readonly number[]).includes(id))) return "testnet";
   return null;
 }
 
@@ -725,15 +724,14 @@ app.post("/v1/intents/:id/deploy", async (c) => {
   if (!intent) return c.json({ error: { code: "not_found", message: "Intent not found" } }, 404);
   if (intent.deploys.length) return c.json({ deploys: intent.deploys }, 200);
   if (intent.status !== "undeployed") throw new BadRequest(`intent is ${intent.status}`);
-  const transport = sponsorTransport(intent.envelope.chainIds);
-  if (!transport) throw new BadRequest("intent chains are not sponsorable");
+  if (!sponsorFamily(intent.envelope.chainIds)) throw new BadRequest("intent chains are not sponsorable");
   const requester = c.get("client");
   const quota = await store.consumeRequest(`deploy:${requester}`, sponsor.policy.perRequesterPerDay, 86_400);
   if (!quota.allowed) return c.json({ error: { code: "sponsor_quota", message: "Daily sponsored deploy quota reached" } }, 429);
   const reserved = reservationWei(sponsor.policy, intent.envelope.chainIds.length);
   const spent = await store.sponsoredWeiSince(new Date(Date.now() - 86_400_000));
   if (spent + reserved > sponsor.policy.dailyBudgetWei) return c.json({ error: { code: "sponsor_budget", message: "The daily sponsorship budget is spent" } }, 429);
-  const deploys = await store.queueDeploys(id, intent.envelope.chainIds, requester, transport, reserved / BigInt(intent.envelope.chainIds.length));
+  const deploys = await store.queueDeploys(id, intent.envelope.chainIds, requester, reserved / BigInt(intent.envelope.chainIds.length));
   sponsor.kick();
   return c.json({ deploys }, 202);
 });
@@ -752,139 +750,66 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 6: Direct lane and the sponsor worker
+### Task 6: Lane types and the sponsor worker
 
 **Files:**
-- Create: `extensions/jbcenter/src/sponsor/direct.ts`
+- Create: `extensions/jbcenter/src/sponsor/chain.ts`
 - Create: `extensions/jbcenter/src/sponsor/worker.ts`
-- Test: `extensions/jbcenter/test/sponsor/direct.test.ts`, `extensions/jbcenter/test/sponsor/worker.test.ts`
+- Test: `extensions/jbcenter/test/sponsor/worker.test.ts`
 
 **Interfaces:**
 - Consumes: Task 1 store methods, Task 4 verifier, Task 5 policy.
-- Produces:
+- Produces (in `chain.ts`):
   ```ts
-  export type SponsorSigner = { address: Address; signTransaction(tx: TransactionSerializableEIP1559): Promise<Hex>; signTypedData(args: any): Promise<Hex> }; // a viem PrivateKeyAccount satisfies this
+  export const PROJECTS_ABI = parseAbi(["function creationFee() view returns (uint256)"]);
+  export const CREATE_TOPIC: Hex; // keccak256("Create(uint256,address,address)"), the same constant deploymentVerifier.ts uses; export it from there and re-export here
+  export type SponsorSigner = { address: Address; signTransaction(tx: TransactionSerializableEIP1559): Promise<Hex>; signTypedData(args: TypedDataDefinition): Promise<Hex> }; // a viem PrivateKeyAccount satisfies this
+  export type LaneReport = { sent(chainId: number, transactionHash: Hex, bundleUuid: string): Promise<void>; confirmed(chainId: number, transactionHash: Hex, projectId: string, spentWei: bigint): Promise<void>; failed(chainId: number, error: string): Promise<void> };
   export type DeployLane = { deploy(intent: Intent, chainIds: number[], report: LaneReport): Promise<void> };
-  export type LaneReport = { sent(chainId: number, transactionHash: Hex, bundleUuid?: string): Promise<void>; confirmed(chainId: number, transactionHash: Hex, projectId: string, spentWei: bigint): Promise<void>; failed(chainId: number, error: string): Promise<void> };
-  export function createDirectLane(options: { rpcUrls: Map<number, string>; signer: SponsorSigner; policy: SponsorPolicy; projectsAddress: Address }): DeployLane;
-  export function createSponsorWorker(options: { store: Store; verifier: DeploymentVerifier; lanes: { direct: DeployLane; relayr?: DeployLane }; policy: SponsorPolicy; leaseSeconds?: number }): SponsorRuntime & { stop(): void; runOnce(): Promise<void> };
   ```
+  Produces (in `worker.ts`): `createSponsorWorker(options: { store: Store; verifier: DeploymentVerifier; lane: DeployLane; policy: SponsorPolicy; leaseSeconds?: number }): SponsorRuntime & { stop(): void; runOnce(): Promise<void> }`.
 
-- [ ] **Step 1: Failing direct-lane test**
-
-Use a scripted JSON-RPC fake (`fakeRpc(handlers)` returning a `fetch`-compatible function; pass it to viem's `http(url, { fetchOptions })` via a `fetch` override on `globalThis` inside the test with `vi.stubGlobal`).
-
-```ts
-test("direct lane reads the fee, caps fees, signs, sends and reports per chain", async () => {
-  const rpc = fakeRpc({
-    eth_chainId: () => "0x14a34",
-    eth_call: () => "0x00000000000000000000000000000000000000000000000000005af3107a4000", // creationFee
-    eth_getTransactionCount: () => "0x5",
-    eth_estimateGas: () => "0x2dc6c0",
-    eth_maxPriorityFeePerGas: () => "0x3b9aca00", // 1 gwei, above the cap
-    eth_getBlockByNumber: () => ({ baseFeePerGas: "0x77359400", number: "0x10" }),
-    eth_sendRawTransaction: (raw) => { sent.push(raw); return HASH; },
-    eth_getTransactionReceipt: () => ({ status: "0x1", blockNumber: "0x10", gasUsed: "0x186a0", effectiveGasPrice: "0x3b9aca00",
-      logs: [createLog(84532, 9n)], transactionHash: HASH }),
-    eth_blockNumber: () => "0x12",
-  });
-  const lane = createDirectLane({ rpcUrls: new Map([[84532, "http://rpc"]]), signer, policy, projectsAddress: PROJECTS });
-  await lane.deploy(intent(84532), [84532], report);
-  expect(report.sent).toHaveBeenCalledWith(84532, HASH, undefined);
-  expect(report.confirmed).toHaveBeenCalledWith(84532, HASH, "9", 100_000n * 1_000_000_000n + 100_000_000_000_000n);
-  const tx = parseTransaction(sent[0]);
-  expect(tx.maxFeePerGas).toBe(1_000_000_000n);
-  expect(tx.value).toBe(100_000_000_000_000n);
-  expect(tx.to).toBe(intent(84532).envelope.deploymentCalls[0].to);
-});
-
-test("direct lane reports failure when gas exceeds the cap", async () => {
-  const rpc = fakeRpc({ ...base, eth_estimateGas: () => "0x989680" }); // 10M > 8M cap
-  await lane.deploy(intent(84532), [84532], report);
-  expect(report.failed).toHaveBeenCalledWith(84532, expect.stringContaining("gas"));
-});
-```
-
-- [ ] **Step 2: Run to verify it fails**
-
-Run: `npx vitest run test/sponsor/direct.test.ts`
-Expected: FAIL (module missing).
-
-- [ ] **Step 3: Implement direct.ts**
+- [ ] **Step 1: Failing worker tests**
 
 ```ts
-import { createPublicClient, http, parseAbi, type Address, type Hex } from "viem";
-
-const PROJECTS_ABI = parseAbi(["function creationFee() view returns (uint256)"]);
-const CREATE_TOPIC = "0x..."; // keccak256("Create(uint256,address,address)") — copy the constant from deploymentVerifier.ts
-
-export function createDirectLane({ rpcUrls, signer, policy, projectsAddress }): DeployLane {
-  return {
-    async deploy(intent, chainIds, report) {
-      for (const chainId of chainIds) {
-        const call = intent.envelope.deploymentCalls.find((c) => c.chainId === chainId);
-        const url = rpcUrls.get(chainId);
-        if (!call || !url) { await report.failed(chainId, "chain is not configured"); continue; }
-        const client = createPublicClient({ transport: http(url) });
-        try {
-          const value = await client.readContract({ address: projectsAddress, abi: PROJECTS_ABI, functionName: "creationFee" });
-          const gasEstimate = await client.estimateGas({ account: signer.address, to: call.to, data: call.data, value });
-          const gas = (gasEstimate * 12n) / 10n;
-          if (gas > policy.maximumGas) throw new Error(`gas ${gas} exceeds the sponsor cap ${policy.maximumGas}`);
-          const fees = await client.estimateFeesPerGas();
-          const maxFeePerGas = fees.maxFeePerGas > policy.maximumFeePerGas ? policy.maximumFeePerGas : fees.maxFeePerGas;
-          const maxPriorityFeePerGas = fees.maxPriorityFeePerGas > maxFeePerGas ? maxFeePerGas : fees.maxPriorityFeePerGas;
-          const nonce = await client.getTransactionCount({ address: signer.address, blockTag: "pending" });
-          const raw = await signer.signTransaction({ type: "eip1559", chainId, to: call.to, data: call.data, value, gas, maxFeePerGas, maxPriorityFeePerGas, nonce });
-          const hash = await client.sendRawTransaction({ serializedTransaction: raw });
-          await report.sent(chainId, hash);
-          const receipt = await client.waitForTransactionReceipt({ hash, confirmations: policy.confirmations, timeout: 180_000 });
-          if (receipt.status !== "success") throw new Error("deployment reverted");
-          const created = receipt.logs.find((l) => l.address.toLowerCase() === projectsAddress.toLowerCase() && l.topics[0] === CREATE_TOPIC);
-          if (!created?.topics[1]) throw new Error("no Create log");
-          const projectId = BigInt(created.topics[1]).toString();
-          await report.confirmed(chainId, hash, projectId, receipt.gasUsed * receipt.effectiveGasPrice + value);
-        } catch (error) {
-          await report.failed(chainId, error instanceof Error ? error.message : String(error));
-        }
-      }
-    },
-  };
-}
-```
-
-If a chain fails, later chains of the same intent are skipped: after a `failed` report `return` instead of `continue`, so a draft never ends with a mixed sender across chains. The worker marks the remaining rows failed.
-
-- [ ] **Step 4: Failing worker test**
-
-```ts
-test("worker claims a queued intent, runs its lane, verifies and records", async () => {
+test("worker claims a queued intent, runs the lane, verifies and records", async () => {
   const store = new MemoryStore();
   const { intent } = await store.createIntent(newIntent({ chainIds: [84532] }), limits);
-  await store.queueDeploys(intent.id, [84532], "browser:x", "direct", 10n);
-  const direct: DeployLane = { deploy: vi.fn(async (_i, _c, report) => { await report.sent(84532, HASH); await report.confirmed(84532, HASH, "9", 5n); }) };
+  await store.queueDeploys(intent.id, [84532], "browser:x", 10n);
+  const lane: DeployLane = { deploy: vi.fn(async (_i, _c, report) => { await report.sent(84532, HASH, BUNDLE); await report.confirmed(84532, HASH, "9", 5n); }) };
   const verifier = { verify: vi.fn(async () => {}) };
-  const worker = createSponsorWorker({ store, verifier, lanes: { direct }, policy });
+  const worker = createSponsorWorker({ store, verifier, lane, policy });
   await worker.runOnce();
   expect(verifier.verify).toHaveBeenCalledWith(expect.objectContaining({ chainId: 84532, projectId: "9", transactionHash: HASH }));
   const after = await store.getIntent(intent.id);
   expect(after?.status).toBe("deployed");
-  expect(after?.deploys[0]).toMatchObject({ status: "confirmed", transactionHash: HASH });
+  expect(after?.deploys[0]).toMatchObject({ status: "confirmed", transactionHash: HASH, bundleUuid: BUNDLE });
 });
 
 test("worker marks remaining chains failed when the lane stops early", async () => {
-  /* queue [84532, 421614]; lane reports failed(84532, "boom") only; expect both rows failed, second error "not attempted: 84532 failed" */
+  const store = new MemoryStore();
+  const { intent } = await store.createIntent(newIntent({ chainIds: [84532, 421614] }), limits);
+  await store.queueDeploys(intent.id, [84532, 421614], "browser:x", 10n);
+  const lane: DeployLane = { deploy: vi.fn(async (_i, _c, report) => { await report.failed(84532, "boom"); }) };
+  await createSponsorWorker({ store, verifier: { verify: vi.fn() }, lane, policy }).runOnce();
+  const after = await store.getIntent(intent.id);
+  expect(after?.deploys.map((d) => [d.status, d.error])).toEqual([["failed", "boom"], ["failed", "not attempted: an earlier chain failed"]]);
 });
 
-test("worker refuses a relayr intent when no relayr lane is configured", async () => {
-  /* queue transport "relayr"; expect rows failed with "relayr lane is not configured" */
+test("worker records a verifier rejection as a failed row", async () => {
+  /* lane reports confirmed; verifier.verify rejects with DeploymentVerificationError("bad"); expect the row failed with "bad" and no deployment recorded */
 });
 ```
 
-- [ ] **Step 5: Implement worker.ts**
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `npx vitest run test/sponsor/worker.test.ts`
+Expected: FAIL (module missing).
+
+- [ ] **Step 3: Implement chain.ts and worker.ts**
 
 ```ts
-export function createSponsorWorker({ store, verifier, lanes, policy, leaseSeconds = 300 }) {
+export function createSponsorWorker({ store, verifier, lane, policy, leaseSeconds = 900 }) {
   let running = false; let stopped = false; let pending = false;
 
   async function runOnce() {
@@ -892,24 +817,25 @@ export function createSponsorWorker({ store, verifier, lanes, policy, leaseSecon
     for (const { intentId, chainIds } of claims) {
       const intent = await store.getIntent(intentId);
       if (!intent) continue;
-      const transport = intent.deploys[0]?.transport ?? "direct";
-      const lane = lanes[transport];
       const done = new Set<number>();
       const report: LaneReport = {
-        sent: (chainId, transactionHash, bundleUuid) => store.updateDeploy(intentId, chainId, { status: "sent", transactionHash, ...(bundleUuid ? { bundleUuid } : {}) }),
+        sent: (chainId, transactionHash, bundleUuid) => store.updateDeploy(intentId, chainId, { status: "sent", transactionHash, bundleUuid }),
         confirmed: async (chainId, transactionHash, projectId, spentWei) => {
-          const call = intent.envelope.deploymentCalls.find((c) => c.chainId === chainId)!;
-          await verifier.verify({ chainId, projectId, transactionHash, deploymentVersion: intent.envelope.deploymentVersion, call });
-          await store.recordDeployment(intentId, { chainId, projectId, transactionHash });
-          await store.updateDeploy(intentId, chainId, { status: "confirmed", transactionHash, spentWei });
+          try {
+            const call = intent.envelope.deploymentCalls.find((c) => c.chainId === chainId)!;
+            await verifier.verify({ chainId, projectId, transactionHash, deploymentVersion: intent.envelope.deploymentVersion, call });
+            await store.recordDeployment(intentId, { chainId, projectId, transactionHash });
+            await store.updateDeploy(intentId, chainId, { status: "confirmed", transactionHash, spentWei });
+          } catch (error) {
+            await store.updateDeploy(intentId, chainId, { status: "failed", transactionHash, error: error instanceof Error ? error.message : String(error) });
+          }
           done.add(chainId);
         },
         failed: async (chainId, error) => { await store.updateDeploy(intentId, chainId, { status: "failed", error }); done.add(chainId); },
       };
-      if (!lane) { for (const c of chainIds) await report.failed(c, `${transport} lane is not configured`); continue; }
       try { await lane.deploy(intent, chainIds, report); }
       catch (error) { const first = chainIds.find((c) => !done.has(c)); if (first !== undefined) await report.failed(first, error instanceof Error ? error.message : String(error)); }
-      for (const c of chainIds) if (!done.has(c)) await store.updateDeploy(intentId, c, { status: "failed", error: `not attempted: an earlier chain failed` });
+      for (const c of chainIds) if (!done.has(c)) await store.updateDeploy(intentId, c, { status: "failed", error: "not attempted: an earlier chain failed" });
     }
   }
 
@@ -926,30 +852,31 @@ export function createSponsorWorker({ store, verifier, lanes, policy, leaseSecon
 }
 ```
 
-`recordDeployment` throws `ConflictError` if another sender got there first; let it propagate into the catch so the row fails with that message.
+`recordDeployment` throws `ConflictError` when another sender already deployed that chain; the `confirmed` handler turns that into a failed row with the conflict message, which is the "one sender per draft" refusal after the fact. The lease is 15 minutes because a Relayr bundle can take several minutes to execute across chains.
 
-- [ ] **Step 6: Run, commit**
+- [ ] **Step 4: Run, commit**
 
 Run: `npx vitest run test/sponsor && npx tsc --noEmit`
 
 ```bash
-git add src/sponsor/direct.ts src/sponsor/worker.ts test/sponsor/direct.test.ts test/sponsor/worker.test.ts
-git commit -m "Deploy sponsored drafts directly on testnets
+git add src/sponsor/chain.ts src/sponsor/worker.ts src/deploymentVerifier.ts test/sponsor/worker.test.ts
+git commit -m "Add the sponsored deploy worker
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 7: Relayr lane for mainnet drafts
+### Task 7: Relayr lane for both network families
 
 **Files:**
 - Create: `extensions/jbcenter/src/sponsor/relayr.ts`
-- Modify: `extensions/jbcenter/src/rest/sponsorship/provider.ts` (export `parseQuote` and `parseStatus` if they are not already exported)
+- Modify: `extensions/jbcenter/src/rest/sponsorship/provider.ts` (add `parseFamilyQuote`; export `parseStatus` if it is not already exported)
 - Test: `extensions/jbcenter/test/sponsor/relayr.test.ts`
 
 **Interfaces:**
-- Consumes: `SponsorshipChain` (`src/rest/sponsorship/chain.ts`: `prepare(catalog, call, account, stepIndex, deadline)`, `signed(request, signature, preceding)`), `RelayrProvider` (`create`, `status`), `FORWARD_REQUEST_TYPES`, `verifyRelayrPaymentEvent` (`paymentContract.ts`), `RELAYR_PAYMENT_ADDRESS`, the `ContractCatalog` instance built in `src/index.ts` for the REST runtime, `RestRpc`.
+- Consumes: `SponsorshipChain` (`src/rest/sponsorship/chain.ts`: `prepare(catalog, call, account, stepIndex, deadline)`, `signed(request, signature, preceding)`; it has no mainnet gate), `RelayrProvider` (`create`, `status`; one API origin for both families), `FORWARD_REQUEST_TYPES`, `RELAYR_MAINNET_CHAINS`, `RELAYR_TESTNET_CHAINS`, `verifyRelayrPaymentEvent` (`paymentContract.ts`), the `ContractCatalog` from `getContractCatalog()` (`src/rest/contracts/catalog.ts`; its pinned manifest `src/rest/contracts/data/catalog.json` covers all eight chains), `RestRpc`.
+- Produces (in `provider.ts`): `parseFamilyQuote(value: unknown, entries: RelayrEntry[], now: number, maximumValue: bigint): RelayrQuote` — like `parseQuote`, but the payment chains are whichever of `RELAYR_MAINNET_CHAINS` or `RELAYR_TESTNET_CHAINS` contains every entry's chain (the same family rule `parseIndependentQuoteBinding` already applies), failing `RELAYR_INVALID_QUOTE` for a mixed set.
 - Produces: `createRelayrLane(options: { chain: SponsorshipChain; catalog: ContractCatalog; provider: RelayrProvider; rpcUrls: Map<number, string>; signer: SponsorSigner; policy: SponsorPolicy; projectsAddress: Address; now?: () => number }): DeployLane`.
 
 - [ ] **Step 1: Failing test**
@@ -958,6 +885,7 @@ Fake `chain` (`prepare` returns a `PreparedForwardRequest` fixture per chain wit
 
 ```ts
 test("relayr lane signs forward requests with the sponsor key, prepays, polls and reports", async () => {
+  // run once with intent(8453, 10) and once with intent(84532, 11155420); the fake provider's payment_info chain follows the family
   const lane = createRelayrLane({ chain, catalog, provider, rpcUrls, signer, policy, projectsAddress: PROJECTS, now: () => 1_700_000_000_000 });
   await lane.deploy(intent(8453, 10), [8453, 10], report);
   expect(chain.prepare).toHaveBeenCalledTimes(2);
@@ -1000,7 +928,7 @@ export function createRelayrLane({ chain, catalog, provider, rpcUrls, signer, po
           });
           entries.push(await chain.signed(prepared, signature));
         }
-        const quote = parseQuote(await provider.create(entries), entries, now(), reservationWei(policy, chainIds.length));
+        const quote = parseFamilyQuote(await provider.create(entries), entries, now(), reservationWei(policy, chainIds.length));
         const payment = quote.payments.find((p) => rpcUrls.has(p.chainId)) ?? quote.payments[0];
         if (!payment) return failAll("relayr returned no payment option");
         const paymentClient = createPublicClient({ transport: http(rpcUrls.get(payment.chainId)!) });
@@ -1041,15 +969,15 @@ export function createRelayrLane({ chain, catalog, provider, rpcUrls, signer, po
 }
 ```
 
-Share `PROJECTS_ABI` and `CREATE_TOPIC` with `direct.ts` by moving them to `src/sponsor/chain.ts`. `parseQuote` rejects any quote above the fourth argument, which is how the reservation cap is enforced. Relayr executes the forwarder, so the top-level `to` is the forwarder and the verifier's trace path handles it; mainnets have trace upstreams already.
+`PROJECTS_ABI` and `CREATE_TOPIC` come from `src/sponsor/chain.ts` (Task 6). `parseFamilyQuote` rejects any quote above the fourth argument, which is how the reservation cap is enforced. Relayr executes the forwarder, so the top-level `to` is the forwarder and the verifier's trace path handles it; Task 4 configured every chain, and the Dwellir upstreams serve `debug_traceTransaction` on testnets as well as mainnets (confirm on Base Sepolia during Task 15 before relying on it).
 
 - [ ] **Step 4: Run, commit**
 
 Run: `npx vitest run test/sponsor && npx tsc --noEmit`
 
 ```bash
-git add src/sponsor/relayr.ts src/sponsor/chain.ts src/sponsor/direct.ts src/rest/sponsorship/provider.ts test/sponsor/relayr.test.ts
-git commit -m "Deploy sponsored mainnet drafts through Relayr
+git add src/sponsor/relayr.ts src/rest/sponsorship/provider.ts test/sponsor/relayr.test.ts
+git commit -m "Deploy sponsored drafts through Relayr on both families
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -1077,15 +1005,12 @@ if (sponsorKey) {
   const signer = privateKeyToAccount(sponsorKey as Hex);
   const policy = readSponsorPolicy(process.env);
   const rpcUrls = new Map([...upstreams].map(([chainId, urls]) => [chainId, urls[0]]));
-  const lanes = {
-    direct: createDirectLane({ rpcUrls, signer, policy, projectsAddress: PROJECTS }),
-    ...(catalog ? { relayr: createRelayrLane({ chain: new SponsorshipChain(restRpc, DEFAULT_SPONSORSHIP_POLICY), catalog, provider: new RelayrProvider(), rpcUrls, signer, policy, projectsAddress: PROJECTS }) } : {}),
-  };
-  sponsor = createSponsorWorker({ store, verifier, lanes, policy });
+  const lane = createRelayrLane({ chain: new SponsorshipChain(restRpc, DEFAULT_SPONSORSHIP_POLICY), catalog, provider: new RelayrProvider(), rpcUrls, signer, policy, projectsAddress: PROJECTS });
+  sponsor = createSponsorWorker({ store, verifier, lane, policy });
 }
 ```
 
-`upstreams` is the Dwellir map already built in `index.ts`; `catalog` and `restRpc` are the REST runtime's contract catalog and RPC (locate the symbols where `createRestRuntime` is configured and hoist them so they are in scope). Pass `...(sponsor ? { sponsor } : {})` into `createApp`. Call `sponsor?.stop()` in the shutdown handler. Export `PROJECTS` from `deploymentVerifier.ts` instead of duplicating.
+`upstreams` is the Dwellir map already built in `index.ts`; `catalog` is `getContractCatalog()` and `restRpc` is the REST runtime's RPC (`src/rest/runtime.ts` builds both; hoist or re-create them so they are in scope). `DEFAULT_SPONSORSHIP_POLICY.allowedChainIds` is only enforced by `RelayrSponsorshipService`, not by `SponsorshipChain`, so the same chain helper serves testnets. Pass `...(sponsor ? { sponsor } : {})` into `createApp`. Call `sponsor?.stop()` in the shutdown handler. Export `PROJECTS` from `deploymentVerifier.ts` instead of duplicating.
 
 - [ ] **Step 2: Docs**
 
@@ -1118,7 +1043,7 @@ gh pr create --title "Draft projects: lifecycle, sponsored deploys" --body "..."
 - Produces:
   ```ts
   export type JBCenterIntentStatus = "undeployed" | "deployed" | "superseded" | "withdrawn";
-  export type JBCenterIntentDeploy = { chainId: number; transport: "direct" | "relayr"; status: "queued" | "sent" | "confirmed" | "failed"; transactionHash: Hex | null; bundleUuid: string | null; error: string | null; createdAt: string; updatedAt: string };
+  export type JBCenterIntentDeploy = { chainId: number; status: "queued" | "sent" | "confirmed" | "failed"; transactionHash: Hex | null; bundleUuid: string | null; error: string | null; createdAt: string; updatedAt: string };
   // JBCenterIntent gains: status: JBCenterIntentStatus; supersedes: string | null; supersededBy: string | null; withdrawnAt: string | null; deploys: JBCenterIntentDeploy[]
   // JBCenterIntentInput gains: supersedes?: string
   export const JBCENTER_SPONSORED_CHAIN_IDS: readonly number[]; // [10, 8453, 42161, 11155111, 11155420, 84532, 421614]
@@ -1141,7 +1066,7 @@ test("withdrawIntent posts the signature and returns the intent", async () => {
 });
 
 test("requestDeploy returns the queued rows", async () => {
-  const deploys = [{ chainId: 84532, transport: "direct", status: "queued", transactionHash: null, bundleUuid: null, error: null, createdAt: "2026-09-21T00:00:00.000Z", updatedAt: "2026-09-21T00:00:00.000Z" }];
+  const deploys = [{ chainId: 84532, status: "queued", transactionHash: null, bundleUuid: null, error: null, createdAt: "2026-09-21T00:00:00.000Z", updatedAt: "2026-09-21T00:00:00.000Z" }];
   const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ deploys }, { status: 202 }));
   await expect(createJBCenterClient({ fetch: fetchMock }).requestDeploy(intent().id)).resolves.toEqual({ deploys });
 });
@@ -1431,8 +1356,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Files:** none (ops).
 
-- [ ] **Step 1:** Generate a sponsor key, fund it on Base Sepolia and OP Sepolia (0.01 ETH each), set `SPONSOR_SIGNER_KEY` and the policy vars on the Railway `dev` environment of `juice-center`, deploy.
-- [ ] **Step 2:** With the SDK, publish a two-chain testnet draft from a fresh EOA, call `requestDeploy`, poll `getIntent` until both rows are `confirmed`, and confirm both projects exist on chain with the same owner and the expected ruleset start. Record the intent id and both tx hashes in `tasks/todo.md`.
+- [ ] **Step 1:** Generate a sponsor key, fund it on Base Sepolia and OP Sepolia (0.01 ETH each; Relayr's testnet prepayment lands on one of them), set `SPONSOR_SIGNER_KEY` and the policy vars on the Railway `dev` environment of `juice-center`, deploy.
+- [ ] **Step 2:** With the SDK, publish a two-chain testnet draft from a fresh EOA, call `requestDeploy`, poll `getIntent` until both rows are `confirmed` with the same `bundleUuid`, and confirm both projects exist on chain with the same owner, the expected ruleset start, and matching sucker addresses. Confirm the recorded deployments came through the trace path on a testnet. Record the intent id, bundle id and both tx hashes in `tasks/todo.md`.
 - [ ] **Step 3:** Publish a single-chain Base mainnet draft with a real owner, fund the sponsor key on Base with 0.002 ETH, `requestDeploy`, confirm Relayr executes and Center records the deployment through the trace path.
 - [ ] **Step 4:** Confirm `GET /v1/search` no longer lists either draft and that `POST /v1/intents/:id/deploy` on a deployed draft returns 200 with the rows.
 
@@ -1446,5 +1371,5 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ## Self-review notes
 
-- Spec coverage: publish limits (T3), supersede and withdraw (T1, T2), sponsored deploy policy and route (T5), Relayr on mainnets and direct on testnets (T6, T7), one-sender refusal (T5 checks `status === "undeployed"`; lanes stop at the first failed chain), fast-path verification and testnet verifier configs (T4), SDK decoder, merger, `ensureDeployed`, route convention (T10 to T12), skill (T14), rehearsal (T15). Client work is deferred to the follow-on plans by design.
+- Spec coverage: publish limits (T3), supersede and withdraw (T1, T2), sponsored deploy policy and route (T5), one Relayr lane for both families (T6, T7), one-sender refusal (T5 checks `status === "undeployed"`; the lane stops at the first failed chain; `recordDeployment` conflicts fail the row), fast-path verification and testnet verifier configs (T4), SDK decoder, merger, `ensureDeployed`, route convention (T10 to T12), skill (T14), rehearsal (T15). Client work is deferred to the follow-on plans by design.
 - Known ceiling: the worker runs in every Center replica; `claimQueuedDeploys` relies on the lease and `SKIP LOCKED` semantics. If Center ever runs more than one replica, add `pg_advisory_xact_lock(hashtext('sponsor-worker'))` around the claim.
