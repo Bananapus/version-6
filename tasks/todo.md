@@ -73,6 +73,8 @@ Spec: docs/superpowers/specs/2026-09-21-project-intents-design.md
 Plan (phase 1, Center + SDK + skill): docs/superpowers/plans/2026-09-21-project-intents-phase-1.md
 - [x] Phase 1 tasks 1-13 merged 2026-09-21: jbcenter #23 (91ebed8, main only; `dev` not merged), juice-sdk-v4 #139 (678c1ae, changeset pending Version Packages), juicebox-skills #6 (f6bff2c)
 - [x] Task 14 dev rehearsal PASSED 2026-09-21 after three fixes (jbcenter #26 rollup payment chain, #28 funded-rollup choice + fresh SponsorshipChain + deferral backoff, #30 forwarded-call verification): intent 5ce6df07 → one Relayr bundle, prepayment on OP Sepolia 0.00021 ETH, Base Sepolia project #27 + OP Sepolia project #11 confirmed and recorded in 48 s; intent 378d4644 recorded via the self-paid route (Base Sepolia #26, OP Sepolia #10)
+- [x] Production enabled 2026-09-21: sponsor EOA 0x795287b5E75B3Ce7D7d2Da334Bf9557137d5569B (0.005 ETH on Base from jango), SPONSOR_PAUSED=0 on juice-central; check intent 7e46e01d → Base project #16 (tx 0xc639985b…) in 38 s for 0.000109 ETH
+- [ ] Beep terminal creation via intents (design presented 2026-09-21, awaiting approval); Homerun, juicebox.money, revnet.money deferred
 - [ ] Follow-on: Center returns the recording sender on deployments so the SDK can refuse to resume another wallet's partial self-paid deploy
 - [ ] Phase 2 plan: juicebox.money + revnet.money
 - [ ] Phase 3 plan: homerun, succulent, JBSticky, juicescan
