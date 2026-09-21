@@ -32,6 +32,7 @@ Repo: github.com/mejango/homerun (standalone clone at extensions/homerun, not a 
 - [x] FIXED constructor: hook must trust the same forwarder; _requireSuckers pins INCOME sucker minGas; natspec corrected (allowlist = pay gate; "closed" is point-in-time; cash-out delay + close-every-chain sequencing documented)
 - [x] FIXED deploy tooling: propose/verify refuse dirty checkout; pins cover all 11 siblings + 5 node_modules packages (tested from artifact metadata.sources); one-address-per-group check; SDK registry cross-check; REVOwner + USD price feed probes; Deploy.run idempotent
 - [x] jango's calls: start INCOME's stage ~10 min ahead (client lead) → no revnet cash-out delay; vault funded by permissionless `fundInitialAllocation` once the stage starts (late chains atomic); `_requireClosedFund` removed. 129 forge tests, 2156/2157 vitest (1 pre-existing Node-20 `Promise.withResolvers` failure), rehearsals green on 8 chains (deployer 0x936a96bC… / 0xC31180AC…)
+- [x] Codex review finding fixed: permissionless REVOwner.autoIssueFor could strand the allocation in the deployer → mintInitialAllocation forwards the whole held balance (committed)
 - [ ] Open by design: reservedBps may be 100%
 ## Review
 Root cause of the one real bug: JBController scopes `deployERC20For`'s salt by `_msgSender()`, which is the shared HomerunDeployer for every user, so the caller never entered the token's CREATE2 preimage while it did enter the sucker's. Everything else the review raised is owner-trust or documentation. Working tree is uncommitted; another session's "SDK connect 0.5.5/0.5.6" commits swept in the package.json/lockfile edits.
@@ -71,7 +72,7 @@ reply carries public tokens only. Open: a lost framed approve response 409-loops
 Spec: docs/superpowers/specs/2026-09-21-project-intents-design.md
 Plan (phase 1, Center + SDK + skill): docs/superpowers/plans/2026-09-21-project-intents-phase-1.md
 - [x] Phase 1 tasks 1-13 merged 2026-09-21: jbcenter #23 (91ebed8, main only; `dev` not merged), juice-sdk-v4 #139 (678c1ae, changeset pending Version Packages), juicebox-skills #6 (f6bff2c)
-- [ ] Task 14 dev rehearsal (2026-09-21 first run FAILED: Relayr quoted the prepayment on Sepolia L1, whose base fee 1.15 gwei exceeds SPONSOR_MAX_FEE_PER_GAS 1 gwei → tx stuck → 180 s receipt timeout; fix = prefer L2 payment chains; intent d19812b0 is a dead end, retry with dad0f3f7): merge jbcenter main → dev, fund a sponsor EOA on Base Sepolia + OP Sepolia, set SPONSOR_SIGNER_KEY + policy vars on Railway dev, single replica, confirm debug_traceTransaction on testnet Dwellir hosts, publish a two-chain testnet intent and requestDeploy
+- [x] Task 14 dev rehearsal PASSED 2026-09-21 after three fixes (jbcenter #26 rollup payment chain, #28 funded-rollup choice + fresh SponsorshipChain + deferral backoff, #30 forwarded-call verification): intent 5ce6df07 → one Relayr bundle, prepayment on OP Sepolia 0.00021 ETH, Base Sepolia project #27 + OP Sepolia project #11 confirmed and recorded in 48 s; intent 378d4644 recorded via the self-paid route (Base Sepolia #26, OP Sepolia #10)
 - [ ] Follow-on: Center returns the recording sender on deployments so the SDK can refuse to resume another wallet's partial self-paid deploy
 - [ ] Phase 2 plan: juicebox.money + revnet.money
 - [ ] Phase 3 plan: homerun, succulent, JBSticky, juicescan
