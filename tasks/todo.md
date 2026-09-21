@@ -1,17 +1,18 @@
 # Homerun: mint the initial INCOME to the Owner, drop the vault (2026-09-21, jango's call)
 
-"Promise, not a claim": INCOME's auto-issuance goes to the FUND owner (= INCOME operator), who settles the published allocation offchain. Removes HomerunInitialIncomeVault, HomerunDeployerLib, Merkle roots/proofs, funding step.
+"Promise, not a claim": INCOME's auto-issuance goes to the FUND owner (= INCOME operator), who settles the published allocation offchain. Removed HomerunInitialIncomeVault, HomerunDeployerLib, Merkle roots/proofs, funding step.
 
-## Contracts (me)
-- [ ] HomerunInitialIncomeAllocation: drop merkleRoot, leafCount
-- [ ] HomerunDeployer: beneficiary = _msgSender(); remove vault/lib/fundInitialAllocation/initialAllocationVaultOf/distributionIdFor/DISTRIBUTION_TYPEHASH/FUND_TOKEN_CODE_HASH; IncomeDeployed(fund, income, owner, fundToken); verify REV recorded the owner's entitlement
-- [ ] Delete vault + interface + lib + vault tests; adapt unit + integration tests (mint via REVOwner.autoIssueFor to the owner)
-- [ ] Deployment scripts: no library (hook → deployer), immutable count 14, tests/docs/runner fields
-- [ ] scripts/prepare-income-release.mts + docs/INCOME_INTEGRATION.md + DEPLOYMENT.md
+## Contracts
+- [x] HomerunInitialIncomeAllocation: dropped merkleRoot, leafCount
+- [x] HomerunDeployer: auto-issuance beneficiary = _msgSender(); removed vault/lib/fundInitialAllocation/initialAllocationVaultOf/distributionIdFor/DISTRIBUTION_TYPEHASH/FUND_TOKEN_CODE_HASH; IncomeDeployed(fund, income, owner, fundToken); launch verifies REV recorded the owner's entitlement. Runtime 16,256 B.
+- [x] Deleted vault + interface + lib + vault tests; unit/integration tests mint via REVOwner.autoIssueFor to the owner (80/80)
+- [x] Deployment scripts: hook → deployer only (no library), immutable count 14; runner fields; DEPLOYMENT.md
+- [x] scripts/prepare-income-release.mts + docs/INCOME_RELEASE_MANIFEST.json regenerated + docs/INCOME_INTEGRATION.md
 ## Client (subagent)
-- [ ] ABI/struct, manifest v3 without roots/proofs, delete claim page/allocation-state/merkle libs + tests, "mint initial INCOME to the owner" action, launch verification via amountToAutoIssue, README/docs wording
+- [x] ABI/struct, manifest v3 without roots/proofs, deleted claim page/allocation-state/merkle libs + tests, InitialIncomeMint panel (REVOwner.autoIssueFor to the owner), launch verification via amountToAutoIssue, README/docs
 ## Gates
-- [ ] forge test, test:deployment, vitest, typecheck, lint, next build, rehearsals on 8 chains
+- [x] forge test 80/80, test:deployment, vitest 2009/2010 (Node-20 Promise.withResolvers only), typecheck, lint, next build, rehearsals on 8 chains (hook 0x99cC605F…, deployer 0xA23497B9… mainnets / 0xd94A452e… testnets)
+- [x] jango: pay the CURRENT owner → auto-issuance beneficiary is the deployer; permissionless `mintInitialAllocation(fundProjectId)` forwards to `JBProjects.ownerOf` at mint time (deployer 17.6 KB; 0x1afdF3b6… mainnets / 0x030f86Dc… testnets)
 
 # Homerun contracts: in-repo Sphinx rollout + adversarial review (2026-09-21)
 
@@ -70,7 +71,7 @@ reply carries public tokens only. Open: a lost framed approve response 409-loops
 Spec: docs/superpowers/specs/2026-09-21-project-intents-design.md
 Plan (phase 1, Center + SDK + skill): docs/superpowers/plans/2026-09-21-project-intents-phase-1.md
 - [x] Phase 1 tasks 1-13 merged 2026-09-21: jbcenter #23 (91ebed8, main only; `dev` not merged), juice-sdk-v4 #139 (678c1ae, changeset pending Version Packages), juicebox-skills #6 (f6bff2c)
-- [ ] Task 14 dev rehearsal: merge jbcenter main → dev, fund a sponsor EOA on Base Sepolia + OP Sepolia, set SPONSOR_SIGNER_KEY + policy vars on Railway dev, single replica, confirm debug_traceTransaction on testnet Dwellir hosts, publish a two-chain testnet intent and requestDeploy
+- [ ] Task 14 dev rehearsal (2026-09-21 first run FAILED: Relayr quoted the prepayment on Sepolia L1, whose base fee 1.15 gwei exceeds SPONSOR_MAX_FEE_PER_GAS 1 gwei → tx stuck → 180 s receipt timeout; fix = prefer L2 payment chains; intent d19812b0 is a dead end, retry with dad0f3f7): merge jbcenter main → dev, fund a sponsor EOA on Base Sepolia + OP Sepolia, set SPONSOR_SIGNER_KEY + policy vars on Railway dev, single replica, confirm debug_traceTransaction on testnet Dwellir hosts, publish a two-chain testnet intent and requestDeploy
 - [ ] Follow-on: Center returns the recording sender on deployments so the SDK can refuse to resume another wallet's partial self-paid deploy
 - [ ] Phase 2 plan: juicebox.money + revnet.money
 - [ ] Phase 3 plan: homerun, succulent, JBSticky, juicescan
