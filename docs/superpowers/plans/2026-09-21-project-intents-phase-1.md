@@ -849,6 +849,7 @@ test("sponsorable chain sets", () => {
   expect(isSponsorable([1, 8453])).toBe(false);
   expect(isSponsorable([])).toBe(false);
 });
+```
 
 Also update the `intent()` fixture with `deploys: []` and assert `getIntent` accepts a non-empty `deploys` list and rejects a malformed deploy row.
 
