@@ -1,24 +1,39 @@
+# Homerun: mint the initial INCOME to the Owner, drop the vault (2026-09-21, jango's call)
+
+"Promise, not a claim": INCOME's auto-issuance goes to the FUND owner (= INCOME operator), who settles the published allocation offchain. Removes HomerunInitialIncomeVault, HomerunDeployerLib, Merkle roots/proofs, funding step.
+
+## Contracts (me)
+- [ ] HomerunInitialIncomeAllocation: drop merkleRoot, leafCount
+- [ ] HomerunDeployer: beneficiary = _msgSender(); remove vault/lib/fundInitialAllocation/initialAllocationVaultOf/distributionIdFor/DISTRIBUTION_TYPEHASH/FUND_TOKEN_CODE_HASH; IncomeDeployed(fund, income, owner, fundToken); verify REV recorded the owner's entitlement
+- [ ] Delete vault + interface + lib + vault tests; adapt unit + integration tests (mint via REVOwner.autoIssueFor to the owner)
+- [ ] Deployment scripts: no library (hook → deployer), immutable count 14, tests/docs/runner fields
+- [ ] scripts/prepare-income-release.mts + docs/INCOME_INTEGRATION.md + DEPLOYMENT.md
+## Client (subagent)
+- [ ] ABI/struct, manifest v3 without roots/proofs, delete claim page/allocation-state/merkle libs + tests, "mint initial INCOME to the owner" action, launch verification via amountToAutoIssue, README/docs wording
+## Gates
+- [ ] forge test, test:deployment, vitest, typecheck, lint, next build, rehearsals on 8 chains
+
 # Homerun contracts: in-repo Sphinx rollout + adversarial review (2026-09-21)
 
 Repo: github.com/mejango/homerun (standalone clone at extensions/homerun, not a submodule). Pattern source: extensions/JBSticky.
 
 ## Port the JBSticky deployment pattern
-- [ ] foundry.toml: bytecode_hash none, storageLayout output, memory/gas limits, fs_permissions (sibling deployments/, ./deployments, ./cache), rpc_endpoints, [profile.deploy] isolate=false, libs += node_modules
-- [ ] remappings.txt: @sphinx-labs/contracts; package.json: @sphinx-labs/plugins 0.33.3 devDep + deploy:* / test:deployment scripts; sphinx.lock copied from deploy-all-v6
-- [ ] script/helpers/HomerunDeployment.sol: canonical CREATE2 factory + runtime check; loads per-group protocol artifacts (JBController, REVDeployer, JBOmnichainDeployer, JBRouterTerminalRegistry from the sibling deployments/ trees, USDC table); predicts lib → hook → deployer; deploys missing; verifies runtime (immutables + library link refs masked) and every immutable binding; writes deployments/<network>/{simulation,verified}.json
-- [ ] script/structs/*.sol; script/Deploy.s.sol (Sphinx, v6-deployment, expected Safe), Rehearse.s.sol, Verify.s.sol
-- [ ] script/deploy.mjs + deploy.sh: preflight / rehearse / propose / verify per group; pins the 7 sibling checkouts the contracts compile against; absolute remappings (shared with scripts/test-contracts.mjs)
-- [ ] test/deployment: Foundry harness tests (clean, repeat, partial, runtime/immutable/link tampering, chain-same prediction, artifact loading, manifest) + node runner/config tests
-- [ ] DEPLOYMENT.md, README pointer, .env.example vars, .gitignore
-- [ ] Verify: forge test (all), node test:deployment, forge build --sizes, rehearsal against a live testnet RPC if deploy-all-v6/.env has one
+- [x] foundry.toml, remappings (+@sphinx-labs), package.json (sphinx 0.33.3 devDep, deploy:*/test:deployment scripts), sphinx.lock, .gitignore, .env.example
+- [x] script/helpers/HomerunDeployment.sol (CREATE2 factory check, sibling artifact loading per group, lib→hook→deployer prediction with manual `__$…$__` linking, immutable-masked runtime + binding verification, manifests)
+- [x] script/Deploy.s.sol (Sphinx v6-deployment, expected Safe), Rehearse.s.sol, Verify.s.sol; script/deploy.mjs + deploy.sh; scripts/forge-remappings.mjs + forge.sh
+- [x] test/deployment: 22 Foundry harness tests + 16 node runner/config tests
+- [x] DEPLOYMENT.md, README pointers
+- [x] Verified: 133/133 forge tests, node tests green, fmt + lint clean; live rehearsals green on all 8 chains (lib 0x73f04ad0…, hook 0x99cC605F…; deployer 0x9655a972… mainnets / 0x26c68acc… testnets)
 
 ## Adversarial review of the contracts
-- [ ] Parallel review agents: (1) HomerunDeployer launch/INCOME path + revnet interplay, (2) snapshot/vault Merkle + economics, (3) allowlist hook + ERC2771/payer tracking + omnichain deployer interplay, (4) deployment/CREATE2/link/immutable surface
-- [ ] Independently verify every finding against code (+ PoC test where cheap); triage with the operational-execution playbook
-- [ ] Report: confirmed findings ranked, fixes applied or explicitly deferred
-
+- [x] 14 agents (8 pashov v2 + 5 pashov v3 + deployment surface); every one converged on the same FINDING
+- [x] FIXED launchFundFor: FUND token CREATE2 salt was scoped to the deployer only → public-salt squatting bricked linked launches (PoC test). Now scoped to (caller, owner, salt) for suckers and token.
+- [x] FIXED constructor: hook must trust the same forwarder; _requireSuckers pins INCOME sucker minGas; natspec corrected (allowlist = pay gate; "closed" is point-in-time; cash-out delay + close-every-chain sequencing documented)
+- [x] FIXED deploy tooling: propose/verify refuse dirty checkout; pins cover all 11 siblings + 5 node_modules packages (tested from artifact metadata.sources); one-address-per-group check; SDK registry cross-check; REVOwner + USD price feed probes; Deploy.run idempotent
+- [x] jango's calls: start INCOME's stage ~10 min ahead (client lead) → no revnet cash-out delay; vault funded by permissionless `fundInitialAllocation` once the stage starts (late chains atomic); `_requireClosedFund` removed. 129 forge tests, 2156/2157 vitest (1 pre-existing Node-20 `Promise.withResolvers` failure), rehearsals green on 8 chains (deployer 0x936a96bC… / 0xC31180AC…)
+- [ ] Open by design: reservedBps may be 100%
 ## Review
-(filled at the end)
+Root cause of the one real bug: JBController scopes `deployERC20For`'s salt by `_msgSender()`, which is the shared HomerunDeployer for every user, so the caller never entered the token's CREATE2 preimage while it did enter the sucker's. Everything else the review raised is owner-trust or documentation. Working tree is uncommitted; another session's "SDK connect 0.5.5/0.5.6" commits swept in the package.json/lockfile edits.
 
 # kmac88 feedback (2026-09-20)
 
@@ -54,7 +69,9 @@ reply carries public tokens only. Open: a lost framed approve response 409-loops
 ## Project intents (2026-09-21)
 Spec: docs/superpowers/specs/2026-09-21-project-intents-design.md
 Plan (phase 1, Center + SDK + skill): docs/superpowers/plans/2026-09-21-project-intents-phase-1.md
-- [ ] Phase 1 tasks 1-14 (Center lifecycle + sponsor, SDK surface, skill, dev rehearsal)
+- [x] Phase 1 tasks 1-13 merged 2026-09-21: jbcenter #23 (91ebed8, main only; `dev` not merged), juice-sdk-v4 #139 (678c1ae, changeset pending Version Packages), juicebox-skills #6 (f6bff2c)
+- [ ] Task 14 dev rehearsal: merge jbcenter main → dev, fund a sponsor EOA on Base Sepolia + OP Sepolia, set SPONSOR_SIGNER_KEY + policy vars on Railway dev, single replica, confirm debug_traceTransaction on testnet Dwellir hosts, publish a two-chain testnet intent and requestDeploy
+- [ ] Follow-on: Center returns the recording sender on deployments so the SDK can refuse to resume another wallet's partial self-paid deploy
 - [ ] Phase 2 plan: juicebox.money + revnet.money
 - [ ] Phase 3 plan: homerun, succulent, JBSticky, juicescan
 - [ ] Phase 4 plan: eth.shop, ethis.money, JBChat read side
