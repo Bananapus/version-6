@@ -1,22 +1,21 @@
-# Draft Projects, Phase 1 (Center + SDK + skill) Implementation Plan
+# Project Intents, Phase 1 (Center + SDK + skill) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make juicebox.center able to hold a project draft through its whole life (publish, supersede, withdraw, sponsored or self-paid deploy, redirect) and give every webclient one SDK surface to consume it.
+**Goal:** Make juicebox.center able to carry a project intent from publish through sponsored or self-paid deploy and redirect, and give every webclient one SDK surface to consume it. A submitted intent is firm: no edit, replace or withdraw.
 
-**Architecture:** Center's existing intent store gains lifecycle columns, a deploy queue and a sponsor worker. The worker deploys drafts on both network families through the existing Relayr ERC-2771 wrapper, signed by Center's sponsor key; the testnet setup is the mainnet setup. The SDK core package gains lifecycle calls, a launch-calldata decoder, a search merger and an `ensureDeployed` pre-step. A new skill states the norm.
+**Architecture:** Center's existing intent store gains a deploy queue and a sponsor worker. The worker deploys intents on both network families through the existing Relayr ERC-2771 wrapper, signed by Center's sponsor key; the testnet setup is the mainnet setup. The SDK core package gains lifecycle calls, a launch-calldata decoder, a search merger and an `ensureDeployed` pre-step. A new skill states the norm.
 
 **Tech Stack:** Center: Hono 4, Node 22, Postgres via `pg` raw SQL, viem, vitest. SDK: TypeScript, viem, vitest with 95/95/92/82 coverage floors. Skills: Agent Skills SKILL.md format.
 
-**Spec:** `docs/superpowers/specs/2026-09-21-draft-projects-design.md`
+**Spec:** `docs/superpowers/specs/2026-09-21-project-intents-design.md`
 
 ## Global Constraints
 
 - Sponsored chains: mainnets `10, 8453, 42161` and testnets `11155111, 11155420, 84532, 421614`, all through Relayr at `https://api.relayr.ba5ed.com`. One bundle spans one family. Ethereum mainnet `1` is never sponsored.
-- Exactly one sender deploys every chain of a draft. Center refuses to sponsor an intent whose status is not `undeployed`.
+- Exactly one sender deploys every chain of an intent. Center refuses to sponsor an intent whose status is not `undeployed`.
 - Policy defaults, all Center env vars: `SPONSOR_DEPLOYS_PER_REQUESTER_PER_DAY=5`, `SPONSOR_DAILY_BUDGET_WEI=50000000000000000` (0.05 ETH), `SPONSOR_MAX_GAS=8000000`, `SPONSOR_MAX_FEE_PER_GAS=1000000000` (1 gwei), `SPONSOR_PAUSED=0`. Publish limits `PUBLISH_PER_PUBLISHER_PER_DAY=20`, `PUBLISH_PER_IP_PER_HOUR=60`.
-- The intent signing message stays `Juice Central project intent\nVersion: 1\nContent hash: <hash>`. Existing signatures must keep verifying: an envelope without `supersedes` canonicalizes exactly as before.
-- Withdraw message: `Juice Central withdraw intent\nVersion: 1\nIntent: <id>`.
+- The intent signing message and envelope stay exactly as today, so existing signatures keep verifying.
 - Creation fee is read live from `JBProjects.creationFee()` at `0x6017d1fba9dc279bfa0b03fd931c22e242ab3691` on every chain and sent exactly.
 - Center's Docker build runs `tsc` over `test/`, so test files must type-check. Run touched vitest suites alone against Postgres 16.
 - Never `git add -A`. Stage by explicit path. Commit messages end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
@@ -27,12 +26,11 @@
 ## File map
 
 Center (`extensions/jbcenter`):
-- Create `src/db/migrations/036_intent_lifecycle_and_deploys.sql`: lifecycle columns + `intent_deploys` table.
-- Modify `src/types.ts`: `Intent.status` union, `supersedes`, `supersededBy`, `deploys`, new `IntentDeploy`.
-- Modify `src/store.ts`: `NewIntent.supersedes`, `withdrawIntent`, deploy queue methods.
-- Modify `src/db/postgres.ts`: implement the above; search excludes superseded and withdrawn.
-- Modify `src/intent.ts`: optional `supersedes` in `normalizeEnvelope`; `withdrawMessage(id)`.
-- Modify `src/app.ts`: supersede on publish, withdraw route, publish limits, deploy route, `AppOptions.sponsor`.
+- Create `src/db/migrations/036_intent_deploys.sql`: the `intent_deploys` table.
+- Modify `src/types.ts`: `Intent.deploys`, new `IntentDeploy`.
+- Modify `src/store.ts`: deploy queue methods.
+- Modify `src/db/postgres.ts`: implement the above.
+- Modify `src/app.ts`: publish limits, deploy route, `AppOptions.sponsor`.
 - Modify `src/deploymentVerifier.ts`: top-level fast path, all eight chains.
 - Create `src/sponsor/policy.ts`: chain families, sponsorability, policy parsing.
 - Create `src/sponsor/chain.ts`: shared `PROJECTS_ABI`, `CREATE_TOPIC`, `SponsorSigner`, `DeployLane`, `LaneReport` types.
@@ -42,21 +40,21 @@ Center (`extensions/jbcenter`):
 - Tests: `test/app.test.ts` (MemoryStore + routes), `test/deploymentVerifier.test.ts`, `test/sponsor/*.test.ts`.
 
 SDK (`juice-sdk-connect/packages/core`):
-- Modify `src/jbcenter.ts`: types, `supersedes`, `withdrawIntent`, `requestDeploy`, deploy status validators, `SPONSORED_CHAIN_IDS`, `isSponsorable`.
+- Modify `src/jbcenter.ts`: types, `requestDeploy`, deploy status validators, `SPONSORED_CHAIN_IDS`, `isSponsorable`.
 - Create `src/jbcenter/decode.ts`: `decodeDeploymentCall`.
-- Create `src/jbcenter/merge.ts`: `mergeSearch`, `draftPath`, `deployedUrn`.
+- Create `src/jbcenter/merge.ts`: `mergeSearch`, `intentPath`, `deployedChains`, `isFullyDeployed`.
 - Create `src/jbcenter/ensureDeployed.ts`: `ensureDeployed`.
 - Modify `src/index.ts` and `src/publicSurface.test.ts`.
 
 Skills (`skills/plugins/juicebox-v6`):
-- Create `skills/jb-draft-projects/SKILL.md`; add a row to `README.md`.
+- Create `skills/jb-project-intents/SKILL.md`; add a row to `README.md`.
 
 ---
 
-### Task 1: Migration, types and store for the intent lifecycle and deploy queue
+### Task 1: Migration, types and store for the deploy queue
 
 **Files:**
-- Create: `extensions/jbcenter/src/db/migrations/036_intent_lifecycle_and_deploys.sql`
+- Create: `extensions/jbcenter/src/db/migrations/036_intent_deploys.sql`
 - Modify: `extensions/jbcenter/src/types.ts`
 - Modify: `extensions/jbcenter/src/store.ts`
 - Modify: `extensions/jbcenter/src/db/postgres.ts`
@@ -64,17 +62,12 @@ Skills (`skills/plugins/juicebox-v6`):
 - Test: `extensions/jbcenter/test/postgres.integration.test.ts` (add cases; if the file does not exist, create it following the existing integration test in `extensions/center-signup-fast-2/test/postgres.integration.test.ts`)
 
 **Interfaces:**
-- Produces: `IntentDeploy`, `Intent.status` union, `Store.withdrawIntent`, `Store.queueDeploys`, `Store.listDeploys`, `Store.claimQueuedDeploys`, `Store.updateDeploy`, `Store.sponsoredWeiSince`, `NewIntent.supersedes`.
+- Produces: `IntentDeploy`, `Intent.deploys`, `Store.queueDeploys`, `Store.listDeploys`, `Store.claimQueuedDeploys`, `Store.updateDeploy`, `Store.sponsoredWeiSince`.
 
 - [ ] **Step 1: Write the migration**
 
 ```sql
--- 036_intent_lifecycle_and_deploys.sql
-ALTER TABLE intents ADD COLUMN supersedes uuid REFERENCES intents(id);
-ALTER TABLE intents ADD COLUMN superseded_by uuid REFERENCES intents(id);
-ALTER TABLE intents ADD COLUMN withdrawn_at timestamptz;
-CREATE INDEX intents_supersedes_idx ON intents (supersedes);
-
+-- 036_intent_deploys.sql
 CREATE TABLE intent_deploys (
   intent_id uuid NOT NULL REFERENCES intents(id) ON DELETE CASCADE,
   chain_id bigint NOT NULL,
@@ -97,7 +90,7 @@ CREATE INDEX intent_deploys_created_at_idx ON intent_deploys (created_at DESC);
 
 - [ ] **Step 2: Extend the types**
 
-In `src/types.ts` replace the `Intent` type and add `IntentDeploy`:
+In `src/types.ts` add `IntentDeploy` and the `deploys` field on `Intent`:
 
 ```ts
 export type IntentDeployStatus = "queued" | "sent" | "confirmed" | "failed";
@@ -112,36 +105,24 @@ export type IntentDeploy = {
   updatedAt: string;
 };
 
-export type IntentStatus = "undeployed" | "deployed" | "superseded" | "withdrawn";
-
 export type Intent = IntentMetadata & {
   id: string;
-  status: IntentStatus;
+  status: "undeployed" | "deployed";
   contentHash: Hex;
   envelope: IntentEnvelope;
   publisher: Address;
   signature: Hex;
   createdAt: string;
-  supersedes: string | null;
-  supersededBy: string | null;
-  withdrawnAt: string | null;
   deployments: Deployment[];
   deploys: IntentDeploy[];
 };
 ```
-
-Add `supersedes?: string` to `IntentEnvelope` (optional; absent means none).
 
 - [ ] **Step 3: Extend the Store interface**
 
 In `src/store.ts`:
 
 ```ts
-export type NewIntent = IntentMetadata & {
-  contentHash: Hex; envelope: IntentEnvelope; publisher: Address; signature: Hex;
-  submittedBy: string; jbBytes: number; supersedes: string | null;
-};
-
 export type DeployPatch = {
   status: IntentDeployStatus;
   transactionHash?: Hex;
@@ -157,15 +138,12 @@ export interface Store {
   getIntent(id: string): Promise<Intent | null>;
   search(query: string, limit: number, offset: number): Promise<SearchPage>;
   recordDeployment(intentId: string, value: NewDeployment): Promise<Deployment>;
-  withdrawIntent(id: string, publisher: Address): Promise<Intent | null>;
   queueDeploys(intentId: string, chainIds: number[], requester: string, reservedWeiPerChain: bigint): Promise<IntentDeploy[]>;
   listDeploys(intentId: string): Promise<IntentDeploy[]>;
   claimQueuedDeploys(leaseSeconds: number, limit: number): Promise<{ intentId: string; chainIds: number[] }[]>;
   updateDeploy(intentId: string, chainId: number, patch: DeployPatch): Promise<void>;
   sponsoredWeiSince(since: Date): Promise<bigint>;
 }
-
-export class SupersedeError extends Error {}
 ```
 
 Import `IntentDeploy`, `IntentDeployStatus` from `./types.js`.
@@ -175,32 +153,6 @@ Import `IntentDeploy`, `IntentDeployStatus` from `./types.js`.
 Add to the integration suite (uses a real PG16 via `DATABASE_URL`, following the existing pattern):
 
 ```ts
-test("supersede marks the old intent and search hides it", async () => {
-  const first = await store.createIntent(newIntent({ name: "one" }), limits);
-  const second = await store.createIntent(newIntent({ name: "two", supersedes: first.intent.id }), limits);
-  const old = await store.getIntent(first.intent.id);
-  expect(old?.status).toBe("superseded");
-  expect(old?.supersededBy).toBe(second.intent.id);
-  expect(second.intent.supersedes).toBe(first.intent.id);
-  const page = await store.search("", 10, 0);
-  expect(page.items.map((i) => i.intentId)).toEqual([second.intent.id]);
-});
-
-test("supersede by a different publisher is refused", async () => {
-  const first = await store.createIntent(newIntent({ name: "one" }), limits);
-  await expect(
-    store.createIntent(newIntent({ name: "two", supersedes: first.intent.id, publisher: OTHER }), limits),
-  ).rejects.toBeInstanceOf(SupersedeError);
-});
-
-test("withdraw hides the intent and returns null for a stranger", async () => {
-  const { intent } = await store.createIntent(newIntent({ name: "one" }), limits);
-  expect(await store.withdrawIntent(intent.id, OTHER)).toBeNull();
-  const withdrawn = await store.withdrawIntent(intent.id, intent.publisher);
-  expect(withdrawn?.status).toBe("withdrawn");
-  expect((await store.search("", 10, 0)).items).toEqual([]);
-});
-
 test("deploy queue is idempotent, leases rows, and sums wei", async () => {
   const { intent } = await store.createIntent(newIntent({ name: "one", chainIds: [84532, 421614] }), limits);
   const rows = await store.queueDeploys(intent.id, [84532, 421614], "browser:x", 1000n);
@@ -221,63 +173,20 @@ test("deploy queue is idempotent, leases rows, and sums wei", async () => {
 - [ ] **Step 5: Run to verify they fail**
 
 Run: `cd extensions/jbcenter && npx vitest run test/postgres.integration.test.ts`
-Expected: FAIL on missing methods and columns.
+Expected: FAIL on missing methods and table.
 
 - [ ] **Step 6: Implement in PostgresStore**
 
-Extend `selectIntent` with `supersedes, superseded_by, withdrawn_at`. Extend `toIntent` (the row mapper near line 49) so status is derived:
-
-```ts
-status: row.withdrawn_at ? "withdrawn" : row.superseded_by ? "superseded" : deployments.length ? "deployed" : "undeployed",
-supersedes: row.supersedes ?? null,
-supersededBy: row.superseded_by ?? null,
-withdrawnAt: row.withdrawn_at ? new Date(row.withdrawn_at).toISOString() : null,
-deploys,
-```
-
-`getIntent` adds a third parallel query:
+Extend `toIntent` (the row mapper near line 49) with `deploys`. `getIntent` adds a third parallel query:
 
 ```sql
 SELECT chain_id, status, bundle_uuid, transaction_hash, error, created_at, updated_at
 FROM intent_deploys WHERE intent_id = $1 ORDER BY chain_id
 ```
 
-`createIntent`: inside the existing transaction, after the usage check and before the INSERT, when `value.supersedes` is set:
-
-```ts
-const prior = await client.query("SELECT publisher, superseded_by, withdrawn_at FROM intents WHERE id = $1 FOR UPDATE", [value.supersedes]);
-const row = prior.rows[0];
-if (!row || row.publisher !== value.publisher || row.superseded_by || row.withdrawn_at) {
-  throw new SupersedeError("supersedes must name your own live intent");
-}
-```
-
-Add `supersedes` to the INSERT column list (`$18`), then after the INSERT:
-
-```ts
-if (value.supersedes) await client.query("UPDATE intents SET superseded_by = $1 WHERE id = $2", [id, value.supersedes]);
-```
-
-`search`: replace the WHERE with
-
-```sql
-WHERE NOT EXISTS (SELECT 1 FROM deployments WHERE deployments.intent_id = intents.id)
-  AND superseded_by IS NULL AND withdrawn_at IS NULL
-```
-
-in both the page and the count query.
-
 New methods:
 
 ```ts
-async withdrawIntent(id: string, publisher: Address): Promise<Intent | null> {
-  const result = await this.pool.query(
-    "UPDATE intents SET withdrawn_at = now() WHERE id = $1 AND publisher = $2 AND withdrawn_at IS NULL RETURNING id",
-    [id, publisher],
-  );
-  return result.rowCount ? this.getIntent(id) : null;
-}
-
 async queueDeploys(intentId, chainIds, requester, reservedWeiPerChain) {
   await this.pool.query(
     `INSERT INTO intent_deploys (intent_id, chain_id, requester, reserved_wei)
@@ -327,11 +236,11 @@ async sponsoredWeiSince(since) {
 }
 ```
 
-Note: `DISTINCT ... FOR UPDATE` is not allowed in Postgres. Write `picked` as `SELECT intent_id FROM intent_deploys WHERE ... GROUP BY intent_id ORDER BY intent_id LIMIT $2` and lock in the UPDATE instead; the advisory lock in the worker (Task 6) serializes claims across processes.
+Note: `DISTINCT ... FOR UPDATE` is not allowed in Postgres. Write `picked` as `SELECT intent_id FROM intent_deploys WHERE ... GROUP BY intent_id ORDER BY intent_id LIMIT $2` and lock in the UPDATE instead; the advisory lock in the worker (Task 5) serializes claims across processes.
 
 - [ ] **Step 7: Update the test MemoryStore**
 
-In `test/app.test.ts` extend `MemoryStore` with in-memory versions of the six new methods and status derivation identical to the SQL rules, so route tests in later tasks work without Postgres. Keep `deploys: IntentDeploy[]` on each stored intent.
+In `test/app.test.ts` extend `MemoryStore` with in-memory versions of the five new methods, so route tests in later tasks work without Postgres. Keep `deploys: IntentDeploy[]` on each stored intent.
 
 - [ ] **Step 8: Run tests**
 
@@ -341,138 +250,15 @@ Expected: PASS.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add src/db/migrations/036_intent_lifecycle_and_deploys.sql src/types.ts src/store.ts src/db/postgres.ts test/app.test.ts test/postgres.integration.test.ts
-git commit -m "Add intent lifecycle columns and the deploy queue
+git add src/db/migrations/036_intent_deploys.sql src/types.ts src/store.ts src/db/postgres.ts test/app.test.ts test/postgres.integration.test.ts
+git commit -m "Add the intent deploy queue
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 2: Supersede on publish, withdraw route, richer status
-
-**Files:**
-- Modify: `extensions/jbcenter/src/intent.ts`
-- Modify: `extensions/jbcenter/src/app.ts`
-- Test: `extensions/jbcenter/test/app.test.ts`, `extensions/jbcenter/test/intent.test.ts`
-
-**Interfaces:**
-- Consumes: Task 1 store methods.
-- Produces: `withdrawMessage(id: string): string`; `POST /v1/intents/:id/withdraw { signature }`; `supersedes` accepted in the publish envelope.
-
-- [ ] **Step 1: Failing tests for canonicalization and messages**
-
-In `test/intent.test.ts`:
-
-```ts
-test("an envelope without supersedes hashes as before", () => {
-  const before = contentHash(normalizeEnvelope(envelope));
-  const after = contentHash(normalizeEnvelope({ ...envelope, supersedes: undefined }));
-  expect(after).toBe(before);
-});
-
-test("supersedes must be a uuid and changes the hash", () => {
-  expect(() => normalizeEnvelope({ ...envelope, supersedes: "nope" })).toThrow("supersedes must be an intent id");
-  const id = "2b6a1a5e-0d2b-4c3e-9a7f-1c2d3e4f5a6b";
-  expect(normalizeEnvelope({ ...envelope, supersedes: id }).supersedes).toBe(id);
-  expect(contentHash(normalizeEnvelope({ ...envelope, supersedes: id }))).not.toBe(contentHash(normalizeEnvelope(envelope)));
-});
-
-test("withdraw message", () => {
-  expect(withdrawMessage("2b6a1a5e-0d2b-4c3e-9a7f-1c2d3e4f5a6b"))
-    .toBe("Juice Central withdraw intent\nVersion: 1\nIntent: 2b6a1a5e-0d2b-4c3e-9a7f-1c2d3e4f5a6b");
-});
-```
-
-In `test/app.test.ts`:
-
-```ts
-test("publishing with supersedes retires the old intent", async () => {
-  const app = createApp(new MemoryStore());
-  const first = (await (await publish(app)).json()) as Intent;
-  const second = await publishWith(app, { ...envelope, jb: { ...envelope.jb, name: "v2" }, supersedes: first.id });
-  expect(second.status).toBe(201);
-  const old = await (await app.request(`/v1/intents/${first.id}`, { headers: trusted })).json() as Intent;
-  expect(old.status).toBe("superseded");
-  expect(old.supersededBy).toBe(((await second.json()) as Intent).id);
-});
-
-test("withdraw needs the publisher's signature", async () => {
-  const app = createApp(new MemoryStore());
-  const intent = (await (await publish(app)).json()) as Intent;
-  const bad = await app.request(`/v1/intents/${intent.id}/withdraw`, { method: "POST", headers: trusted,
-    body: JSON.stringify({ signature: await other.signMessage({ message: withdrawMessage(intent.id) }) }) });
-  expect(bad.status).toBe(403);
-  const ok = await app.request(`/v1/intents/${intent.id}/withdraw`, { method: "POST", headers: trusted,
-    body: JSON.stringify({ signature: await account.signMessage({ message: withdrawMessage(intent.id) }) }) });
-  expect(ok.status).toBe(200);
-  expect(((await ok.json()) as Intent).status).toBe("withdrawn");
-});
-```
-
-`publishWith(app, envelopeLike)` is `publish` generalized over the envelope; refactor `publish` to call it. `other` is a second `privateKeyToAccount`.
-
-- [ ] **Step 2: Run to verify they fail**
-
-Run: `npx vitest run test/intent.test.ts test/app.test.ts`
-Expected: FAIL (`withdrawMessage` undefined, 404 on withdraw).
-
-- [ ] **Step 3: Implement in intent.ts**
-
-In `normalizeEnvelope`, after the existing fields:
-
-```ts
-const supersedes = raw.supersedes;
-if (supersedes !== undefined) {
-  if (typeof supersedes !== "string" || !UUID.test(supersedes)) throw new IntentError("supersedes must be an intent id");
-}
-return { format, deploymentVersion, chainIds, deploymentCalls, jb, ...(supersedes ? { supersedes } : {}) };
-```
-
-Use the same `UUID` regex as `app.ts` (move it to `intent.ts` and import it in `app.ts`). Because `canonicalJson` serializes only present keys, an envelope without `supersedes` hashes exactly as before.
-
-```ts
-export function withdrawMessage(id: string): string {
-  return `Juice Central withdraw intent\nVersion: 1\nIntent: ${id}`;
-}
-```
-
-- [ ] **Step 4: Implement in app.ts**
-
-In `POST /v1/intents`, pass `supersedes: envelope.supersedes ?? null` into `store.createIntent` and map `SupersedeError` to 403 `{ code: "forbidden_supersede" }` in `app.onError`.
-
-New route after `GET /v1/intents/:id`:
-
-```ts
-app.post("/v1/intents/:id/withdraw", async (c) => {
-  const id = c.req.param("id");
-  if (!UUID.test(id)) throw new BadRequest("intent id is invalid");
-  const intent = await store.getIntent(id);
-  if (!intent) return c.json({ error: { code: "not_found", message: "Intent not found" } }, 404);
-  const body = await json(c);
-  const signed = signature(body.signature);
-  const valid = await verifyMessage({ address: intent.publisher, message: withdrawMessage(id), signature: signed });
-  if (!valid) return c.json({ error: { code: "forbidden", message: "signature does not match the publisher" } }, 403);
-  const withdrawn = await store.withdrawIntent(id, intent.publisher);
-  return c.json(withdrawn ?? intent);
-});
-```
-
-- [ ] **Step 5: Run tests, type-check, commit**
-
-Run: `npx vitest run test/intent.test.ts test/app.test.ts && npx tsc --noEmit`
-Expected: PASS.
-
-```bash
-git add src/intent.ts src/app.ts test/intent.test.ts test/app.test.ts
-git commit -m "Let a publisher supersede or withdraw an intent
-
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
-```
-
----
-
-### Task 3: Publish rate limits
+### Task 2: Publish rate limits
 
 **Files:**
 - Modify: `extensions/jbcenter/src/app.ts`
@@ -527,7 +313,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 4: Deployment verifier fast path and all eight chains
+### Task 3: Deployment verifier fast path and all eight chains
 
 **Files:**
 - Modify: `extensions/jbcenter/src/deploymentVerifier.ts`
@@ -599,7 +385,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Sponsor policy and the deploy request route
+### Task 4: Sponsor policy and the deploy request route
 
 **Files:**
 - Create: `extensions/jbcenter/src/sponsor/policy.ts`
@@ -750,7 +536,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 6: Lane types and the sponsor worker
+### Task 5: Lane types and the sponsor worker
 
 **Files:**
 - Create: `extensions/jbcenter/src/sponsor/chain.ts`
@@ -758,7 +544,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Test: `extensions/jbcenter/test/sponsor/worker.test.ts`
 
 **Interfaces:**
-- Consumes: Task 1 store methods, Task 4 verifier, Task 5 policy.
+- Consumes: Task 1 store methods, Task 3 verifier, Task 4 policy.
 - Produces (in `chain.ts`):
   ```ts
   export const PROJECTS_ABI = parseAbi(["function creationFee() view returns (uint256)"]);
@@ -852,7 +638,7 @@ export function createSponsorWorker({ store, verifier, lane, policy, leaseSecond
 }
 ```
 
-`recordDeployment` throws `ConflictError` when another sender already deployed that chain; the `confirmed` handler turns that into a failed row with the conflict message, which is the "one sender per draft" refusal after the fact. The lease is 15 minutes because a Relayr bundle can take several minutes to execute across chains.
+`recordDeployment` throws `ConflictError` when another sender already deployed that chain; the `confirmed` handler turns that into a failed row with the conflict message, which is the "one sender per intent" refusal after the fact. The lease is 15 minutes because a Relayr bundle can take several minutes to execute across chains.
 
 - [ ] **Step 4: Run, commit**
 
@@ -867,7 +653,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 7: Relayr lane for both network families
+### Task 6: Relayr lane for both network families
 
 **Files:**
 - Create: `extensions/jbcenter/src/sponsor/relayr.ts`
@@ -969,7 +755,7 @@ export function createRelayrLane({ chain, catalog, provider, rpcUrls, signer, po
 }
 ```
 
-`PROJECTS_ABI` and `CREATE_TOPIC` come from `src/sponsor/chain.ts` (Task 6). `parseFamilyQuote` rejects any quote above the fourth argument, which is how the reservation cap is enforced. Relayr executes the forwarder, so the top-level `to` is the forwarder and the verifier's trace path handles it; Task 4 configured every chain, and the Dwellir upstreams serve `debug_traceTransaction` on testnets as well as mainnets (confirm on Base Sepolia during Task 15 before relying on it).
+`PROJECTS_ABI` and `CREATE_TOPIC` come from `src/sponsor/chain.ts` (Task 5). `parseFamilyQuote` rejects any quote above the fourth argument, which is how the reservation cap is enforced. Relayr executes the forwarder, so the top-level `to` is the forwarder and the verifier's trace path handles it; Task 3 configured every chain, and the Dwellir upstreams serve `debug_traceTransaction` on testnets as well as mainnets (confirm on Base Sepolia during Task 14 before relying on it).
 
 - [ ] **Step 4: Run, commit**
 
@@ -977,14 +763,14 @@ Run: `npx vitest run test/sponsor && npx tsc --noEmit`
 
 ```bash
 git add src/sponsor/relayr.ts src/rest/sponsorship/provider.ts test/sponsor/relayr.test.ts
-git commit -m "Deploy sponsored drafts through Relayr on both families
+git commit -m "Deploy sponsored intents through Relayr on both families
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 8: Wire the sponsor into the process, env and docs
+### Task 7: Wire the sponsor into the process, env and docs
 
 **Files:**
 - Modify: `extensions/jbcenter/src/index.ts`
@@ -1014,7 +800,7 @@ if (sponsorKey) {
 
 - [ ] **Step 2: Docs**
 
-`.env.example`: add the sponsor block with every variable from Global Constraints plus `SPONSOR_SIGNER_KEY=` (blank) and one comment line each. README: document `supersedes` under "Publish an intent"; add `POST /v1/intents/:id/withdraw` and `POST /v1/intents/:id/deploy` sections with request and response examples copied from the tests; add the per-chain `deploys` field to "Read and search"; list the sponsor env vars under "Production configuration" with the note that the sponsor key funds every sponsored chain plus the Relayr payment chain. `src/llms.ts`: add the two routes.
+`.env.example`: add the sponsor block with every variable from Global Constraints plus `SPONSOR_SIGNER_KEY=` (blank) and one comment line each. README: state under "Publish an intent" that a published intent is firm (no edit, replace or withdraw); add a `POST /v1/intents/:id/deploy` section with request and response examples copied from the tests; add the per-chain `deploys` field to "Read and search"; list the sponsor env vars under "Production configuration" with the note that the sponsor key funds every sponsored chain plus the Relayr payment chain. `src/llms.ts`: add the route.
 
 - [ ] **Step 3: Full check**
 
@@ -1025,15 +811,15 @@ Expected: PASS. `npm run check` is the required-tests gate; if it names a missin
 
 ```bash
 git add src/index.ts .env.example README.md src/llms.ts
-git commit -m "Run the draft sponsor and document the routes
+git commit -m "Run the intent sponsor and document the routes
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
-gh pr create --title "Draft projects: lifecycle, sponsored deploys" --body "..."  # body ends with the attribution line
+gh pr create --title "Intent projects: lifecycle, sponsored deploys" --body "..."  # body ends with the attribution line
 ```
 
 ---
 
-### Task 9: SDK client: lifecycle calls, deploy status, sponsorable chains
+### Task 8: SDK client: deploy request, deploy status, sponsorable chains
 
 **Files:**
 - Modify: `juice-sdk-connect/packages/core/src/jbcenter.ts`
@@ -1042,29 +828,16 @@ gh pr create --title "Draft projects: lifecycle, sponsored deploys" --body "..."
 **Interfaces:**
 - Produces:
   ```ts
-  export type JBCenterIntentStatus = "undeployed" | "deployed" | "superseded" | "withdrawn";
   export type JBCenterIntentDeploy = { chainId: number; status: "queued" | "sent" | "confirmed" | "failed"; transactionHash: Hex | null; bundleUuid: string | null; error: string | null; createdAt: string; updatedAt: string };
-  // JBCenterIntent gains: status: JBCenterIntentStatus; supersedes: string | null; supersededBy: string | null; withdrawnAt: string | null; deploys: JBCenterIntentDeploy[]
-  // JBCenterIntentInput gains: supersedes?: string
+  // JBCenterIntent gains: deploys: JBCenterIntentDeploy[]
   export const JBCENTER_SPONSORED_CHAIN_IDS: readonly number[]; // [10, 8453, 42161, 11155111, 11155420, 84532, 421614]
   export function isSponsorable(chainIds: readonly number[]): boolean;
-  export function withdrawIntentMessage(intentId: string): string;
-  class JBCenterClient { withdrawIntent(intentId: string, signature: Hex, options?): Promise<JBCenterIntent>; requestDeploy(intentId: string, options?): Promise<{ deploys: JBCenterIntentDeploy[] }>; }
+  class JBCenterClient { requestDeploy(intentId: string, options?): Promise<{ deploys: JBCenterIntentDeploy[] }>; }
   ```
 
 - [ ] **Step 1: Failing tests** (same `jsonResponse` and `fetchMock` conventions as the existing file)
 
 ```ts
-test("withdrawIntent posts the signature and returns the intent", async () => {
-  const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ...intent(), status: "withdrawn", withdrawnAt: "2026-09-21T00:00:00.000Z" }));
-  const client = createJBCenterClient({ fetch: fetchMock });
-  const result = await client.withdrawIntent(intent().id, signature);
-  expect(result.status).toBe("withdrawn");
-  const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-  expect(url).toBe(`https://juicebox.center/v1/intents/${intent().id}/withdraw`);
-  expect(JSON.parse(String(init.body))).toEqual({ signature });
-});
-
 test("requestDeploy returns the queued rows", async () => {
   const deploys = [{ chainId: 84532, status: "queued", transactionHash: null, bundleUuid: null, error: null, createdAt: "2026-09-21T00:00:00.000Z", updatedAt: "2026-09-21T00:00:00.000Z" }];
   const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ deploys }, { status: 202 }));
@@ -1077,12 +850,7 @@ test("sponsorable chain sets", () => {
   expect(isSponsorable([])).toBe(false);
 });
 
-test("withdraw message", () => {
-  expect(withdrawIntentMessage("abc")).toBe("Juice Central withdraw intent\nVersion: 1\nIntent: abc");
-});
-```
-
-Also update the `intent()` fixture with the new fields and assert `getIntent` accepts a `superseded` status and a non-empty `deploys` list, and rejects a malformed deploy row.
+Also update the `intent()` fixture with `deploys: []` and assert `getIntent` accepts a non-empty `deploys` list and rejects a malformed deploy row.
 
 - [ ] **Step 2: Run to verify they fail**
 
@@ -1091,24 +859,18 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement**
 
-Extend the types as above. Extend `isIntent` to accept the four statuses, nullable `supersedes`/`supersededBy`/`withdrawnAt`, and validate `deploys` with a new `isIntentDeploy` guard. Add `supersedes` as an optional string to `isEnvelope`. Add:
+Extend the types as above. Extend `isIntent` to validate `deploys` with a new `isIntentDeploy` guard. Add:
 
 ```ts
 export const JBCENTER_SPONSORED_CHAIN_IDS = Object.freeze([10, 8453, 42161, 11155111, 11155420, 84532, 421614]);
 export function isSponsorable(chainIds: readonly number[]): boolean {
   return chainIds.length > 0 && chainIds.every((id) => JBCENTER_SPONSORED_CHAIN_IDS.includes(id));
 }
-export function withdrawIntentMessage(intentId: string): string {
-  return `Juice Central withdraw intent\nVersion: 1\nIntent: ${intentId}`;
-}
 ```
 
 Client methods, using the private `fetchJson`:
 
 ```ts
-withdrawIntent(intentId: string, signature: Hex, options?: JBCenterRequestOptions): Promise<JBCenterIntent> {
-  return this.fetchJson(`v1/intents/${encodeURIComponent(intentId)}/withdraw`, { method: "POST", body: JSON.stringify({ signature }) }, isIntent, options);
-}
 requestDeploy(intentId: string, options?: JBCenterRequestOptions): Promise<{ deploys: JBCenterIntentDeploy[] }> {
   return this.fetchJson(`v1/intents/${encodeURIComponent(intentId)}/deploy`, { method: "POST" }, isDeployResponse, options);
 }
@@ -1120,14 +882,14 @@ Run: `npx vitest run src/jbcenter.test.ts src/publicSurface.test.ts && npm run t
 
 ```bash
 git add packages/core/src/jbcenter.ts packages/core/src/jbcenter.test.ts packages/core/src/publicSurface.test.ts
-git commit -m "Add intent lifecycle and sponsored deploy calls to the Center client
+git commit -m "Add sponsored deploy calls to the Center client
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 10: SDK launch-calldata decoder
+### Task 9: SDK launch-calldata decoder
 
 **Files:**
 - Create: `juice-sdk-connect/packages/core/src/jbcenter/decode.ts`
@@ -1210,14 +972,14 @@ Run: `npx vitest run src/jbcenter && npm run type-check`
 
 ```bash
 git add packages/core/src/jbcenter/decode.ts packages/core/src/jbcenter/decode.test.ts packages/core/src/jbcenter.ts
-git commit -m "Decode a draft's launch calldata into a project shell
+git commit -m "Decode an intent's launch calldata into a project shell
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 11: SDK search merger and route helpers
+### Task 10: SDK search merger and route helpers
 
 **Files:**
 - Create: `juice-sdk-connect/packages/core/src/jbcenter/merge.ts`
@@ -1226,10 +988,10 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Produces:
   ```ts
-  export type JBCenterDraftRow = { draft: true; intentId: string; name: string; tagline: string | null; logoUri: string | null; owner: Address | null; chainIds: number[]; createdAt: number /* unix seconds */ };
-  export function draftRow(item: JBCenterSearchItem): JBCenterDraftRow;
-  export function mergeSearch<T extends { createdAt: number }>(rows: readonly T[], items: readonly JBCenterSearchItem[]): (T | JBCenterDraftRow)[]; // newest first
-  export function draftPath(intentId: string): string; // `/draft/${intentId}`
+  export type JBCenterIntentRow = { undeployed: true; intentId: string; name: string; tagline: string | null; logoUri: string | null; owner: Address | null; chainIds: number[]; createdAt: number /* unix seconds */ };
+  export function intentRow(item: JBCenterSearchItem): JBCenterIntentRow;
+  export function mergeSearch<T extends { createdAt: number }>(rows: readonly T[], items: readonly JBCenterSearchItem[]): (T | JBCenterIntentRow)[]; // newest first
+  export function intentPath(intentId: string): string; // `/intent/${intentId}`
   export function deployedChains(intent: JBCenterIntent): Record<number, string>; // chainId → projectId from intent.deployments
   export function isFullyDeployed(intent: JBCenterIntent): boolean;
   ```
@@ -1237,31 +999,31 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - [ ] **Step 1: Failing tests**
 
 ```ts
-test("mergeSearch interleaves by creation time, newest first, and flags drafts", () => {
+test("mergeSearch interleaves by creation time, newest first, and flags undeployed intents", () => {
   const rows = [{ id: "a", createdAt: 100 }, { id: "b", createdAt: 300 }];
   const items = [{ ...searchItem, intentId: "d", createdAt: "1970-01-01T00:03:20.000Z" }]; // 200s
-  expect(mergeSearch(rows, items).map((r) => ("draft" in r ? r.intentId : r.id))).toEqual(["b", "d", "a"]);
-  expect(mergeSearch(rows, items)[1]).toMatchObject({ draft: true, createdAt: 200 });
+  expect(mergeSearch(rows, items).map((r) => ("undeployed" in r ? r.intentId : r.id))).toEqual(["b", "d", "a"]);
+  expect(mergeSearch(rows, items)[1]).toMatchObject({ undeployed: true, createdAt: 200 });
 });
-test("draftPath and deployedChains", () => {
-  expect(draftPath("x")).toBe("/draft/x");
+test("intentPath and deployedChains", () => {
+  expect(intentPath("x")).toBe("/intent/x");
   expect(deployedChains({ ...intent(), deployments: [{ chainId: 8453, projectId: "12", transactionHash: hash, createdAt: "" }] })).toEqual({ 8453: "12" });
   expect(isFullyDeployed({ ...intent(), envelope: { ...intent().envelope, chainIds: [8453, 10] }, deployments: [{ chainId: 8453, projectId: "12", transactionHash: hash, createdAt: "" }] })).toBe(false);
 });
 ```
 
-- [ ] **Step 2: Run to verify they fail**, then **Step 3: Implement** (a stable sort by `createdAt` descending; `draftRow` converts the ISO string with `Math.floor(Date.parse(createdAt) / 1000)`), **Step 4: Run, commit**
+- [ ] **Step 2: Run to verify they fail**, then **Step 3: Implement** (a stable sort by `createdAt` descending; `intentRow` converts the ISO string with `Math.floor(Date.parse(createdAt) / 1000)`), **Step 4: Run, commit**
 
 ```bash
 git add packages/core/src/jbcenter/merge.ts packages/core/src/jbcenter/merge.test.ts packages/core/src/jbcenter.ts
-git commit -m "Merge Center drafts into project lists
+git commit -m "Merge undeployed Center intents into project lists
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 12: SDK `ensureDeployed`
+### Task 11: SDK `ensureDeployed`
 
 **Files:**
 - Create: `juice-sdk-connect/packages/core/src/jbcenter/ensureDeployed.ts`
@@ -1295,29 +1057,29 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 ---
 
-### Task 13: SDK public surface, coverage and release
+### Task 12: SDK public surface, coverage and release
 
 **Files:**
-- Modify: `juice-sdk-connect/packages/core/src/index.ts`, `src/publicSurface.test.ts`, `package.json` (version bump to 2.7.0), `README.md` (a "Draft projects" section)
+- Modify: `juice-sdk-connect/packages/core/src/index.ts`, `src/publicSurface.test.ts`, `package.json` (version bump to 2.7.0), `README.md` (a "Intent projects" section)
 
-- [ ] **Step 1:** Add every new export to `publicSurface.test.ts` (`decodeDeploymentCall`, `mergeSearch`, `draftRow`, `draftPath`, `deployedChains`, `isFullyDeployed`, `ensureDeployed`, `EnsureDeployedError`, `isSponsorable`, `withdrawIntentMessage`, `JBCENTER_SPONSORED_CHAIN_IDS`).
+- [ ] **Step 1:** Add every new export to `publicSurface.test.ts` (`decodeDeploymentCall`, `mergeSearch`, `intentRow`, `intentPath`, `deployedChains`, `isFullyDeployed`, `ensureDeployed`, `EnsureDeployedError`, `isSponsorable`, `JBCENTER_SPONSORED_CHAIN_IDS`).
 - [ ] **Step 2:** Run `npx vitest run --coverage` and confirm every new file clears the global floors (95 statements, 95 lines, 92 functions, 82 branches). Add cases for any uncovered branch.
-- [ ] **Step 3:** README section: publish, supersede, withdraw, `ensureDeployed` usage, the "one sender per draft" rule and the `/draft/<id>` route convention.
+- [ ] **Step 3:** README section: publish, `ensureDeployed` usage, the "one sender per intent" rule and the `/intent/<id>` route convention. State that a published intent is firm and cannot be edited or withdrawn.
 - [ ] **Step 4:** Commit and open the release PR (the release run enforces 100 percent line coverage; check `vitest run --coverage` output before pushing).
 
 ```bash
 git add packages/core/src/index.ts packages/core/src/publicSurface.test.ts packages/core/package.json packages/core/README.md
-git commit -m "Release the draft projects SDK surface
+git commit -m "Release the project intents SDK surface
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 14: `jb-draft-projects` skill
+### Task 13: `jb-project-intents` skill
 
 **Files:**
-- Create: `skills/plugins/juicebox-v6/skills/jb-draft-projects/SKILL.md`
+- Create: `skills/plugins/juicebox-v6/skills/jb-project-intents/SKILL.md`
 - Modify: `skills/plugins/juicebox-v6/README.md` (category table)
 
 - [ ] **Step 1: Write the skill**
@@ -1326,50 +1088,50 @@ Frontmatter per `CONVENTIONS.md`:
 
 ```yaml
 ---
-name: jb-draft-projects
+name: jb-project-intents
 description: |
-  Create, list, render and deploy Juicebox V6 draft projects stored on juicebox.center.
+  Create, list, render and deploy Juicebox V6 project intents stored on juicebox.center.
   Use when: (1) building a create flow that should not need a transaction,
-  (2) merging undeployed drafts into project lists and search,
-  (3) rendering a project page for a draft, (4) inserting the deploy-first
-  step before any write against a draft.
+  (2) merging undeployed intents into project lists and search,
+  (3) rendering a project page for an undeployed intent, (4) inserting the
+  deploy-first step before any write against one.
 metadata:
   version: "6.0.0"
 ---
 ```
 
-Body sections, tables over prose: the intent envelope and signing message; the lifecycle (publish, supersede, withdraw, deployed); the one-sender rule with the salt explanation; sponsored chains and the deploy route; the `/draft/<id>` route and the redirect rule; `decodeDeploymentCall` shells per flavor; `mergeSearch`; `ensureDeployed` at the write chokepoint; and a trailing `## Common mistakes` (baking `mustStartAtOrAfter: 0` into stage 1 of a draft; deploying some chains yourself and asking Center for the rest; showing drafts in Trending; treating the intent signature as transaction approval).
+Body sections, tables over prose: the intent envelope and signing message; the lifecycle (publish, then deployed; a published intent is firm, with no edit or withdraw); the one-sender rule with the salt explanation; sponsored chains and the deploy route; the `/intent/<id>` route and the redirect rule; `decodeDeploymentCall` shells per flavor; `mergeSearch`; `ensureDeployed` at the write chokepoint; and a trailing `## Common mistakes` (baking `mustStartAtOrAfter: 0` into stage 1 of an intent; deploying some chains yourself and asking Center for the rest; showing undeployed intents in Trending; calling them intents in copy, which invites editing; treating the intent signature as transaction approval).
 
-- [ ] **Step 2:** Run `./build-skills.sh` and confirm `dist/jb-draft-projects.zip` exists. Add the row to the README category table.
+- [ ] **Step 2:** Run `./build-skills.sh` and confirm `dist/jb-project-intents.zip` exists. Add the row to the README category table.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add skills/jb-draft-projects/SKILL.md README.md
-git commit -m "Add the jb-draft-projects skill
+git add skills/jb-project-intents/SKILL.md README.md
+git commit -m "Add the jb-project-intents skill
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
 ---
 
-### Task 15: Rehearsal on Center dev
+### Task 14: Rehearsal on Center dev
 
 **Files:** none (ops).
 
 - [ ] **Step 1:** Generate a sponsor key, fund it on Base Sepolia and OP Sepolia (0.01 ETH each; Relayr's testnet prepayment lands on one of them), set `SPONSOR_SIGNER_KEY` and the policy vars on the Railway `dev` environment of `juice-center`, deploy.
-- [ ] **Step 2:** With the SDK, publish a two-chain testnet draft from a fresh EOA, call `requestDeploy`, poll `getIntent` until both rows are `confirmed` with the same `bundleUuid`, and confirm both projects exist on chain with the same owner, the expected ruleset start, and matching sucker addresses. Confirm the recorded deployments came through the trace path on a testnet. Record the intent id, bundle id and both tx hashes in `tasks/todo.md`.
-- [ ] **Step 3:** Publish a single-chain Base mainnet draft with a real owner, fund the sponsor key on Base with 0.002 ETH, `requestDeploy`, confirm Relayr executes and Center records the deployment through the trace path.
-- [ ] **Step 4:** Confirm `GET /v1/search` no longer lists either draft and that `POST /v1/intents/:id/deploy` on a deployed draft returns 200 with the rows.
+- [ ] **Step 2:** With the SDK, publish a two-chain testnet intent from a fresh EOA, call `requestDeploy`, poll `getIntent` until both rows are `confirmed` with the same `bundleUuid`, and confirm both projects exist on chain with the same owner, the expected ruleset start, and matching sucker addresses. Confirm the recorded deployments came through the trace path on a testnet. Record the intent id, bundle id and both tx hashes in `tasks/todo.md`.
+- [ ] **Step 3:** Publish a single-chain Base mainnet intent with a real owner, fund the sponsor key on Base with 0.002 ETH, `requestDeploy`, confirm Relayr executes and Center records the deployment through the trace path.
+- [ ] **Step 4:** Confirm `GET /v1/search` no longer lists either intent and that `POST /v1/intents/:id/deploy` on a deployed intent returns 200 with the rows.
 
 ---
 
-## Follow-on plans (write after Task 13 fixes the SDK surface)
+## Follow-on plans (write after Task 12 fixes the SDK surface)
 
-1. `2026-09-XX-draft-projects-phase-2.md`: juicebox.money and revnet.money together. Create step "Publish" (absolute stage-1 start, `createJBCenterDeploymentCall` from `buildLaunchRequest` / `parseDeployData`, `publishIntent`, clear local draft, route to `/draft/<id>`); `/draft/[id]` route rendering the existing project page from `decodeDeploymentCall` plus `shellProject` / `getProjectFallback`, redirect once deployed; `mergeSearch` in `/api/search`, `/api/search-projects`, New lists; `ensureDeployed` inside `useSafeTx` and `useWriteContract` as the first TxSteps step with the existing self-paid launch pipelines as `selfPaid`.
-2. `2026-09-XX-draft-projects-phase-3.md`: homerun (`buildFundLaunch`, `useSafeTx`), succulent (`pageLaunchTx`, `tx.ts`), JBSticky (`deployStickyFor`; confirm the deployer is permissionless for a non-owner caller and trusts the forwarder before starting), juicescan render and search.
-3. `2026-09-XX-draft-projects-phase-4.md`: eth.shop, ethis.money, JBChat read-side rendering of drafts.
+1. `2026-09-XX-project-intents-phase-2.md`: juicebox.money and revnet.money together. Create step "Publish" (absolute stage-1 start, `createJBCenterDeploymentCall` from `buildLaunchRequest` / `parseDeployData`, `publishIntent`, clear local draft, route to `/intent/<id>`); `/intent/[id]` route rendering the existing project page from `decodeDeploymentCall` plus `shellProject` / `getProjectFallback`, redirect once deployed; `mergeSearch` in `/api/search`, `/api/search-projects`, New lists; `ensureDeployed` inside `useSafeTx` and `useWriteContract` as the first TxSteps step with the existing self-paid launch pipelines as `selfPaid`.
+2. `2026-09-XX-project-intents-phase-3.md`: homerun (`buildFundLaunch`, `useSafeTx`), succulent (`pageLaunchTx`, `tx.ts`), JBSticky (`deployStickyFor`; confirm the deployer is permissionless for a non-owner caller and trusts the forwarder before starting), juicescan render and search.
+3. `2026-09-XX-project-intents-phase-4.md`: eth.shop, ethis.money, JBChat read-side rendering of intents.
 
 ## Self-review notes
 
-- Spec coverage: publish limits (T3), supersede and withdraw (T1, T2), sponsored deploy policy and route (T5), one Relayr lane for both families (T6, T7), one-sender refusal (T5 checks `status === "undeployed"`; the lane stops at the first failed chain; `recordDeployment` conflicts fail the row), fast-path verification and testnet verifier configs (T4), SDK decoder, merger, `ensureDeployed`, route convention (T10 to T12), skill (T14), rehearsal (T15). Client work is deferred to the follow-on plans by design.
+- Spec coverage: publish limits (T2), sponsored deploy policy and route (T4), one Relayr lane for both families (T5, T6), one-sender refusal (T4 checks `status === "undeployed"`; the lane stops at the first failed chain; `recordDeployment` conflicts fail the row), fast-path verification and testnet verifier configs (T3), SDK decoder, merger, `ensureDeployed`, route convention (T9 to T11), skill (T13), rehearsal (T14). Client work is deferred to the follow-on plans by design.
 - Known ceiling: the worker runs in every Center replica; `claimQueuedDeploys` relies on the lease and `SKIP LOCKED` semantics. If Center ever runs more than one replica, add `pg_advisory_xact_lock(hashtext('sponsor-worker'))` around the claim.

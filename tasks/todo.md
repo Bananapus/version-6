@@ -51,10 +51,10 @@ No externally reachable finding: frame-ancestors + body flow token + request-key
 hardenings and two functional bugs fixed. SDK modal/hand-up checked by hand: same-origin + source-gated, theme
 reply carries public tokens only. Open: a lost framed approve response 409-loops on retry.
 
-## Draft projects (2026-09-21)
-Spec: docs/superpowers/specs/2026-09-21-draft-projects-design.md
-Plan (phase 1, Center + SDK + skill): docs/superpowers/plans/2026-09-21-draft-projects-phase-1.md
-- [ ] Phase 1 tasks 1-15 (Center lifecycle + sponsor, SDK surface, skill, dev rehearsal)
+## Project intents (2026-09-21)
+Spec: docs/superpowers/specs/2026-09-21-project-intents-design.md
+Plan (phase 1, Center + SDK + skill): docs/superpowers/plans/2026-09-21-project-intents-phase-1.md
+- [ ] Phase 1 tasks 1-14 (Center lifecycle + sponsor, SDK surface, skill, dev rehearsal)
 - [ ] Phase 2 plan: juicebox.money + revnet.money
 - [ ] Phase 3 plan: homerun, succulent, JBSticky, juicescan
 - [ ] Phase 4 plan: eth.shop, ethis.money, JBChat read side
