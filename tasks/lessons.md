@@ -618,3 +618,23 @@ A Playwright harness that answers `eth_call` with a bare value breaks wagmi read
 
 ## 2026-09-22 — Assert on what renders, not on the request object
 The Task 4 fix removed `from` from the reviewed calls and its unit test asserted `review.calls[0].from === undefined` on the request object. The provider that renders the dialog defaulted `from` back to the connected account, so the merchant still saw themselves as sender. A live dry run of the real dialog caught it. Rule: for user-facing claims ("no From row"), the test must render through the real provider/dialog and assert the DOM, and a live or browser proof should run before shipping anything a person signs.
+
+## 2026-09-22 — `nvm use` hides npm-global CLIs
+The Railway CLI is an npm global under the default Node; after `source nvm.sh && nvm use 22` in the same shell it vanishes ("command not found: railway") and a deploy step silently does nothing. Rule: run Railway (and other npm-global tools) in a shell without `nvm use`, or split the command.
+
+## 2026-09-22 — a background test run is a reader in the worktree too
+
+A full vitest run was still collecting in center-lane-recovery when the fix
+implementer started editing there; one test read the new store against the old
+assertion and failed for no real reason. Rule: before dispatching a writer into a
+worktree, stop or wait out any background suite running in it, or run the suite
+from a throwaway `git worktree add <tmp> HEAD`. The one-writer rule covers readers
+that take minutes.
+
+## 2026-09-22 — the Plan agent type cannot write files
+
+Three planners were dispatched as `subagent_type: Plan` to write plan files; that agent
+is read-only, so each returned a 40-60 KB plan inline and it had to be recovered from the
+task transcript (JSON-escaped, HTML entities, and the outer ```` fence must be cut at the
+last fence before the closing summary, not the first). Rule: a subagent that must produce
+a file is `general-purpose`; `Plan` and `Explore` only for reports that stay small.
