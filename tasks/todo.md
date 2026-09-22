@@ -106,7 +106,7 @@ Worktrees: extensions/center-setup-calls (jbcenter feat/intent-setup-calls), ext
 - [x] SDK 2.9.0 published (juice-sdk-v4 PR #143, review ship; Version Packages merged by jango); worktree removed
 - [x] Homerun: mejango/homerun PR #2 merged and deployed (review ship + fix round: any-order copy, "Owned or published" heading)
 - [x] Live check on dev: intent 2eac709f (script, 2-of-2 Safe 0xE5B6af5F026a498F69bC9965A0F7D0F4354754a9) deployed after the nonce fix: Base Sepolia project 32 + OP Sepolia project 16, Safe has code on both and JBProjects.ownerOf returns it. The Homerun-flow intents (7e7cf160, f3e30ef0, 551f0387) were published through the real UI; 551f0387 is deploying. Production run pending the budget decision.
-- [ ] Root cause of RELAYR_INVALID_STATUS after payment: the named field is `chain`: Center binds Relayr tx_uuids to entries by array index and Relayr returns them in another order sometimes; fix in extensions/center-binding-fix (bind by request fields).
+- [ ] Root cause of RELAYR_INVALID_STATUS after payment: the named field is `chain`: Center binds Relayr tx_uuids to entries by array index and Relayr returns them in another order sometimes; fixed in jbcenter PR #50 (bind ids from the status echo by request fields), mirrored to dev #51. Follow-up: the same index binding in `parseQuoteBinding` (src/rest/sponsorship/service.ts, app-sponsorship dispatch).
 - [ ] Live: dev two-chain FUND with a new 2-of-2 owner Safe; production Base + Optimism; Safe exists at the predicted address and owns the project
 - [ ] Port note for jbm/revnet in tasks and memory; remove worktrees
 
