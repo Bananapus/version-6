@@ -638,3 +638,7 @@ is read-only, so each returned a 40-60 KB plan inline and it had to be recovered
 task transcript (JSON-escaped, HTML entities, and the outer ```` fence must be cut at the
 last fence before the closing summary, not the first). Rule: a subagent that must produce
 a file is `general-purpose`; `Plan` and `Explore` only for reports that stay small.
+
+## 2026-09-22 — a `;` after an `&&` chain ran git commit in another session's checkout
+
+A one-liner did `cd <shared checkout> && git pull --ff-only && cd <worktree> && ... ; git add … && git commit … && git push …`. The pull refused (dirty tree), the `&&` chain stopped, and the commands after `;` ran in the shared checkout: they committed 259 files of another session's staged work onto its local main. Undone with `git reset --soft HEAD~1` (index restored exactly). Rules: never `git add`/`git commit` in `extensions/jbcenter`, `extensions/homerun` or any main checkout, only in a worktree I created; never put `;` after a chain whose earlier step changes directory; one git write per command when a checkout may be dirty.
