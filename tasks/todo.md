@@ -101,9 +101,9 @@ Plan (phase 1, Center + SDK + skill): docs/superpowers/plans/2026-09-21-project-
 ## 2026-09-22 — Intent setup calls: Safe-owned projects without a transaction
 Spec: docs/superpowers/specs/2026-09-22-intent-setup-calls-safe-owners-design.md (approved by jango: sequential-in-Center over a launcher contract because it ports to jbm/revnet; Safe addresses are deterministic so setup and launch go out independently).
 Worktrees: extensions/center-setup-calls (jbcenter feat/intent-setup-calls), extensions/sdk-setup-calls (juice-sdk-v4 feat/intent-setup-calls), extensions/homerun-setup-calls (homerun feat/intent-setup-calls).
-- [ ] Plans written: center, sdk, homerun (docs/superpowers/plans/2026-09-22-intent-setup-calls-*.md)
-- [ ] Center: validation, lane setup entries, per-entry settle/resume, existing-Safe skip, docs/MCP; PR to main, mirror dev, deploy
-- [ ] SDK 2.9.0: pinned proxy creation code, safe-create decode, validation mirror, intentCalls; PR + Version Packages
-- [ ] Homerun: plans in intent, eligibility, review + intent page + account list, Playwright; PR, deploy
+- [x] Plans written: center, sdk, homerun (docs/superpowers/plans/2026-09-22-intent-setup-calls-*.md), committed 077e30d
+- [ ] Center: implementer running in extensions/center-setup-calls (6 tasks per plan); then review, PR to main, mirror dev, deploy
+- [x] SDK 2.9.0: juice-sdk-v4 PR #143 merged (review SHIP), Version Packages merged by jango; publish running at 14:11 UTC
+- [ ] Homerun: implementer running in extensions/homerun-setup-calls (waits for 2.9.0 on npm, Tasks 1-4 + gate); then review, live check, PR, deploy
 - [ ] Live: dev two-chain FUND with a new 2-of-2 owner Safe; production Base + Optimism; Safe exists at the predicted address and owns the project
 - [ ] Port note for jbm/revnet in tasks and memory; remove worktrees
