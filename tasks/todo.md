@@ -104,6 +104,17 @@ Worktrees: extensions/center-setup-calls (jbcenter feat/intent-setup-calls), ext
 - [x] Plans written: center, sdk, homerun (docs/superpowers/plans/2026-09-22-intent-setup-calls-*.md), committed 077e30d
 - [x] Center: jbcenter PR #44 (setup calls, review ship after one fix round) + #46 (knowledge sync) merged to main, mirrored to dev (#45, #47); Railway deploys watched. Open nits: N1 setup eth_call revert maps terminal, N2 reservation over-counts the fee per setup call.
 - [x] SDK 2.9.0 published (juice-sdk-v4 PR #143, review ship; Version Packages merged by jango); worktree removed
-- [ ] Homerun: implementer running in extensions/homerun-setup-calls (waits for 2.9.0 on npm, Tasks 1-4 + gate); then review, live check, PR, deploy
+- [x] Homerun: mejango/homerun PR #2 merged and deployed (review ship + fix round: any-order copy, "Owned or published" heading)
+- [ ] Live check: the real Homerun flow published three Safe-owned intents on dev (7e7cf160, f3e30ef0, 551f0387; pin rate limit stopped a fourth); sponsored deploy blocked until Center numbers setup entries (Relayr 406 "Virtual nonce is required" in MultiChain mode; fix in progress on fix/setup-entry-nonces). Then: deploy 551f0387 on dev, confirm the Safe at the predicted address owns the project on both testnets; production Base + Optimism run.
 - [ ] Live: dev two-chain FUND with a new 2-of-2 owner Safe; production Base + Optimism; Safe exists at the predicted address and owns the project
 - [ ] Port note for jbm/revnet in tasks and memory; remove worktrees
+
+## 2026-09-22 — Homerun preview → create → deploy any chains from the shareable link
+Spec: docs/superpowers/specs/2026-09-22-homerun-preview-create-and-per-chain-deploy-design.md (approved: "Show preview" replaces Sign in/Create; preview page with Edit and Create; /intent/<id> shareable with a checkbox per chain, "free" on sponsored chains, "costs ~x ETH" on Ethereum paid by the visitor through Center's signed forward request so the sender stays Center; redirect to the first deployed chain; project page offers the remaining chains).
+Worktrees: extensions/center-setup-calls (jbcenter feat/intent-relay), extensions/sdk-relay (juice-sdk-v4 feat/intent-relay), extensions/homerun-setup-calls (homerun feat/preview-create).
+- [ ] Plans: center, sdk, homerun (docs/superpowers/plans/2026-09-22-intent-relay-{center,sdk}.md, 2026-09-22-homerun-preview-create.md)
+- [ ] Center: POST /v1/intents/:id/relay (unsponsored chains, signed forward request, nothing stored), /deploy with chainIds subset, mixed intents accepted; docs; PR, mirror dev, deploy
+- [ ] SDK 2.10.0: sponsorableChains/unsponsoredChains, requestDeploy chainIds, requestRelay, ensureDeployed chainIds + relayPaid; PR + Version Packages
+- [ ] Homerun: Show preview, /create/preview, deploy panel on intent and project pages, redirect with ?intent; Playwright; PR, deploy
+- [ ] Live: dev three-chain FUND (two sponsored + Sepolia relay-paid), pairing confirmed; production Base + Optimism sponsored, Ethereum relay when jango chooses
+- [ ] Budgets: production SPONSOR_DAILY_BUDGET_WEI decision deferred by jango ("deal with budgets later, keep to minimum")
