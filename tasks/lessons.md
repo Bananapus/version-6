@@ -642,3 +642,12 @@ a file is `general-purpose`; `Plan` and `Explore` only for reports that stay sma
 ## 2026-09-22 — a `;` after an `&&` chain ran git commit in another session's checkout
 
 A one-liner did `cd <shared checkout> && git pull --ff-only && cd <worktree> && ... ; git add … && git commit … && git push …`. The pull refused (dirty tree), the `&&` chain stopped, and the commands after `;` ran in the shared checkout: they committed 259 files of another session's staged work onto its local main. Undone with `git reset --soft HEAD~1` (index restored exactly). Rules: never `git add`/`git commit` in `extensions/jbcenter`, `extensions/homerun` or any main checkout, only in a worktree I created; never put `;` after a chain whose earlier step changes directory; one git write per command when a checkout may be dirty.
+
+## 2026-09-22 — a spec sentence that names a shortcut overrides its own goal
+
+The preview-create spec said "the full project page rendered from the form values" and then
+"renders the project page layout (IntentProject's shell)". The planner and implementer took
+the parenthetical: jango got a bare shell instead of the /founderhaus page. Rule: when a spec
+names the visual target, point at the concrete page or component that already looks right
+(here the modeled example page) and never add a "shell" or "layout" hint; and look at the
+result before shipping a page a person will judge by eye (one screenshot in the report).
