@@ -606,3 +606,15 @@ bisect needed. If a bisect is truly needed, use `git worktree add` on HEAD, neve
 
 ## 2026-09-21 — Trace the consumer before ruling on server-side state
 Ruled "drop the deployer's failed-outcome cache, a retry just starts a new run" without reading the client's 3 s poll loop; an unconditional new run would have made every failure invisible (the poll finds no run, starts another deploy, forever). The implementer caught it. Rule: before ruling that a server should forget or re-derive state, read every caller that polls or retries it and say what each one sees on the next call.
+
+## 2026-09-21 — A signing guard must pin the whole signed text
+Beep's publish guard (and the first SDK port of it) checked only that Center's message *contained* the content hash, then handed the whole message to the signer. A hostile or misconfigured Center could wrap the hash in any text (a SIWE body for another domain) and get a valid signature. Rule: when code signs text a server supplied, compare the entire text to a locally built template; never substring-match. The same goes for envelopes: normalize the way the server does (sorted arrays, trimmed strings) and compare whole values.
+
+## 2026-09-22 — Two implementers in one worktree race on the index
+Pipelining a fix round and the next task's implementer in the same worktree (disjoint files) still races on `git add`/`git commit`: one agent's staged files were swept into the other's commit, and it had to `reset --soft` and re-commit. Content survived, but it cost a round trip and a hand check. Rule: at most one writing agent per worktree; pipeline only read-only reviewers alongside an implementer. If parallel implementation is worth it, give the second agent its own worktree on a stacked branch.
+
+## 2026-09-22 — Modeled RPC for wagmi must speak Multicall3
+A Playwright harness that answers `eth_call` with a bare value breaks wagmi reads: wagmi batches through Multicall3 `aggregate3`, so viem decodes the bare value as an array offset and the flow dies silently. Model `aggregate3` (decode the calls, answer one value each). Also: a modeled Center must return the real signing template or `publishSignedIntent` refuses to sign; and with an injected EIP-6963 wallet answering `eth_accounts`, wagmi reconnects on mount, so there is no "Sign in" click to script.
+
+## 2026-09-22 — Assert on what renders, not on the request object
+The Task 4 fix removed `from` from the reviewed calls and its unit test asserted `review.calls[0].from === undefined` on the request object. The provider that renders the dialog defaulted `from` back to the connected account, so the merchant still saw themselves as sender. A live dry run of the real dialog caught it. Rule: for user-facing claims ("no From row"), the test must render through the real provider/dialog and assert the DOM, and a live or browser proof should run before shipping anything a person signs.
