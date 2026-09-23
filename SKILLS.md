@@ -119,7 +119,7 @@ Split groups use `uint256 groupId = uint256(uint160(tokenAddress))` while accoun
 
 ```
 NATIVE_TOKEN: groupId = 61166,  currency = 61166  (same!)
-USDC:         groupId = 918893084697899778867...,  currency = 909516616  (different!)
+USDC:         groupId = 917551056842671309452...,  currency = 906423112  (different!)
 ```
 
 When configuring payout splits for an ERC-20 token, the `groupId` on the split group must use the full `uint256(uint160(token))` encoding, while the `currency` on accounting contexts and payout limits uses `uint32(uint160(token))`.
