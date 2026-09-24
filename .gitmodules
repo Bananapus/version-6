@@ -82,8 +82,8 @@
 [submodule "skills"]
 	path = skills
 	url = https://github.com/mejango/juicebox-skills.git
-[submodule "extensions/Sticky"]
-	path = extensions/Sticky
+[submodule "extensions/sticky"]
+	path = extensions/sticky
 	url = https://github.com/mejango/sticky.git
 [submodule "extensions/JBChat"]
 	path = extensions/JBChat
