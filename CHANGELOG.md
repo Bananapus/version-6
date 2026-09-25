@@ -83,7 +83,7 @@ Those repos exist in source form, but they were not part of the deployed v5 ecos
 - `LAUNCH_RULESETS` is a new dedicated permission.
 - `SET_ROUTER_TERMINAL` replaces the old swap-terminal-specific permissions.
 - `SET_SUCKER_DEPRECATION` was split out from `SUCKER_SAFETY`.
-- `OPEN_LOAN` (36), `REALLOCATE_LOAN` (37), `REPAY_LOAN` (38) are new operator delegation permissions for `revnet-core-v6`.
+- `OPEN_LOAN` (37), `REALLOCATE_LOAN` (38), `REPAY_LOAN` (39) are new operator delegation permissions for `revnet-core-v6`.
 
 ## Excluded Repos
 
