@@ -11,9 +11,9 @@ Use this README when you need to answer four questions quickly:
 - where should I start if I am auditing, integrating, or debugging
 - which directories are active workspace surfaces versus supporting material
 
-App: [JuiceScan](ipfs://bafybeibyaqslp5c5swmzehi7knsrkqg6qrizivtoqmro6kadihel3b45se/)\
+App: [JuiceScan](ipfs://bafybeidt62seckjgbmjauobjirl37zwnehhgqvj7qulk5cilwsf4lu6oui/)\
 Canonical webapp reference: [`webclients/juicescan`](./webclients/juicescan) ([mejango/juicescan](https://github.com/mejango/juicescan))\
-Docs: [JuiceScan docs](ipfs://bafybeibyaqslp5c5swmzehi7knsrkqg6qrizivtoqmro6kadihel3b45se/#learn)\
+Docs: [JuiceScan docs](ipfs://bafybeidt62seckjgbmjauobjirl37zwnehhgqvj7qulk5cilwsf4lu6oui/#learn)\
 Juicebox Center: <https://juicebox.center>\
 Juicebox Money: <https://juicebox.money>\
 Revnet Money: <https://revnet.money>\
